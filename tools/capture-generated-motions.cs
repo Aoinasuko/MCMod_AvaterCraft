@@ -1,7 +1,9 @@
-var source = UnityEngine.Object.FindObjectsOfType<Animator>().Single(a => a.name == "nasuko" && a.isHuman).gameObject;
+var selectedAnimator = Selection.activeGameObject ? Selection.activeGameObject.GetComponentInParent<Animator>() : null;
+if (!selectedAnimator || !selectedAnimator.isHuman) throw new InvalidOperationException("Select a valid Humanoid avatar root first");
+var source = selectedAnimator.gameObject;
 var exporter = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType("AvatarCraft.Editor.MotionExport")).First(t => t != null);
 var hashes = new System.Collections.Generic.Dictionary<string,string>();
-foreach (string guid in AssetDatabase.FindAssets("t:AnimationClip", new[] { "Assets/AvatarCraft/Motions/nasuko" }))
+foreach (string guid in AssetDatabase.FindAssets("t:AnimationClip", new[] { "Assets/AvatarCraft/Motions/" + source.name }))
 {
     string path = AssetDatabase.GUIDToAssetPath(guid);
     var asset = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
@@ -18,5 +20,7 @@ foreach (string guid in AssetDatabase.FindAssets("t:AnimationClip", new[] { "Ass
     }
     finally { UnityEngine.Object.DestroyImmediate(expected); }
 }
-System.IO.File.WriteAllText("D:/Dev/AvaterCraft/build/generated-motion-hashes.json", Newtonsoft.Json.JsonConvert.SerializeObject(hashes));
+var diagnostics = System.IO.Path.Combine(System.IO.Directory.GetParent(Application.dataPath).FullName, "Library", "AvatarCraftDiagnostics");
+System.IO.Directory.CreateDirectory(diagnostics);
+System.IO.File.WriteAllText(System.IO.Path.Combine(diagnostics, "generated-motion-hashes.json"), Newtonsoft.Json.JsonConvert.SerializeObject(hashes));
 return new { unchangedGeneratedClips = hashes.Count };

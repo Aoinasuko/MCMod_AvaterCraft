@@ -1,4 +1,6 @@
-var source = UnityEngine.Object.FindObjectsOfType<Animator>().Single(a => a.name == "nasuko" && a.isHuman).gameObject;
+var selectedAnimator = Selection.activeGameObject ? Selection.activeGameObject.GetComponentInParent<Animator>() : null;
+if (!selectedAnimator || !selectedAnimator.isHuman) throw new InvalidOperationException("Select a valid Humanoid avatar root first");
+var source = selectedAnimator.gameObject;
 var exporter = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType("AvatarCraft.Editor.MotionExport")).First(t => t != null);
 var profileType = exporter.Assembly.GetType("AvatarCraft.Editor.AvatarCraftMotionProfile");
 var windowType = exporter.Assembly.GetType("AvatarCraft.Editor.AvatarCraftExportWindow");
@@ -7,7 +9,7 @@ if (!AssetDatabase.IsValidFolder(folder)) AssetDatabase.CreateFolder("Assets", "
 if (!AssetDatabase.IsValidFolder(folder + "/MotionProfiles")) AssetDatabase.CreateFolder(folder, "MotionProfiles");
 if (!AssetDatabase.IsValidFolder(folder + "/Motions")) AssetDatabase.CreateFolder(folder, "Motions");
 var profile = (ScriptableObject)profileType.GetMethod("FindFor").Invoke(null, new object[] { source });
-if (!profile) profile = (ScriptableObject)profileType.GetMethod("CreateFor").Invoke(null, new object[] { source, folder + "/MotionProfiles/nasuko_Motions.asset" });
+if (!profile) profile = (ScriptableObject)profileType.GetMethod("CreateFor").Invoke(null, new object[] { source, folder + "/MotionProfiles/" + source.name + "_Motions.asset" });
 profileType.GetMethod("EnsureDefaults").Invoke(profile, null);
 var slots = ((System.Collections.IEnumerable)profileType.GetField("motions").GetValue(profile)).Cast<object>().ToArray();
 var slot = slots.Single(s => (string)s.GetType().GetField("action").GetValue(s) == "walk");
@@ -54,12 +56,13 @@ try
         if (transforms.Where((t,i) => Quaternion.Angle(t.localRotation,before[i]) > .01f || (t.localPosition-beforePosition[i]).sqrMagnitude > 1e-10f || (t.localScale-beforeScale[i]).sqrMagnitude > 1e-10f).Any()) throw new Exception("Custom sampling modified the armature");
     }
     finally { UnityEngine.Object.DestroyImmediate(animation); }
-    string clipFolder = folder + "/Motions/nasuko";
+    string clipFolder = folder + "/Motions/" + source.name;
     if (!AssetDatabase.IsValidFolder(clipFolder))
         windowType.GetMethod("GenerateEditableClips").Invoke(null, new object[] { clone, clipFolder });
     var actionCount = ((Newtonsoft.Json.Linq.JObject)result["actions"]).Count;
     var clipCount = ((Newtonsoft.Json.Linq.JObject)result["clips"]).Count;
-    System.IO.Directory.CreateDirectory("D:/Dev/AvaterCraft/build/motion-preview");
+    var previewFolder = System.IO.Path.Combine(System.IO.Directory.GetParent(Application.dataPath).FullName, "Library", "AvatarCraftDiagnostics", "motion-preview");
+    System.IO.Directory.CreateDirectory(previewFolder);
     foreach (var motion in new[] { "idle_relaxed", "walk_natural", "run_jog", "crouch_idle", "attack", "eat" })
     {
         var utility = new PreviewRenderUtility(); Texture2D image = null; AnimationClip clip = null;
@@ -81,7 +84,7 @@ try
             utility.cameraFieldOfView = 28;utility.camera.transform.position = bounds.center + new Vector3(bounds.size.y * 1.0f, bounds.size.y * .15f, bounds.size.y * 2.3f);utility.camera.transform.LookAt(bounds.center);
             utility.camera.nearClipPlane=.01f;utility.camera.farClipPlane=100;utility.lights[0].intensity=1.2f;utility.lights[1].intensity=.8f;
             utility.BeginStaticPreview(new Rect(0,0,384,512));utility.camera.Render();image=utility.EndStaticPreview();
-            System.IO.File.WriteAllBytes("D:/Dev/AvaterCraft/build/motion-preview/" + motion + ".png", image.EncodeToPNG());
+            System.IO.File.WriteAllBytes(System.IO.Path.Combine(previewFolder, motion + ".png"), image.EncodeToPNG());
         }
         finally { if (image) UnityEngine.Object.DestroyImmediate(image);if (clip) UnityEngine.Object.DestroyImmediate(clip);utility.Cleanup(); }
     }

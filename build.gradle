@@ -19,4 +19,12 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
-test { useJUnitPlatform() }
+test {
+    useJUnitPlatform()
+    def fixture = providers.environmentVariable('AVATARCRAFT_TEST_AVATAR').filter { !it.isBlank() }
+    inputs.property('hasExportedAvatarFixture', fixture.isPresent())
+    if (fixture.isPresent()) {
+        environment 'AVATARCRAFT_TEST_AVATAR', fixture.get()
+        inputs.file(fixture.get()).withPropertyName('exportedAvatarFixture')
+    }
+}

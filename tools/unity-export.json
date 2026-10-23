@@ -1,1 +1,6 @@
-{"name":"execute_code","arguments":{"code":"var source = UnityEngine.Object.FindObjectsOfType<Animator>().Single(a => a.name == \"nasuko\" && a.isHuman).gameObject; var type = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType(\"AvatarCraft.Editor.AvatarCraftExporter\")).First(t => t != null); return type.GetMethod(\"Export\").Invoke(null, new object[] { source, \"D:/Dev/AvaterCraft/run/config/avatarcraft/avatars/nasuko.avc\", true });"}}
+{
+  "name": "execute_code",
+  "arguments": {
+    "code": "var animator = Selection.activeGameObject ? Selection.activeGameObject.GetComponentInParent<Animator>() : null;\nif (!animator || !animator.isHuman) throw new InvalidOperationException(\"Select a valid Humanoid avatar root first\");\nvar source = animator.gameObject;\nvar type = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType(\"AvatarCraft.Editor.AvatarCraftExporter\")).First(t => t != null);\nvar output = System.IO.Path.Combine(System.IO.Directory.GetParent(Application.dataPath).FullName, \"AvatarCraftExports\", \"avatar.avc\");\nreturn type.GetMethod(\"Export\").Invoke(null, new object[] { source, output, true });"
+  }
+}

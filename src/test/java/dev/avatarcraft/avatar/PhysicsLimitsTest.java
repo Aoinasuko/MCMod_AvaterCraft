@@ -172,25 +172,17 @@ class PhysicsLimitsTest {
   }
 
   @Test
-  void actualExportCarriesSourceLimitsAndExcludesNestedScopes() throws Exception {
-    var path = Path.of("run/config/avatarcraft/avatars/nasuko.avc");
-    Assumptions.assumeTrue(Files.exists(path));
-    var a = AvatarArchive.read(path).avatar();
+  void configuredExportCarriesFiniteLimitsAndUniqueScopeMembers() throws Exception {
+    var a = AvatarArchive.read(TestAvatarFixture.path()).avatar();
     assertEquals(2, a.physicsVersion);
-    assertEquals(9, a.springs.length);
-    var front =
-        Arrays.stream(a.springs)
-            .filter(s -> s.name.contains("HairFront"))
-            .findFirst()
-            .orElseThrow();
-    assertEquals("Angle", front.limitType);
-    assertEquals(5, front.maxAngleX);
-    assertEquals(0, front.maxStretch);
-    assertEquals(0, front.maxSquish);
-    Set<Integer> seen = new HashSet<>();
+    assertTrue(a.springs.length > 0, "Fixture must include PhysBone settings");
     for (var s : a.springs) {
       assertTrue(s.curves.has("maxAngleXCurve"));
       assertTrue(s.settings.has("version"));
+      assertTrue(Float.isFinite(s.maxAngleX) && s.maxAngleX >= 0 && s.maxAngleX <= 180);
+      assertTrue(Float.isFinite(s.maxStretch) && s.maxStretch >= 0);
+      assertTrue(Float.isFinite(s.maxSquish) && s.maxSquish >= 0 && s.maxSquish <= 1);
+      Set<Integer> seen = new HashSet<>();
       for (int b : s.bones) assertTrue(seen.add(b), "Duplicate ownership of " + b);
     }
   }

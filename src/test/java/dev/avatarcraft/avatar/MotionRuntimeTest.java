@@ -12,8 +12,7 @@ import org.junit.jupiter.api.*;
 class MotionRuntimeTest {
   @Test
   void horizontalMotionsKeepGazeForwardAndFitSwimmingHeight() throws Exception {
-    var path = Path.of("Exports/nasuko.avc");
-    Assumptions.assumeTrue(Files.exists(path));
+    var path = TestAvatarFixture.path();
     var a = AvatarArchive.read(path).avatar();
     for (String action : List.of("swim", "crawl", "elytra")) {
       var pose = new AvatarPose(a);
@@ -321,9 +320,8 @@ class MotionRuntimeTest {
   }
 
   @Test
-  void realExportContainsAllAssignmentsAndHumanJointMotion() throws Exception {
-    var path = Path.of("Exports/nasuko.avc");
-    Assumptions.assumeTrue(Files.exists(path));
+  void configuredExportContainsAllAssignmentsAndHumanJointMotion() throws Exception {
+    var path = TestAvatarFixture.path();
     var a = AvatarArchive.read(path).avatar();
     assertNotNull(a.motions);
     assertEquals(34, a.motions.actions.size());

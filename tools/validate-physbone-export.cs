@@ -1,4 +1,6 @@
-var source = UnityEngine.Object.FindObjectsOfType<Animator>().Single(a => a.name == "nasuko" && a.isHuman);
+var selectedAnimator = Selection.activeGameObject ? Selection.activeGameObject.GetComponentInParent<Animator>() : null;
+if (!selectedAnimator || !selectedAnimator.isHuman) throw new InvalidOperationException("Select a valid Humanoid avatar root first");
+var source = selectedAnimator;
 var physType = source.GetComponentsInChildren<Component>(true).First(c => c && c.GetType().Name == "VRCPhysBone").GetType();
 var scene = UnityEditor.SceneManagement.EditorSceneManager.NewPreviewScene();
 try

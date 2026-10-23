@@ -1,4 +1,6 @@
-var avatar = UnityEngine.Object.FindObjectsOfType<Animator>().Single(a => a.name == "nasuko" && a.isHuman).gameObject;
+var selectedAnimator = Selection.activeGameObject ? Selection.activeGameObject.GetComponentInParent<Animator>() : null;
+if (!selectedAnimator || !selectedAnimator.isHuman) throw new InvalidOperationException("Select a valid Humanoid avatar root first");
+var avatar = selectedAnimator.gameObject;
 var components = avatar.GetComponentsInChildren<Component>(true).Where(c => c && c.GetType().Name == "VRCPhysBone").ToArray();
 return components.Select(c => new {
     path = AnimationUtility.CalculateTransformPath(c.transform, avatar.transform),

@@ -1,4 +1,6 @@
-var source=UnityEngine.Object.FindObjectsOfType<Animator>().Single(a=>a.name=="nasuko"&&a.isHuman).gameObject;
+var selectedAnimator = Selection.activeGameObject ? Selection.activeGameObject.GetComponentInParent<Animator>() : null;
+if (!selectedAnimator || !selectedAnimator.isHuman) throw new InvalidOperationException("Select a valid Humanoid avatar root first");
+var source = selectedAnimator.gameObject;
 var type=AppDomain.CurrentDomain.GetAssemblies().Select(a=>a.GetType("AvatarCraft.Editor.MotionExport")).First(t=>t!=null);
 var clone=UnityEngine.Object.Instantiate(source);
 try{

@@ -1,4 +1,6 @@
-var source = UnityEngine.Object.FindObjectsOfType<Animator>().Single(a => a.name == "nasuko" && a.isHuman).gameObject;
+var selectedAnimator = Selection.activeGameObject ? Selection.activeGameObject.GetComponentInParent<Animator>() : null;
+if (!selectedAnimator || !selectedAnimator.isHuman) throw new InvalidOperationException("Select a valid Humanoid avatar root first");
+var source = selectedAnimator.gameObject;
 var exporter = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType("AvatarCraft.Editor.MotionExport")).First(t => t != null);
 var scene = UnityEditor.SceneManagement.EditorSceneManager.NewPreviewScene();
 var clip = new AnimationClip { name = "Humanoid validation", frameRate = 30 };

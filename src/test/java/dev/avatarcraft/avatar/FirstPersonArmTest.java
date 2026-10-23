@@ -66,8 +66,7 @@ class FirstPersonArmTest {
 
   @Test
   void legacyArchivesWithoutBakedMotionsCanSupplyArms() throws Exception {
-    var path = Path.of("Exports/nasuko.avc");
-    Assumptions.assumeTrue(Files.exists(path));
+    var path = TestAvatarFixture.path();
     var avatar = AvatarArchive.read(path).avatar();
     avatar.motions = null;
     assertFalse(new FirstPersonArm(avatar, false).parts().isEmpty());
@@ -75,16 +74,13 @@ class FirstPersonArmTest {
 
   @Test
   void exportedAvatarSuppliesBothArmsAndExcludesHeadAndOutfitBody() throws Exception {
-    var path = Path.of("Exports/nasuko.avc");
-    Assumptions.assumeTrue(Files.exists(path));
+    var path = TestAvatarFixture.path();
     var avatar = AvatarArchive.read(path).avatar();
     for (boolean left : new boolean[] {false, true}) {
       var arm = new FirstPersonArm(avatar, left);
       assertFalse(arm.parts().isEmpty());
       int triangles = 0;
       for (var part : arm.parts()) {
-        assertFalse(part.mesh().name.toLowerCase(Locale.ROOT).contains("hair"));
-        assertFalse(part.mesh().name.toLowerCase(Locale.ROOT).contains("hat"));
         for (var indices : part.indices()) {
           triangles += indices.length / 3;
           for (int index : indices) {

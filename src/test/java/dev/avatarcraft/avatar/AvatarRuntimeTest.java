@@ -64,8 +64,7 @@ class AvatarRuntimeTest {
 
   @Test
   void neutralAttachmentMatchesMinecraftDownwardHandBasis() throws Exception {
-    var path = Path.of("Exports/nasuko.avc");
-    Assumptions.assumeTrue(Files.exists(path));
+    var path = TestAvatarFixture.path();
     var a = AvatarArchive.read(path).avatar();
     var pose = new AvatarPose(a);
     pose.animateMotion(new MotionSignals(), 0, new Vector3f(), 0);
@@ -165,10 +164,8 @@ class AvatarRuntimeTest {
   }
 
   @Test
-  void realUnityExportLoadsAndSkinsWithoutNonFiniteVertices() throws Exception {
-    var path = Path.of("run/config/avatarcraft/avatars/nasuko.avc");
-    Assumptions.assumeTrue(
-        Files.exists(path), "Local proprietary avatar is not a distributed fixture");
+  void configuredUnityExportLoadsAndSkinsWithoutNonFiniteVertices() throws Exception {
+    var path = TestAvatarFixture.path();
     var archive = AvatarArchive.read(path);
     var a = archive.avatar();
     assertTrue(a.meshes.length > 0);

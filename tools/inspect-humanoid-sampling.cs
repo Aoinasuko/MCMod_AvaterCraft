@@ -1,4 +1,6 @@
-var source=UnityEngine.Object.FindObjectsOfType<Animator>().Single(a=>a.name=="nasuko"&&a.isHuman).gameObject;
+var selectedAnimator = Selection.activeGameObject ? Selection.activeGameObject.GetComponentInParent<Animator>() : null;
+if (!selectedAnimator || !selectedAnimator.isHuman) throw new InvalidOperationException("Select a valid Humanoid avatar root first");
+var source = selectedAnimator.gameObject;
 var clone=UnityEngine.Object.Instantiate(source);var clip=new AnimationClip();
 try {
  var animator=clone.GetComponent<Animator>();var bones=new System.Collections.Generic.HashSet<Transform>();for(int i=0;i<(int)HumanBodyBones.LastBone;i++){var b=animator.GetBoneTransform((HumanBodyBones)i);if(b)bones.Add(b);}
