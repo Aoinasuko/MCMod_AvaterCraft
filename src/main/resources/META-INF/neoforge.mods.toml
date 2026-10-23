@@ -1,0 +1,20 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="All Rights Reserved"
+[[mods]]
+modId="avatarcraft"
+version="0.1.0"
+displayName="AvatarCraft"
+description='''Unity avatar rendering and expression editor.'''
+[[dependencies.avatarcraft]]
+modId="neoforge"
+type="required"
+versionRange="[26.3.0.95,26.4)"
+ordering="NONE"
+side="BOTH"
+[[dependencies.avatarcraft]]
+modId="minecraft"
+type="required"
+versionRange="[26.3]"
+ordering="NONE"
+side="BOTH"

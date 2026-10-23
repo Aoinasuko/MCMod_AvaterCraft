@@ -1,0 +1,1 @@
+{"name":"execute_code","arguments":{"code":"AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate); AssetDatabase.ImportAsset(\"Packages/dev.avatarcraft.exporter\", ImportAssetOptions.ImportRecursive | ImportAssetOptions.ForceUpdate); return \"Exporter import requested\";"}}

@@ -1,0 +1,11 @@
+{
+  "name": "dev.avatarcraft.exporter",
+  "version": "0.1.0",
+  "displayName": "AvatarCraft Exporter",
+  "unity": "2022.3",
+  "description": "Export skinned avatars, expressions, lilToon materials and secondary motion to AvatarCraft.",
+  "license": "All Rights Reserved",
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.1"
+  }
+}

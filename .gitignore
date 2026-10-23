@@ -1,0 +1,12 @@
+.gradle/
+.tmp/
+build/
+run/
+out/
+*.avc
+.idea/
+*.iml
+__pycache__/
+tools/unity-tools.json
+PublishPackage/
+Docs/

@@ -1,0 +1,1 @@
+{"name":"AvatarCraft.Exporter.Editor","includePlatforms":["Editor"],"references":["Newtonsoft.Json"],"overrideReferences":true,"precompiledReferences":["Newtonsoft.Json.dll"],"autoReferenced":true}
