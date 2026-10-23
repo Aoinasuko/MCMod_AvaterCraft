@@ -2,8 +2,10 @@
 .tmp/
 build/
 run/
+run-npc-qa/
 out/
 *.avc
+!src/npc/resources/assets/avatarcraftnpc/avatars/tortobu.avc
 .idea/
 *.iml
 __pycache__/

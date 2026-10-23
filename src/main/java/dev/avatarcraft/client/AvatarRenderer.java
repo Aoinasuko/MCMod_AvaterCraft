@@ -185,9 +185,6 @@ public final class AvatarRenderer {
                   : a.materials[mesh.submeshes[sub].material];
           int[] indices = mesh.geometry.indices()[sub];
           draw(session, mesh, skinned, indices, mat, stack, collector, s.lightCoords, false, false);
-          if (mat.number("_UseEmission", 0) > 0 && mat.texture("_EmissionMap") != null)
-            draw(
-                session, mesh, skinned, indices, mat, stack, collector, s.lightCoords, true, false);
           if (mat.number("_OutlineWidth", 0) > 0
               && mat.shader != null
               && mat.shader.toLowerCase(Locale.ROOT).contains("outline"))
@@ -299,12 +296,27 @@ public final class AvatarRenderer {
       int light,
       boolean emission,
       boolean outline) {
+    draw(
+        session.textures, mesh, vertices, indices, mat, stack, collector, light, emission, outline);
+  }
+
+  static void draw(
+      AvatarTextures textures,
+      Avatar.Mesh mesh,
+      float[] vertices,
+      int[] indices,
+      Avatar.Material mat,
+      PoseStack stack,
+      SubmitNodeCollector collector,
+      int light,
+      boolean emission,
+      boolean outline) {
     String slot = emission ? "_EmissionMap" : outline ? "_OutlineTex" : "_MainTex";
-    var texture = session.textures.get(mat.texture(slot));
-    var type = AvatarMaterials.get(mat, texture, emission, outline);
+    var texture = textures.get(mat.texture(slot));
+    var type = AvatarMaterials.get(mat, texture, textures.surface(mat), emission, outline);
     float[] color =
         mat.color(emission ? "_EmissionColor" : outline ? "_OutlineColor" : "_Color", 1, 1, 1, 1);
-    float[] scale = mat.uv(slot, "scale", 1, 1), offset = mat.uv(slot, "offset", 0, 0);
+    boolean quads = emission || MaterialAlpha.mode(mat) == MaterialAlpha.Mode.TRANSLUCENT;
     float width = outline ? mat.number("_OutlineWidth", 0) * .001f : 0;
     // Snapshot arrays are immutable for the lifetime of deferred geometry submission.
     collector.submitCustomGeometry(
@@ -313,8 +325,9 @@ public final class AvatarRenderer {
         (pose, buffer) -> {
           var normal = new Vector3f();
           for (int t = 0; t < indices.length; t += 3)
-            for (int k = 0; k < 3; k++) {
-              int ix = indices[t + (outline ? k : 2 - k)], v = ix * 6, src = ix * 16;
+            for (int k = 0; k < (quads ? 4 : 3); k++) {
+              int corner = Math.min(k, 2);
+              int ix = indices[t + (outline ? corner : 2 - corner)], v = ix * 6, src = ix * 16;
               normal.set(vertices[v + 3], vertices[v + 4], vertices[v + 5]);
               float x = vertices[v] + normal.x * width,
                   y = vertices[v + 1] + normal.y * width,
@@ -322,9 +335,7 @@ public final class AvatarRenderer {
               buffer
                   .addVertex(pose, x, y, z)
                   .setColor(color[0], color[1], color[2], color[3])
-                  .setUv(
-                      mesh.geometry.vertices()[src + 6] * scale[0] + offset[0],
-                      1 - (mesh.geometry.vertices()[src + 7] * scale[1] + offset[1]))
+                  .setUv(mesh.geometry.vertices()[src + 6], 1 - mesh.geometry.vertices()[src + 7])
                   .setOverlay(OverlayTexture.NO_OVERLAY)
                   .setLight(emission ? 15728880 : light)
                   .setNormal(pose, normal.x, normal.y, normal.z);

@@ -1,5 +1,6 @@
 package dev.avatarcraft.client;
 
+import dev.avatarcraft.api.AvatarCatalog;
 import dev.avatarcraft.avatar.*;
 import java.io.*;
 import java.nio.file.*;
@@ -24,8 +25,30 @@ public final class AvatarLibrary {
     return entries;
   }
 
+  public static Entry resolve(String id) {
+    if (!AvatarCatalog.validId(id)) return null;
+    var canonical =
+        entries.stream()
+            .filter(e -> e.archive() != null && e.archive().avatar().id.equals(id))
+            .findFirst();
+    return canonical.orElseGet(
+        () ->
+            entries.stream()
+                .filter(
+                    e ->
+                        e.archive() != null
+                            && e.path().getFileName().toString().equals(id + ".avc"))
+                .findFirst()
+                .orElse(null));
+  }
+
   public static boolean loading() {
     return pending != null && !pending.isDone();
+  }
+
+  public static synchronized void reloadAfterCurrent() {
+    if (loading()) pending.whenComplete((entries, error) -> reload());
+    else reload();
   }
 
   public static synchronized void reload() {
@@ -37,20 +60,16 @@ public final class AvatarLibrary {
               try {
                 Files.createDirectories(ROOT.resolve("avatars"));
                 Files.createDirectories(ROOT.resolve("expressions"));
-                try (var paths = Files.list(ROOT.resolve("avatars"))) {
-                  for (var p :
-                      paths
-                          .filter(p -> p.toString().endsWith(".avc"))
-                          .sorted()
-                          .limit(256)
-                          .toList()) {
-                    try {
-                      list.add(new Entry(p, AvatarArchive.read(p), null));
-                    } catch (Exception e) {
-                      list.add(new Entry(p, null, e.getMessage()));
-                    }
-                  }
-                }
+                var catalog = new AvatarCatalog(ROOT.resolve("avatars"));
+                catalog.reload();
+                for (var entry : catalog.entries())
+                  list.add(new Entry(entry.path(), entry.archive(), null));
+                for (var problem : catalog.problems())
+                  list.add(
+                      new Entry(
+                          ROOT.resolve("avatars").resolve(problem.file()),
+                          null,
+                          problem.message()));
               } catch (IOException e) {
                 list.add(new Entry(ROOT, null, e.getMessage()));
               }

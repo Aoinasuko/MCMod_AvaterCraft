@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "APA",
+    "AEA",
+    "ARA"
+  ],
+  "key": {
+    "A": "minecraft:amethyst_shard",
+    "P": "minecraft:paper",
+    "E": "minecraft:ender_pearl",
+    "R": "minecraft:redstone"
+  },
+  "result": {
+    "id": "avatarcraftnpc:soulstone",
+    "count": 1
+  }
+}

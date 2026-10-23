@@ -10,8 +10,8 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 /** Inventory-style extraction with an explicit preview marker for its independent pose/physics. */
-final class AvatarPreview {
-  static void extractEntityInInventoryFollowsMouse(
+public final class AvatarPreview {
+  public static void extractEntityInInventoryFollowsMouse(
       GuiGraphicsExtractor graphics,
       int x0,
       int y0,
@@ -32,6 +32,8 @@ final class AvatarPreview {
     var state = renderer.createRenderState(entity, 1);
     state.shadowPieces.clear();
     state.outlineColor = 0;
+    state.nameTag = null;
+    state.nameTagAttachment = null;
     if (state instanceof LivingEntityRenderState living) {
       living.bodyRot = 180 + xAngle * 20;
       living.yRot = xAngle * 20;
@@ -41,6 +43,8 @@ final class AvatarPreview {
       living.scale = 1;
     }
     if (state instanceof AvatarRenderState avatar) AvatarRenderer.markPreview(avatar);
+    if (state instanceof dev.avatarcraft.api.client.AvatarActorRenderer.ActorRenderState actor)
+      actor.inventoryPreview = true;
     var translation = new Vector3f(0, state.boundingBoxHeight / 2 + offsetY, 0);
     graphics.entity(state, size, translation, rotation, xRotation, x0, y0, x1, y1);
   }

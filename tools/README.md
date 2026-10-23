@@ -43,3 +43,22 @@ C#スクリプトでは、Hierarchyで明示的に選択したHumanoidアバタ�
 ## モーション生成と配布
 
 `python tools/build_motion_library.py` で標準の `motions.json` を生成します。ビルド後に `python tools/package_release.py` で配布用JAR・UPM tarball・日本語ガイド・チェックサムを `PublishPackage/` へまとめます。既存の同じ版は上書きしません。
+
+
+## NPCとOAuthの検証
+
+`tools/dev.ps1 -Task runNpcGameTest` は `run-npc-qa/` の独立したGameTestワールドを使います。`AVATARCRAFT_CODEX_LIVE=1` を指定した `-Task test` は、サインイン済みCodex CLIの実接続試験も行います。`AVATARCRAFT_CODEX_EXECUTABLE` は試験用のCLIパス指定です。実接続試験は利用枠を使います。通常のテストではスキップします。
+
+開発クライアントは `AVATARCRAFT_QA_WORLD` に既存の検証用ワールドフォルダ名を指定すると、そのワールドを直接開きます。
+
+`validate-visible-bounds.cs` は一時メッシュを生成し、インポートされた境界の余白・未使用頂点を除いて寸法を求め、ルートの縮尺を一度だけ適用することをUnityで確認します。シーンは保存しません。
+
+NPCのHTTPプロバイダーはJUnitの模擬APIで検証します（外部APIキー不要）。実環境の設定は `config/avatarcraftnpc-ai.toml` です。開発GUIは提供画像に合わせて209×272の論理領域を使い、小画面では描画と入力を同倍率に縮小します。
+
+0.4.0以降、NPC用JARには再配布が許可されたタートブだけを同梱します。`tools/package_release.py` は同梱モデルの名前・エントリ・ハッシュと作者クレジットを検証し、他のモデルを含む場合は失敗します。
+
+## lilToon素材の検証
+
+`tools/generate_surface_shader.py` はUnityの `Resources/AvatarCraft/surface.json` を共通定義として、Java用定義とGLSLのアトラス参照関数を同期します。定義を編集した場合は生成後にビルドしてください。
+
+`tools/dev.ps1 -Task test` でCPU側のアトラス・合成とGPU検証用フィクスチャを生成します。Pythonへ `moderngl` と `Pillow` を導入し、`python tools/validate_surface_gpu.py` で実GPUのコンパイル・描画ピクセルを検証できます。Minecraftのウィンドウや操作には触れず、非表示の独立したOpenGLコンテキストを使います。結果は `build/surface-qa/` へ保存します。

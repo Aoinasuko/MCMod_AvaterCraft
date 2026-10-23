@@ -1,0 +1,20 @@
+{
+  "item.avatarcraftnpc.memory_journal": "アバターの記録帳",
+  "entity.avatarcraftnpc.companion": "アバターNPC",
+  "message.avatarcraftnpc.not_owner": "このアバターの設定・持ち物は所有者だけが操作できます。",
+  "avatarcraftnpc.configuration.ai": "AI接続設定",
+  "avatarcraftnpc.configuration.enabled": "AIを有効にする",
+  "avatarcraftnpc.configuration.provider": "接続方式",
+  "avatarcraftnpc.configuration.model": "モデルID",
+  "avatarcraftnpc.configuration.baseUrl": "APIのベースURL",
+  "avatarcraftnpc.configuration.apiKeyEnvironment": "APIキーの環境変数名",
+  "avatarcraftnpc.configuration.apiKey": "APIキー（ローカル保存）",
+  "avatarcraftnpc.configuration.codexExecutable": "Codex実行ファイル",
+  "avatarcraftnpc.configuration.requestTimeoutSeconds": "通信タイムアウト（秒）",
+  "avatarcraftnpc.configuration.turnTimeoutSeconds": "ターン上限時間（秒）",
+  "avatarcraftnpc.configuration.maxToolCalls": "ツール呼び出し回数上限",
+  "avatarcraftnpc.configuration.maxConcurrentTurns": "同時実行数",
+  "avatarcraftnpc.configuration.minimumRequestIntervalSeconds": "リクエスト間隔（秒）",
+  "avatarcraftnpc.configuration.maxOutputTokens": "最大出力トークン数",
+  "item.avatarcraftnpc.soulstone": "ソウルストーン"
+}

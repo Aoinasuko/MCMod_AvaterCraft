@@ -1,17 +1,21 @@
-# AvatarCraft 0.1.0
+# AvatarCraft 0.5.0
 
-VRChat向けの人型アバターを専用ファイルへ変換し、Minecraftのローカルプレイヤーとして表示するMODです。プレビュー付きアバター選択、ゲーム内の表情設定、人型モーション、PhysBoneの角度・伸縮制限、一人称の手と袖に対応します。
+VRChat向けの人型アバターを専用ファイルへ変換し、MinecraftのローカルプレイヤーやNPCとして表示するMODです。プレビュー付きアバター選択、ゲーム内の表情設定、人型モーション、PhysBoneの角度・伸縮制限、一人称の手と袖に対応します。
 
 ## 内容
 
-- `Minecraft/mods/avatarcraft-0.1.0.jar`：Minecraftへ導入するMOD。
-- `Unity/dev.avatarcraft.exporter-0.1.0.tgz`：Unityのアバター変換ツール。標準モーションを同梱。
+- `Minecraft/mods/avatarcraft-0.5.0.jar`：共通のFramework MOD。
+- `Minecraft/mods/avatarcraft-npc-0.5.0.jar`：AIアバターNPC用の追加MOD。
+- `Unity/dev.avatarcraft.exporter-0.5.0.tgz`：Unityのアバター変換ツール。標準モーションを同梱。
 - `Docs/Guide_ja.md`：モーション・表情・物理設定と制限事項。
+- `Docs/LilToon_ja.md`：素材・各種マスクの対応範囲と再変換手順。
+- `Docs/NPC_Guide_ja.md`：NPCの導入、Codex OAuth認証、クラフトと操作方法。
 - `CHANGELOG_ja.md`：この版の主な機能。
 - `LICENSE.txt`：ライセンス表記。
+- `Tortobu_Notice_ja.md`：同梱モデル「タートブ」の作者・権利表記。
 - `manifest.json`、`SHA256SUMS.txt`：内容一覧とファイルの整合性確認用データ。
 
-アバターモデル、テクスチャ、変換済み `.avc`、VRChat SDK、Modular Avatar、lilToon、Minecraft、NeoForge、Unity本体は同梱しません。
+NPC用JARに標準モデル「タートブ」（作者：aoi_nasuko）の変換済みデータとテクスチャを同梱します。VRChat SDK、Modular Avatar、lilToon、Minecraft、NeoForge、Unity本体は別途必要です。
 
 ## 動作環境
 
@@ -28,13 +32,14 @@ VRChat向けの人型アバターを専用ファイルへ変換し、Minecraft�
 ## 1. MinecraftへMODを導入
 
 1. Minecraft 26.3用のNeoForge環境を用意します。
-2. Minecraftを終了し、`Minecraft/mods/avatarcraft-0.1.0.jar` を、使用するゲームディレクトリの `mods/` にコピーします。同じMODの旧JARがある場合は入れ替えてください。
-3. そのNeoForge環境でMinecraftを起動します。このMODはプレイするクライアントへ導入します。
+2. Minecraftを終了し、`Minecraft/mods/avatarcraft-0.5.0.jar` を、使用するゲームディレクトリの `mods/` にコピーします。同じMODの旧JARがある場合は入れ替えてください。
+3. NPCも利用する場合は追加の `avatarcraft-npc-0.5.0.jar` をクライアントとサーバーの両方へ導入します。プレイヤーの表示だけを使う場合はFrameworkだけで利用できます。
+4. そのNeoForge環境でMinecraftを起動します。NPC用MODはタートブを自動で配置するため、標準モデルだけを使う場合はUnityでの変換は不要です。NPCの認証と召喚は `Docs/NPC_Guide_ja.md` を参照してください。
 
 ## 2. Unityでアバターを変換
 
 1. この配布ZIPを展開し、アバターのUnityプロジェクトを開きます。プロジェクト内のアバターのルートにはHumanoidとして有効なAnimatorが必要です。
-2. `Window > Package Manager` の `+` から `Add package from tarball...` を選び、`Unity/dev.avatarcraft.exporter-0.1.0.tgz` を指定します。
+2. `Window > Package Manager` の `+` から `Add package from tarball...` を選び、`Unity/dev.avatarcraft.exporter-0.5.0.tgz` を指定します。
 3. アバターのルートを選択し、`Tools > AvatarCraft > Avatar export and motions` を開きます。
 4. 動作ごとのモーションを確認・選択し、「設定を保存」からプロファイルを保存します。独自のAnimationClipへの差し替えもできます。
 5. 「この設定で .avc を変換」でファイルを保存します。Modular Avatarを使用する場合は、元プロジェクトにNDMFを導入して複製上の適用を有効にしてください。

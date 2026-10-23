@@ -2,16 +2,49 @@ plugins {
     id 'java-library'
     id 'net.neoforged.moddev' version '2.0.148'
 }
-version = '0.1.0'
+version = '0.5.0'
 group = 'dev.avatarcraft'
 base { archivesName = 'avatarcraft' }
 java.toolchain.languageVersion = JavaLanguageVersion.of(25)
 repositories { mavenCentral() }
+sourceSets {
+    npc {
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
+    }
+    test {
+        compileClasspath += sourceSets.npc.output
+        runtimeClasspath += sourceSets.npc.output
+    }
+}
 neoForge {
     version = '26.3.0.95'
-    runs { client { client(); systemProperty 'avatarcraft.qa', 'true' }; server { server(); programArgument '--nogui' } }
-    mods { avatarcraft { sourceSet sourceSets.main } }
+    runs {
+        client {
+            client(); systemProperty 'avatarcraft.qa', 'true'
+            if (System.getenv('AVATARCRAFT_QA_WORLD')) {
+                programArgument '--quickPlaySingleplayer'
+                programArgument System.getenv('AVATARCRAFT_QA_WORLD')
+            }
+        }
+        server { server(); programArgument '--nogui' }
+        npcGameTest {
+            type = 'gameTestServer'
+            gameDirectory = file('run-npc-qa')
+            systemProperty 'avatarcraft.npcGameTest', 'true'
+            systemProperty 'neoforge.enabledGameTestNamespaces', 'avatarcraftnpc'
+        }
+    }
+    mods {
+        avatarcraft { sourceSet sourceSets.main }
+        avatarcraftnpc { sourceSet sourceSets.npc }
+    }
 }
+tasks.register('npcJar', Jar) {
+    archiveBaseName = 'avatarcraft-npc'
+    from sourceSets.npc.output
+}
+assemble.dependsOn tasks.named('npcJar')
 dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter:5.12.2'
     testImplementation 'org.joml:joml:1.10.9'
@@ -23,6 +56,7 @@ test {
     useJUnitPlatform()
     def fixture = providers.environmentVariable('AVATARCRAFT_TEST_AVATAR').filter { !it.isBlank() }
     inputs.property('hasExportedAvatarFixture', fixture.isPresent())
+    inputs.property('codexLive', providers.environmentVariable('AVATARCRAFT_CODEX_LIVE').getOrElse('0'))
     if (fixture.isPresent()) {
         environment 'AVATARCRAFT_TEST_AVATAR', fixture.get()
         inputs.file(fixture.get()).withPropertyName('exportedAvatarFixture')

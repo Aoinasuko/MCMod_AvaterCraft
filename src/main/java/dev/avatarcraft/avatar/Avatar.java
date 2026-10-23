@@ -38,7 +38,7 @@ public final class Avatar {
   }
 
   public static final class Material {
-    public String name, shader;
+    public String name, shader, renderType;
     public int renderQueue;
     public JsonObject properties = new JsonObject();
 

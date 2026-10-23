@@ -1,0 +1,275 @@
+{
+  "slots": [
+    "_AlphaMask",
+    "_BumpMap",
+    "_Bump2ndMap",
+    "_Bump2ndScaleMask",
+    "_Main2ndTex",
+    "_Main2ndBlendMask",
+    "_Main3rdTex",
+    "_Main3rdBlendMask",
+    "_MatCapTex",
+    "_MatCapBlendMask",
+    "_MatCapBumpMap",
+    "_MatCap2ndTex",
+    "_MatCap2ndBlendMask",
+    "_MatCap2ndBumpMap",
+    "_ShadowColorTex",
+    "_Shadow2ndColorTex",
+    "_Shadow3rdColorTex",
+    "_ShadowStrengthMask",
+    "_ShadowBorderMask",
+    "_ShadowBlurMask",
+    "_RimColorTex",
+    "_EmissionMap",
+    "_EmissionBlendMask",
+    "_Emission2ndMap",
+    "_Emission2ndBlendMask",
+    "_OutlineWidthMask",
+    "_MainColorAdjustMask",
+    "_MainGradationTex",
+    "_DissolveMask",
+    "_DissolveNoiseMask",
+    "_Main2ndDissolveMask",
+    "_Main2ndDissolveNoiseMask",
+    "_Main3rdDissolveMask",
+    "_Main3rdDissolveNoiseMask"
+  ],
+  "numbers": {
+    "_UseBumpMap": 0,
+    "_BumpScale": 1,
+    "_UseBump2ndMap": 0,
+    "_Bump2ndScale": 1,
+    "_Bump2ndMap_UVMode": 0,
+    "_MainGradationStrength": 0,
+    "_UseShadow": 0,
+    "_ShadowStrength": 1,
+    "_ShadowBorder": 0.5,
+    "_ShadowBlur": 0.1,
+    "_Shadow2ndBorder": 0.15,
+    "_Shadow2ndBlur": 0.1,
+    "_Shadow3rdBorder": 0.05,
+    "_Shadow3rdBlur": 0.1,
+    "_UseRim": 0,
+    "_RimBorder": 0.5,
+    "_RimBlur": 0.1,
+    "_RimBlendMode": 1,
+    "_RimEnableLighting": 1,
+    "_OutlineWidth": 0,
+    "_DissolveNoiseStrength": 0.1,
+    "_Main2ndTexAngle": 0,
+    "_Main2ndTex_UVMode": 0,
+    "_Main2ndTex_Cull": 0,
+    "_Main2ndTexIsDecal": 0,
+    "_Main2ndTexIsLeftOnly": 0,
+    "_Main2ndTexIsRightOnly": 0,
+    "_Main2ndTexBlendMode": 0,
+    "_Main2ndTexAlphaMode": 0,
+    "_Main2ndEnableLighting": 1,
+    "_Main2ndDissolveNoiseStrength": 0.1,
+    "_UseMain2ndTex": 0,
+    "_Main3rdTexAngle": 0,
+    "_Main3rdTex_UVMode": 0,
+    "_Main3rdTex_Cull": 0,
+    "_Main3rdTexIsDecal": 0,
+    "_Main3rdTexIsLeftOnly": 0,
+    "_Main3rdTexIsRightOnly": 0,
+    "_Main3rdTexBlendMode": 0,
+    "_Main3rdTexAlphaMode": 0,
+    "_Main3rdEnableLighting": 1,
+    "_Main3rdDissolveNoiseStrength": 0.1,
+    "_UseMain3rdTex": 0,
+    "_UseMatCap": 0,
+    "_MatCapBlend": 1,
+    "_MatCapBlendMode": 1,
+    "_MatCapEnableLighting": 1,
+    "_MatCapShadowMask": 0,
+    "_MatCapBackfaceMask": 0,
+    "_MatCapApplyTransparency": 1,
+    "_MatCapNormalStrength": 1,
+    "_MatCapCustomNormal": 0,
+    "_MatCapBumpScale": 1,
+    "_MatCapMainStrength": 0,
+    "_MatCapPerspective": 1,
+    "_UseMatCap2nd": 0,
+    "_MatCap2ndBlend": 1,
+    "_MatCap2ndBlendMode": 1,
+    "_MatCap2ndEnableLighting": 1,
+    "_MatCap2ndShadowMask": 0,
+    "_MatCap2ndBackfaceMask": 0,
+    "_MatCap2ndApplyTransparency": 1,
+    "_MatCap2ndNormalStrength": 1,
+    "_MatCap2ndCustomNormal": 0,
+    "_MatCap2ndBumpScale": 1,
+    "_MatCap2ndMainStrength": 0,
+    "_MatCap2ndPerspective": 1,
+    "_UseEmission": 0,
+    "_EmissionBlend": 1,
+    "_EmissionBlendMode": 1,
+    "_EmissionMainStrength": 0,
+    "_EmissionMap_UVMode": 0,
+    "_UseEmission2nd": 0,
+    "_Emission2ndBlend": 1,
+    "_Emission2ndBlendMode": 1,
+    "_Emission2ndMainStrength": 0,
+    "_Emission2ndMap_UVMode": 0
+  },
+  "vectors": {
+    "_Color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "_MainTexHSVG": [
+      0,
+      1,
+      1,
+      1
+    ],
+    "_ShadowColor": [
+      0.7,
+      0.7,
+      0.8,
+      1
+    ],
+    "_Shadow2ndColor": [
+      1,
+      1,
+      1,
+      0
+    ],
+    "_Shadow3rdColor": [
+      1,
+      1,
+      1,
+      0
+    ],
+    "_RimColor": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "_DissolveParams": [
+      0,
+      0,
+      0.5,
+      0.1
+    ],
+    "_DissolvePos": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "_DissolveColor": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "_MainTex_ScrollRotate": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "_Color2nd": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "_Main2ndTex_ScrollRotate": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "_Main2ndDissolveParams": [
+      0,
+      0,
+      0.5,
+      0.1
+    ],
+    "_Main2ndDissolvePos": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "_Main2ndDissolveColor": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "_Color3rd": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "_Main3rdTex_ScrollRotate": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "_Main3rdDissolveParams": [
+      0,
+      0,
+      0.5,
+      0.1
+    ],
+    "_Main3rdDissolvePos": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "_Main3rdDissolveColor": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "_MatCapColor": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "_MatCap2ndColor": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "_EmissionColor": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "_EmissionMap_ScrollRotate": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "_Emission2ndColor": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "_Emission2ndMap_ScrollRotate": [
+      0,
+      0,
+      0,
+      0
+    ]
+  }
+}

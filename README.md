@@ -1,6 +1,6 @@
 # AvatarCraft
 
-Minecraft Java **26.3** / NeoForge **26.3.0.95** / Java **25** 向けのアバターMODと、Unity **2022.3** 向け変換ツールです。
+Minecraft Java **26.3** / NeoForge **26.3.0.95** / Java **25** 向けのアバターFramework MOD、AIアバターNPCのサブMODと、Unity **2022.3** 向け変換ツールです。
 
 ## 使い方
 
@@ -14,17 +14,24 @@ Minecraft Java **26.3** / NeoForge **26.3.0.95** / Java **25** 向けのアバ�
 
 初期設定は2〜4秒間隔のまばたきです。対応する形状があれば `blink` を閉眼に、`vrc.v_aa` を食事の口に自動割当します。被ダメージの初期表情は閉眼です。
 
+## AIアバターNPC
+
+NPC用サブMODは、クラフトした召喚石からアバターを召喚し、Codex CLIのChatGPT OAuth認証、OpenAI互換API（LM Studio・Ollamaを含む）、Anthropic互換APIで動かします。右クリックで上下に並べたNPC・プレイヤーの持ち物、防具・主手・副手、性格JSON、アバター、作業指示、記録を操作できます。近くのNPCとの会話、作業中の定期発言、クラフトできる記録帳を備えます。標準モデル「タートブ」（作者：aoi_nasuko）を同梱し、共通のソウルストーンから召喚します。モデルと性格はGUIから変更でき、追加モデル・性格は外部ファイルとして読み込みます。近くの所有者のチャットを会話や作業指示として受け取れます。
+
+サーバー側でCodex CLIへログインし、NPCを使うクライアントとサーバーへ両方のJARを導入します。導入・レシピ・認証・保存先・APIは [NPCガイド](release/NPC_Guide_ja.md) を参照してください。
+
 ## 開発
 
 ```powershell
 .\tools\dev.ps1 -Task build
 .\tools\dev.ps1 -Task test
 .\tools\dev.ps1 -Task runClient
+.\tools\dev.ps1 -Task runNpcGameTest
 ```
 
 Java 25が必要です。通常はWindowsで `gradlew.bat build`、macOS/Linuxで `./gradlew build` を実行できます。`dev.ps1` は一時ディレクトリを短いパスへ設定するWindows用の補助スクリプトです。
 
-ビルド成果物は `build/libs/avatarcraft-0.1.0.jar` です。開発クライアント用の `.avc` は `run/config/avatarcraft/avatars/` に配置します。アバターデータはリポジトリに含めません。
+ビルド成果物はFrameworkの `build/libs/avatarcraft-0.5.0.jar` と、NPC用の `build/libs/avatarcraft-npc-0.5.0.jar` です。開発クライアント用の `.avc` は `run/config/avatarcraft/avatars/` に配置します。再配布が許可された標準のタートブだけをリポジトリとNPC用JARに含めます。その他のアバターは外部ファイルです。
 
 テストは外部アバターなしで実行できます。変換済みアバターを使う7件の統合テストは、`AVATARCRAFT_TEST_AVATAR` 環境変数で検証用 `.avc` を指定した場合に実行します。指定しない場合はスキップします。検証データの条件とUnity用の開発ツールは [tools/README.md](tools/README.md) を参照してください。
 
@@ -38,6 +45,8 @@ Java 25が必要です。通常はWindowsで `gradlew.bat build`、macOS/Linux�
 - PhysBoneのAngle / Hinge / Polar制限、制限軸、伸縮上限、各カーブ、有効状態、複数子・入れ子の設定。古い `.avc` は制限が含まれないため再変換してください。
 - lilToon設定の読取と、基本色・UV・透過・影境界・リム・発光・アウトラインの近似描画。
 
-VRChatの非公開PhysBoneソルバーとの完全一致、Animator FX／Expression Menuの実行、Minecraft防具・エリトラの外観、他プレイヤーへの共有・自動配布は未対応です。lilToonのノーマルマップ・MatCap・多層テクスチャや特殊マスクは保存対象を一部含みますが描画には未対応です。アバターファイルはMODに同梱しません。
+VRChatの非公開PhysBoneソルバーとの完全一致、Animator FX／Expression Menuの実行、Minecraft防具・エリトラの外観、他プレイヤーへの共有・自動配布は未対応です。lilToonの法線2層、MatCap2層、メイン2・3層目、色調補正と各種マスクの近似描画に対応します。設定ごとの対応範囲はガイドを参照してください。NPC用MODに同梱するアバターはタートブのみです。
+
+NPCの防具・頭装備・エリトラのモデルは非表示にし、装備の性能は保持します。半透明とカットアウト、色のalpha、AlphaMaskの置換・乗算・加算・減算を近似描画します。
 
 詳しい導入手順は [導入ガイド](release/README_ja.md)、設定と対応範囲は [設定ガイド](release/Guide_ja.md) を参照してください。

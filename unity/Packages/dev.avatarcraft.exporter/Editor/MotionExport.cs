@@ -95,9 +95,9 @@ namespace AvatarCraft.Editor
         static Vector3 Vec(JToken v) => v == null ? Vector3.zero : new Vector3((float)v[0], (float)v[1], (float)v[2]);
         static float Height(GameObject root)
         {
-            var rs = root.GetComponentsInChildren<Renderer>().Where(r => r.enabled).ToArray();
+            var rs = root.GetComponentsInChildren<SkinnedMeshRenderer>().Where(r => r.enabled && r.sharedMesh).ToArray();
             if (rs.Length == 0) return 1.8f;
-            var b = rs[0].bounds; foreach (var r in rs) b.Encapsulate(r.bounds); return Mathf.Max(.1f, b.size.y);
+            return Mathf.Max(.1f, AvatarCraftExporter.VisibleBounds(rs).size.y);
         }
 
         public static Pack Build(GameObject root, AvatarCraftMotionProfile profile)

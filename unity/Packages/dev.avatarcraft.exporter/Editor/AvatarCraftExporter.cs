@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -65,20 +66,23 @@ namespace AvatarCraft.Editor
                 var materials = new List<object>();
                 var meshes = new List<object>();
                 var materialIds = new Dictionary<Material, int>();
-                var textures = new Dictionary<Texture, string>();
+                var textures = new Dictionary<string, string>();
+                var surfaceSchema = JObject.Parse(Resources.Load<TextAsset>("AvatarCraft/surface").text);
+                var surfaceSlots = new HashSet<string>(surfaceSchema["slots"].Values<string>());
                 var shapeDefaults = new Dictionary<string, float>();
                 var shapes = new List<string>();
                 Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path)));
                 using (var file = File.Create(temp))
                 using (var zip = new ZipArchive(file, ZipArchiveMode.Create))
                 {
-                    Func<Texture, string> exportTexture = texture =>
+                    Func<Texture, bool, bool, string> exportTexture = (texture, normal, linear) =>
                     {
                         if (!texture) return null;
-                        if (textures.TryGetValue(texture, out var existing)) return existing;
+                        string textureKey = texture.GetInstanceID() + ":" + normal + ":" + linear;
+                        if (textures.TryGetValue(textureKey, out var existing)) return existing;
                         var name = "textures/" + textures.Count + ".png";
-                        textures[texture] = name;
-                        Write(zip, name, TexturePng(texture));
+                        textures[textureKey] = name;
+                        Write(zip, name, TexturePng(texture, normal, linear));
                         return name;
                     };
                     Func<Material, int> materialIndex = material =>
@@ -99,13 +103,18 @@ namespace AvatarCraft.Editor
                                 case UnityEngine.Rendering.ShaderPropertyType.Texture:
                                     var tex = material.GetTexture(n);
                                     // Keep every texture property, but export only textures used by supported passes.
-                                    bool used = new[] { "_MainTex", "_EmissionMap", "_ShadowColorTex", "_RimColorTex", "_OutlineTex", "_BumpMap", "_MatCapTex" }.Contains(n);
-                                    props[n] = new { texture = used ? exportTexture(tex) : null, source = tex ? tex.name : null, scale = V2(material.GetTextureScale(n)), offset = V2(material.GetTextureOffset(n)) };
+                                    bool used = n == "_MainTex" || n == "_OutlineTex" || surfaceSlots.Contains(n);
+                                    bool normal = n.Contains("Bump") && !n.Contains("Mask");
+                                    bool linear = normal || n.Contains("Mask");
+                                    props[n] = new { texture = used ? exportTexture(tex, normal, linear) : null, source = tex ? tex.name : null, scale = V2(material.GetTextureScale(n)), offset = V2(material.GetTextureOffset(n)), wrapU = tex ? (int)tex.wrapModeU : 0, wrapV = tex ? (int)tex.wrapModeV : 0, normalEncoding = normal ? "rgb" : null };
                                     break;
                                 default: props[n] = material.GetFloat(n); break;
                             }
                         }
-                        materials.Add(new { name = material.name, shader = shader.name, renderQueue = material.renderQueue, properties = props });
+                        foreach (string channel in new[] { "_Main2ndTex_UVMode", "_Main3rdTex_UVMode", "_Bump2ndMap_UVMode", "_EmissionMap_UVMode", "_Emission2ndMap_UVMode" })
+                            if (material.HasProperty(channel) && material.GetFloat(channel) > 0 && material.GetFloat(channel) < 4)
+                                warnings.Add(material.name + ": " + channel + " uses UV1-3; runtime currently falls back to UV0.");
+                        materials.Add(new { name = material.name, shader = shader.name, renderQueue = material.renderQueue, renderType = material.GetTag("RenderType", false, ""), properties = props });
                         if (!shader.name.ToLowerInvariant().Contains("liltoon")) warnings.Add("Non-lilToon material: " + material.name + " (" + shader.name + ")");
                         return id;
                     };
@@ -168,7 +177,9 @@ namespace AvatarCraft.Editor
                     var identity = AssetDatabase.AssetPathToGUID(idPath) + ":" + source.name;
                     var id = BitConverter.ToString(SHA256.Create().ComputeHash(Encoding.UTF8.GetBytes(identity))).Replace("-", "").ToLowerInvariant().Substring(0, 24);
                     var activeRenderers = clone.GetComponentsInChildren<SkinnedMeshRenderer>().Where(r => r.enabled && r.sharedMesh).ToArray();
-                    var bounds = activeRenderers[0].bounds; foreach (var renderer in activeRenderers) bounds.Encapsulate(renderer.bounds);
+                    // Imported skinned bounds include animation padding and may extend far below
+                    // the feet. Measure the actually skinned, referenced vertices instead.
+                    var bounds = VisibleBounds(activeRenderers);
                     var manifest = new { formatVersion = 1, id, name = source.name, height = bounds.size.y, feetOffset = bounds.min.y, bones, humanoid, meshes, materials, physicsVersion = physics.version, springs, colliders, defaults = shapeDefaults, warnings };
                     WriteJson(zip, "avatar.json", manifest);
                     var motions = MotionExport.Build(clone, profile);
@@ -193,6 +204,30 @@ namespace AvatarCraft.Editor
         }
 
         static object Read(object o, string n) { var t = o.GetType(); return t.GetField(n)?.GetValue(o) ?? t.GetProperty(n)?.GetValue(o); }
+        internal static Bounds VisibleBounds(SkinnedMeshRenderer[] renderers)
+        {
+            var bounds = new Bounds(); bool initialized = false;
+            foreach (var renderer in renderers)
+            {
+                var baked = new Mesh();
+                try
+                {
+                    renderer.BakeMesh(baked, true);
+                    var vertices = baked.vertices;
+                    for (int sub = 0; sub < renderer.sharedMesh.subMeshCount; sub++)
+                        foreach (int index in renderer.sharedMesh.GetIndices(sub))
+                        {
+                            var point = renderer.transform.TransformPoint(vertices[index]);
+                            if (!initialized) { bounds = new Bounds(point, Vector3.zero); initialized = true; }
+                            else bounds.Encapsulate(point);
+                        }
+                }
+                finally { Object.DestroyImmediate(baked); }
+            }
+            if (!initialized || bounds.size.y < .01f || float.IsNaN(bounds.size.y) || float.IsInfinity(bounds.size.y))
+                throw new InvalidOperationException("Avatar has no measurable visible geometry.");
+            return bounds;
+        }
         static float Number(object o, string n, float fallback) { var v = Read(o, n); return v == null ? fallback : Convert.ToSingle(v); }
         static float[] V(Vector3 v) => new[] { v.x, v.y, v.z };
         static float[] V2(Vector2 v) => new[] { v.x, v.y };
@@ -203,13 +238,24 @@ namespace AvatarCraft.Editor
         static void WV(BinaryWriter w, Vector3 v) { w.Write(v.x); w.Write(v.y); w.Write(v.z); }
         static void Write(ZipArchive z, string n, byte[] b) { using (var s = z.CreateEntry(n, CompressionLevel.Optimal).Open()) s.Write(b, 0, b.Length); }
         static void WriteJson(ZipArchive z, string n, object o) => Write(z, n, Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(o, Json)));
-        static byte[] TexturePng(Texture texture)
+        static byte[] TexturePng(Texture texture, bool normal = false, bool linear = false)
         {
             int w = Math.Min(texture.width, 4096), h = Math.Min(texture.height, 4096);
-            var rt = RenderTexture.GetTemporary(w, h, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
-            var old = RenderTexture.active; Texture2D copy = null;
-            try { Graphics.Blit(texture, rt); RenderTexture.active = rt; copy = new Texture2D(w, h, TextureFormat.RGBA32, false); copy.ReadPixels(new Rect(0, 0, w, h), 0, 0); copy.Apply(); return copy.EncodeToPNG(); }
-            finally { RenderTexture.active = old; RenderTexture.ReleaseTemporary(rt); if (copy) Object.DestroyImmediate(copy); }
+            var rt = RenderTexture.GetTemporary(w, h, 0, RenderTextureFormat.ARGB32, linear ? RenderTextureReadWrite.Linear : RenderTextureReadWrite.sRGB);
+            var old = RenderTexture.active; bool oldSrgb = GL.sRGBWrite; Texture2D copy = null; Material decode = null;
+            try {
+                GL.sRGBWrite = !linear && QualitySettings.activeColorSpace == ColorSpace.Linear;
+                if (normal) {
+                    var shader = Shader.Find("Hidden/AvatarCraft/ExportNormal");
+                    if (!shader) throw new InvalidOperationException("Missing AvatarCraft normal export shader");
+                    decode = new Material(shader);
+                    Graphics.Blit(texture, rt, decode);
+                } else Graphics.Blit(texture, rt);
+                RenderTexture.active = rt;
+                copy = new Texture2D(w, h, TextureFormat.RGBA32, false, linear);
+                copy.ReadPixels(new Rect(0, 0, w, h), 0, 0); copy.Apply(); return copy.EncodeToPNG();
+            }
+            finally { GL.sRGBWrite = oldSrgb; RenderTexture.active = old; RenderTexture.ReleaseTemporary(rt); if (copy) Object.DestroyImmediate(copy); if (decode) Object.DestroyImmediate(decode); }
         }
         static byte[] RenderPreview(GameObject avatar)
         {
@@ -218,7 +264,7 @@ namespace AvatarCraft.Editor
             try
             {
                 var renderers = avatar.GetComponentsInChildren<Renderer>().Where(r => r.enabled).ToArray();
-                var bounds = renderers[0].bounds; foreach (var r in renderers) bounds.Encapsulate(r.bounds);
+                var bounds = VisibleBounds(renderers.OfType<SkinnedMeshRenderer>().ToArray());
                 utility.AddSingleGO(avatar); utility.cameraFieldOfView = 28;
                 utility.camera.transform.position = bounds.center + new Vector3(0, bounds.size.y * .04f, bounds.size.y * 2.3f);
                 utility.camera.transform.LookAt(bounds.center); utility.camera.nearClipPlane = .01f; utility.camera.farClipPlane = 100;

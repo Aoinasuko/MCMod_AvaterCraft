@@ -36,9 +36,6 @@ public final class AvatarFirstPerson {
           int light = event.getLightCoords();
           AvatarRenderer.draw(
               session, mesh, part.vertices(), indices, mat, stack, collector, light, false, false);
-          if (mat.number("_UseEmission", 0) > 0 && mat.texture("_EmissionMap") != null)
-            AvatarRenderer.draw(
-                session, mesh, part.vertices(), indices, mat, stack, collector, light, true, false);
           if (mat.number("_OutlineWidth", 0) > 0
               && mat.shader != null
               && mat.shader.toLowerCase(Locale.ROOT).contains("outline"))

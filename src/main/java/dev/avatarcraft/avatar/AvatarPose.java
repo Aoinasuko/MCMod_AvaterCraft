@@ -170,6 +170,13 @@ public final class AvatarPose {
             1 / modelScale);
   }
 
+  public Quaternionf attachmentRotation(int bone) {
+    return world[bone]
+        .getUnnormalizedRotation(new Quaternionf())
+        .normalize()
+        .mul(new Quaternionf(neutralWorld[bone]).conjugate());
+  }
+
   private void delta(String name, Quaternionf rotation) {
     Integer i = avatar.humanoid.get(name);
     if (i == null) return;
