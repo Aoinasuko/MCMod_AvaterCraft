@@ -31,7 +31,7 @@ NPC用サブMODは、クラフトした召喚石からアバターを召喚し�
 
 Java 25が必要です。通常はWindowsで `gradlew.bat build`、macOS/Linuxで `./gradlew build` を実行できます。`dev.ps1` は一時ディレクトリを短いパスへ設定するWindows用の補助スクリプトです。
 
-ビルド成果物はFrameworkの `build/libs/avatarcraft-0.5.0.jar` と、NPC用の `build/libs/avatarcraft-npc-0.5.0.jar` です。開発クライアント用の `.avc` は `run/config/avatarcraft/avatars/` に配置します。再配布が許可された標準のタートブだけをリポジトリとNPC用JARに含めます。その他のアバターは外部ファイルです。
+ビルド成果物はFrameworkの `build/libs/avatarcraft-0.5.1.jar` と、NPC用の `build/libs/avatarcraft-npc-0.5.1.jar` です。開発クライアント用の `.avc` は `run/config/avatarcraft/avatars/` に配置します。再配布が許可された標準のタートブだけをリポジトリとNPC用JARに含めます。その他のアバターは外部ファイルです。
 
 テストは外部アバターなしで実行できます。変換済みアバターを使う7件の統合テストは、`AVATARCRAFT_TEST_AVATAR` 環境変数で検証用 `.avc` を指定した場合に実行します。指定しない場合はスキップします。検証データの条件とUnity用の開発ツールは [tools/README.md](tools/README.md) を参照してください。
 

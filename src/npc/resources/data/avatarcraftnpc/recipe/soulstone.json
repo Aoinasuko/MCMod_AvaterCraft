@@ -2,15 +2,13 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "pattern": [
-    "APA",
-    "AEA",
-    "ARA"
+    "IGI",
+    "GGG",
+    "IGI"
   ],
   "key": {
-    "A": "minecraft:amethyst_shard",
-    "P": "minecraft:paper",
-    "E": "minecraft:ender_pearl",
-    "R": "minecraft:redstone"
+    "I": "minecraft:iron_ingot",
+    "G": "minecraft:gold_ingot"
   },
   "result": {
     "id": "avatarcraftnpc:soulstone",

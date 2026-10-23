@@ -457,25 +457,24 @@ public final class NpcGameTests {
               check(
                   !r.get("ok").getAsBoolean() && count(Items.DIAMOND) == 3,
                   "Failed crafting must not consume any materials"));
+      int[] soulstoneMaterials = new int[2];
       add(
-          "craft summon charm",
+          "craft soulstone",
           () -> {
             h.setBlock(2, 1, 3, Blocks.CRAFTING_TABLE);
-            npc.inventory.setItem(4, new ItemStack(Items.AMETHYST_SHARD, 6));
-            npc.inventory.setItem(5, new ItemStack(Items.PAPER));
-            npc.inventory.setItem(
-                6,
-                new ItemStack(
-                    net.minecraft.core.registries.BuiltInRegistries.ITEM.getValue(
-                        net.minecraft.resources.Identifier.withDefaultNamespace("orange_dye")),
-                    2));
-            npc.inventory.setItem(7, new ItemStack(Items.ENDER_PEARL));
-            npc.inventory.setItem(8, new ItemStack(Items.REDSTONE));
+            npc.inventory.setItem(4, new ItemStack(Items.IRON_INGOT, 4));
+            npc.inventory.setItem(5, new ItemStack(Items.GOLD_INGOT, 5));
+            soulstoneMaterials[0] = count(Items.IRON_INGOT);
+            soulstoneMaterials[1] = count(Items.GOLD_INGOT);
             return skills.execute("craft", object("recipe", "avatarcraftnpc:soulstone"));
           },
           r -> {
             success(r);
-            check(count(NpcMod.SOULSTONE.get()) == 1, "Summoning charm recipe must be craftable");
+            check(count(NpcMod.SOULSTONE.get()) == 1, "Soulstone recipe produces one item");
+            check(
+                count(Items.IRON_INGOT) == soulstoneMaterials[0] - 4
+                    && count(Items.GOLD_INGOT) == soulstoneMaterials[1] - 5,
+                "Soulstone consumes four iron ingots and five gold ingots");
           });
       add(
           "craft journal",

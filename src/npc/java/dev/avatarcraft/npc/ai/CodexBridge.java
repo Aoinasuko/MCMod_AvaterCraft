@@ -47,7 +47,7 @@ public final class CodexBridge implements NpcBrain {
     var params =
         object(
             "clientInfo",
-            object("name", "avatarcraft_npc", "title", "AvatarCraft NPC", "version", "0.5.0"),
+            object("name", "avatarcraft_npc", "title", "AvatarCraft NPC", "version", "0.5.1"),
             "capabilities",
             object("experimentalApi", true));
     return rpc.request("initialize", params)
