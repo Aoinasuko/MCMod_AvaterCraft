@@ -1,4 +1,9 @@
 {
+  "item.avatarcraftnpc.recall_map": "呼び戻しの地図",
+  "message.avatarcraftnpc.summon_limit": "召喚できるNPCは1人につき最大%s体です。",
+  "avatarcraftnpc.configuration.companions": "NPCの召喚・復帰",
+  "avatarcraftnpc.configuration.maxPerPlayer": "プレイヤーごとの召喚上限（-1で無制限）",
+  "avatarcraftnpc.configuration.dropItemsOnDeath": "NPC死亡時に所持品をドロップする",
   "item.avatarcraftnpc.memory_journal": "アバターの記録帳",
   "entity.avatarcraftnpc.companion": "アバターNPC",
   "message.avatarcraftnpc.not_owner": "このアバターの設定・持ち物は所有者だけが操作できます。",

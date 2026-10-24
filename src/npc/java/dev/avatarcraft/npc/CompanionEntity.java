@@ -17,7 +17,22 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.*;
 
-public final class CompanionEntity extends PathfinderMob implements AvatarActor, MenuProvider {
+public final class CompanionEntity extends PathfinderMob
+    implements AvatarActor, MenuProvider, ContainerUser {
+  public final NpcContainerAnimation containerAnimation = new NpcContainerAnimation(this);
+
+  @Override
+  public boolean hasContainerOpen(
+      net.minecraft.world.level.block.entity.ContainerOpenersCounter counter,
+      net.minecraft.core.BlockPos pos) {
+    return containerAnimation.hasOpen(pos);
+  }
+
+  @Override
+  public double getContainerInteractionRange() {
+    return 5;
+  }
+
   private static final EntityDataAccessor<String> AVATAR =
       SynchedEntityData.defineId(CompanionEntity.class, EntityDataSerializers.STRING);
   private static final EntityDataAccessor<String> PERSONALITY =
@@ -30,6 +45,57 @@ public final class CompanionEntity extends PathfinderMob implements AvatarActor,
   private static final EntityDataAccessor<String> AI_STATUS =
       SynchedEntityData.defineId(CompanionEntity.class, EntityDataSerializers.STRING);
   private NpcMind mind;
+  private final NpcChunkLoading chunkLoading = new NpcChunkLoading();
+  private String localTaskState = "";
+  private String expeditionState = "{}";
+  private com.google.gson.JsonArray recentResults = new com.google.gson.JsonArray();
+  private boolean recovering;
+  private String respawnDimension = "", respawnConfigKey = "";
+  private net.minecraft.world.phys.Vec3 respawnPosition = net.minecraft.world.phys.Vec3.ZERO;
+  private float respawnYaw;
+
+  public com.google.gson.JsonArray recentResults() {
+    var latest = new com.google.gson.JsonArray();
+    for (int i = recentResults.size() - 1; i >= 0; i--) latest.add(recentResults.get(i).deepCopy());
+    return latest;
+  }
+
+  public void rememberResult(String tool, com.google.gson.JsonObject outcome) {
+    if (!java.util.Set.of(
+            "inspect_entities",
+            "inspect_entity",
+            "inspect_block",
+            "inspect_structures",
+            "explore_structure",
+            "team_status",
+            "use_item",
+            "travel_dimension",
+            "place_workstation",
+            "attack",
+            "hunt",
+            "acquire")
+        .contains(tool)) return;
+    recentResults.add(
+        dev.avatarcraft.npc.ai.CodexBridge.object(
+            "tool",
+            tool,
+            "tick",
+            level().getGameTime(),
+            "result",
+            dev.avatarcraft.npc.ai.NpcObservations.bounded(outcome, 1500)));
+    while (recentResults.size() > 8 || recentResults.toString().length() > 6000)
+      recentResults.remove(0);
+  }
+
+  public String expeditionState() {
+    return expeditionState;
+  }
+
+  public void setExpeditionState(String state) {
+    if (state.length() > 65536) throw new IllegalArgumentException("Expedition state too large");
+    expeditionState = state;
+  }
+
   private static final EntityDataAccessor<Integer> FOOD =
       SynchedEntityData.defineId(CompanionEntity.class, EntityDataSerializers.INT);
   private final NpcVitals vitals = new NpcVitals();
@@ -39,6 +105,7 @@ public final class CompanionEntity extends PathfinderMob implements AvatarActor,
       SynchedEntityData.defineId(CompanionEntity.class, EntityDataSerializers.BOOLEAN);
   private Personality personality = Personality.preset("tortobu");
   public final NpcInventory inventory = new NpcInventory(this);
+  public final NpcLocationMemory locations = new NpcLocationMemory();
 
   public CompanionEntity(EntityType<? extends CompanionEntity> type, Level level) {
     super(type, level);
@@ -157,7 +224,20 @@ public final class CompanionEntity extends PathfinderMob implements AvatarActor,
 
   @Override
   public void remove(RemovalReason reason) {
+    if (!level().isClientSide()) containerAnimation.close();
+    if (!level().isClientSide() && reason.shouldDestroy()) {
+      NpcRoster.get(level().getServer()).remove(getUUID());
+      dev.avatarcraft.npc.ai.NpcTeams.finished(this, "NPC was removed or died");
+      dev.avatarcraft.npc.ai.NpcTeams.changed(this);
+      var data = dev.avatarcraft.npc.ai.NpcWorkData.get((ServerLevel) level());
+      if (data.furnaces.values().removeIf(getUUID()::equals)) data.setDirty();
+    }
+    // Persist tickets during a normal save/unload; release on death/discard and dimension transfer.
+    if (!level().isClientSide()
+        && (reason.shouldDestroy() || reason == RemovalReason.CHANGED_DIMENSION))
+      chunkLoading.remove(this);
     if (mind != null) {
+      localTaskState = mind.saveState();
       mind.close();
       mind = null;
     }
@@ -186,7 +266,13 @@ public final class CompanionEntity extends PathfinderMob implements AvatarActor,
 
   public void tick() {
     super.tick();
+    if (!level().isClientSide()) containerAnimation.tick();
+    if (!level().isClientSide()) chunkLoading.update(this);
     if (level() instanceof ServerLevel server && isAlive()) {
+      if (tickCount % 20 == 0) {
+        NpcRoster.get(server.getServer()).update(this);
+        cacheOwnerRespawn(server);
+      }
       var effect =
           vitals.tick(
               getHealth(),
@@ -223,6 +309,16 @@ public final class CompanionEntity extends PathfinderMob implements AvatarActor,
     if (owner != null) output.putString("Owner", owner.toString());
     output.putString("Personality", personality.json());
     output.putString("Instruction", instruction());
+    output.putString("RememberedLocations", locations.json());
+    output.putString("LocalTaskState", mind == null ? localTaskState : mind.saveState());
+    output.putString("ExpeditionState", expeditionState);
+    output.putString("RecentActionResults", recentResults.toString());
+    output.putBoolean("Recovering", recovering);
+    output.putString("OwnerRespawnDimension", respawnDimension);
+    output.putDouble("OwnerRespawnX", respawnPosition.x);
+    output.putDouble("OwnerRespawnY", respawnPosition.y);
+    output.putDouble("OwnerRespawnZ", respawnPosition.z);
+    output.putFloat("OwnerRespawnYaw", respawnYaw);
     output.putBoolean("FollowOwner", followsOwner());
     output.putInt("foodLevel", vitals.food());
     output.putFloat("foodSaturationLevel", vitals.saturation());
@@ -233,6 +329,14 @@ public final class CompanionEntity extends PathfinderMob implements AvatarActor,
 
   protected void readAdditionalSaveData(ValueInput input) {
     super.readAdditionalSaveData(input);
+    recovering = input.getBooleanOr("Recovering", false);
+    respawnDimension = input.getStringOr("OwnerRespawnDimension", "");
+    respawnPosition =
+        new net.minecraft.world.phys.Vec3(
+            input.getDoubleOr("OwnerRespawnX", 0),
+            input.getDoubleOr("OwnerRespawnY", 0),
+            input.getDoubleOr("OwnerRespawnZ", 0));
+    respawnYaw = input.getFloatOr("OwnerRespawnYaw", 0);
     try {
       owner = UUID.fromString(input.getStringOr("Owner", ""));
     } catch (IllegalArgumentException e) {
@@ -257,6 +361,28 @@ public final class CompanionEntity extends PathfinderMob implements AvatarActor,
         input.getFloatOr("foodExhaustionLevel", 0),
         input.getIntOr("foodTickTimer", 0));
     entityData.set(FOOD, vitals.food());
+    try {
+      locations.load(input.getStringOr("RememberedLocations", "[]"));
+    } catch (RuntimeException ignored) {
+      locations.load("[]");
+    }
+    localTaskState = input.getStringOr("LocalTaskState", "");
+    expeditionState = input.getStringOr("ExpeditionState", "{}");
+    if (expeditionState.length() > 65536) expeditionState = "{}";
+    try {
+      String results = input.getStringOr("RecentActionResults", "[]");
+      if (results.length() <= 6000) {
+        var parsed = com.google.gson.JsonParser.parseString(results).getAsJsonArray();
+        if (parsed.size() <= 8) recentResults = parsed;
+      }
+    } catch (RuntimeException ignored) {
+    }
+    if (localTaskState.length() > 65536) localTaskState = "invalid";
+    if (mind != null) mind.restoreState(localTaskState);
+  }
+
+  public String localTaskState() {
+    return localTaskState;
   }
 
   @Override
@@ -326,13 +452,146 @@ public final class CompanionEntity extends PathfinderMob implements AvatarActor,
       spawnAtLocation(server, remaining);
   }
 
-  protected void dropCustomDeathLoot(
-      ServerLevel level, DamageSource source, boolean killedByPlayer) {
-    super.dropCustomDeathLoot(level, source, killedByPlayer);
-    if (mind != null) mind.close();
-    for (int i = 0; i < NpcInventory.BAG_SIZE; i++) {
+  protected void dropAllDeathLoot(ServerLevel level, DamageSource source) {
+    if (!NpcSettings.DROP_ITEMS_ON_DEATH.get()) return;
+    captureDrops(new java.util.ArrayList<>());
+    for (int i = 0; i < NpcInventory.SIZE; i++) {
       var item = inventory.removeItemNoUpdate(i);
       if (!item.isEmpty()) spawnAtLocation(level, item);
     }
+    var drops = captureDrops(null);
+    if (!net.neoforged.neoforge.common.CommonHooks.onLivingDrops(
+        this, source, drops, lastHurtByPlayerMemoryTime > 0)) drops.forEach(level::addFreshEntity);
+  }
+
+  /**
+   * Clear both persistent tasks and current AI calls; recovery and recall always end in standby.
+   */
+  public void standBy() {
+    setInstruction("");
+    setFollowsOwner(false);
+    setTarget(null);
+    stopUsingItem();
+    getNavigation().stop();
+    setSprinting(false);
+    setShiftKeyDown(false);
+    setMining(false);
+    setAiStatus("待機中");
+    localTaskState = "";
+    expeditionState = "{}";
+  }
+
+  private void cacheOwnerRespawn(ServerLevel level) {
+    var player = owner == null ? null : level.getServer().getPlayerList().getPlayer(owner);
+    if (player == null) return;
+    String key = String.valueOf(player.getRespawnConfig());
+    if (key.equals(respawnConfigKey) && !respawnDimension.isEmpty()) return;
+    respawnConfigKey = key;
+    var at =
+        player.findRespawnPositionAndUseSpawnBlock(
+            false, net.minecraft.world.level.portal.TeleportTransition.DO_NOTHING);
+    respawnDimension = at.newLevel().dimension().identifier().toString();
+    respawnPosition = at.position();
+    respawnYaw = at.yRot();
+  }
+
+  @Override
+  public void die(DamageSource source) {
+    super.die(source);
+    if (level() instanceof ServerLevel server && dead && owner != null && !recovering) {
+      recovering = true;
+      standBy();
+      var data = dev.avatarcraft.npc.ai.NpcWorkData.get(server);
+      if (data.furnaces.values().removeIf(getUUID()::equals)) data.setDirty();
+      NpcService.get(server.getServer()).notice(this, "倒れました。作業を中断し、あなたのリスポーン地点へ戻ります。");
+    }
+  }
+
+  @Override
+  protected void tickDeath() {
+    if (owner == null) {
+      super.tickDeath();
+      return;
+    }
+    if (!(level() instanceof ServerLevel server)) {
+      deathTime = Math.min(20, deathTime + 1);
+      return;
+    }
+    if (++deathTime < 20 || (deathTime > 20 && deathTime % 100 != 0)) return;
+    var player = server.getServer().getPlayerList().getPlayer(owner);
+    net.minecraft.world.level.portal.TeleportTransition at = null;
+    if (player != null)
+      at =
+          player.findRespawnPositionAndUseSpawnBlock(
+              false, net.minecraft.world.level.portal.TeleportTransition.DO_NOTHING);
+    var destination =
+        at == null
+            ? server
+                .getServer()
+                .getLevel(
+                    net.minecraft.resources.ResourceKey.create(
+                        net.minecraft.core.registries.Registries.DIMENSION,
+                        net.minecraft.resources.Identifier.tryParse(respawnDimension) == null
+                            ? net.minecraft.resources.Identifier.parse("minecraft:overworld")
+                            : net.minecraft.resources.Identifier.parse(respawnDimension)))
+            : at.newLevel();
+    boolean missingDimension = destination == null;
+    if (missingDimension) destination = server.getServer().findRespawnDimension();
+    var position =
+        at != null
+            ? at.position()
+            : respawnDimension.isEmpty() || missingDimension
+                ? net.minecraft.world.phys.Vec3.atBottomCenterOf(
+                    adjustSpawnLocation(destination, destination.getRespawnData().pos()))
+                : respawnPosition;
+    var safe = NpcTravel.safePosition(destination, position);
+    if (safe == null && at == null) {
+      destination = server.getServer().findRespawnDimension();
+      safe =
+          NpcTravel.safePosition(
+              destination,
+              net.minecraft.world.phys.Vec3.atBottomCenterOf(
+                  adjustSpawnLocation(destination, destination.getRespawnData().pos())));
+    }
+    if (safe == null) {
+      setAiStatus("復帰先に安全な場所がありません。再試行中");
+      return;
+    }
+    dead = false;
+    recovering = false;
+    deathTime = 0;
+    hurtTime = 0;
+    setHealth(getMaxHealth());
+    setPose(Pose.STANDING);
+    clearFire();
+    removeAllEffects();
+    setAirSupply(getMaxAirSupply());
+    fallDistance = 0;
+    setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+    vitals.restore(20, 5, 0, 0);
+    entityData.set(FOOD, 20);
+    standBy();
+    var moved = NpcTravel.move(this, destination, safe, at == null ? respawnYaw : at.yRot());
+    if (moved == null) {
+      dead = true;
+      recovering = true;
+      setHealth(0);
+      setPose(Pose.DYING);
+      deathTime = 20;
+      return;
+    }
+    destination.broadcastEntityEvent(moved, (byte) -70);
+    NpcService.get(destination.getServer())
+        .record(moved, "respawn", "所有者のリスポーン地点へ復帰して待機", owner, new com.google.gson.JsonObject());
+  }
+
+  @Override
+  public void handleEntityEvent(byte event) {
+    if (event == (byte) -70) {
+      dead = false;
+      deathTime = 0;
+      hurtTime = 0;
+      setPose(Pose.STANDING);
+    } else super.handleEntityEvent(event);
   }
 }

@@ -34,7 +34,33 @@ public final class NpcSkills {
   private final CompanionEntity npc;
   private final BiConsumer<String, Integer> speak;
   private Action action;
+  private NpcSurvival acquisition;
+  private NpcSmelting smelting;
+  private NpcExpedition expedition;
+  private final int acquisitionDepth;
+  private final NpcInteractions interactions;
   private final NpcFollowing following;
+  private final TravelPace travelPace = new TravelPace();
+
+  private double movementSpeed(double distanceSquared, boolean precise) {
+    travelPace.update(distanceSquared, canSprint(npc), precise);
+    npc.setSprinting(travelPace.sprinting());
+    npc.getNavigation().setSpeedModifier(travelPace.speed());
+    return travelPace.speed();
+  }
+
+  static boolean canSprint(CompanionEntity npc) {
+    var path = npc.getNavigation().getPath();
+    boolean flat =
+        path == null || path.isDone() || path.getNextNodePos().getY() == npc.blockPosition().getY();
+    return npc.foodLevel() > 6
+        && !npc.isShiftKeyDown()
+        && !npc.isUsingItem()
+        && !npc.isInWater()
+        && flat
+        && npc.level().noCollision(npc, npc.getBoundingBox().inflate(.35, 0, .35));
+  }
+
   private volatile long generation;
   private long lastAttack = Long.MIN_VALUE / 2;
 
@@ -47,6 +73,9 @@ public final class NpcSkills {
     int miningTicks;
     float progress;
     ItemStack tool = ItemStack.EMPTY;
+    Vec3 started;
+    double bestDistance = Double.POSITIVE_INFINITY;
+    long progressTick;
 
     Action(
         String name,
@@ -61,8 +90,14 @@ public final class NpcSkills {
   }
 
   public NpcSkills(CompanionEntity npc, BiConsumer<String, Integer> speak) {
+    this(npc, speak, 0);
+  }
+
+  NpcSkills(CompanionEntity npc, BiConsumer<String, Integer> speak, int depth) {
     this.npc = npc;
     this.speak = speak;
+    acquisitionDepth = depth;
+    interactions = new NpcInteractions(npc, this);
     following = new NpcFollowing(npc);
   }
 
@@ -92,7 +127,11 @@ public final class NpcSkills {
                           else result.complete(error("Game action failed"));
                         });
               } catch (RuntimeException e) {
-                result.complete(error("Invalid or disallowed game action"));
+                result.complete(
+                    error(
+                        e instanceof IllegalArgumentException && e.getMessage() != null
+                            ? e.getMessage()
+                            : "Game action rejected (" + e.getClass().getSimpleName() + ")"));
               }
             });
     return result;
@@ -123,20 +162,35 @@ public final class NpcSkills {
         && npc.distanceToSqr(Vec3.atCenterOf(pos)) <= distance * distance;
   }
 
-  private boolean mayChange(BlockPos pos, double distance) {
+  boolean mayChange(BlockPos pos, double distance) {
     return permitted(pos, distance) && owner().mayBuild() && level().mayInteract(owner(), pos);
   }
 
-  private boolean visible(BlockPos target) {
+  boolean visible(BlockPos target) {
+    return visibleFrom(npc.getEyePosition(), target);
+  }
+
+  boolean visibleFrom(Vec3 eye, BlockPos target) {
+    if (visibleHitFrom(eye, Vec3.atCenterOf(target), target)) return true;
+    for (var face : Direction.values())
+      if (visibleHitFrom(
+          eye,
+          Vec3.atCenterOf(target)
+              .add(face.getStepX() * .499, face.getStepY() * .499, face.getStepZ() * .499),
+          target)) return true;
+    return false;
+  }
+
+  boolean visibleHit(Vec3 point, BlockPos target) {
+    return visibleHitFrom(npc.getEyePosition(), point, target);
+  }
+
+  private boolean visibleHitFrom(Vec3 eye, Vec3 point, BlockPos target) {
     var hit =
         level()
             .clip(
                 new ClipContext(
-                    npc.getEyePosition(),
-                    Vec3.atCenterOf(target),
-                    ClipContext.Block.COLLIDER,
-                    ClipContext.Fluid.NONE,
-                    npc));
+                    eye, point, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, npc));
     return hit.getType() == HitResult.Type.MISS || hit.getBlockPos().equals(target);
   }
 
@@ -152,6 +206,33 @@ public final class NpcSkills {
     if (name.equals("observe")) return immediate(observe());
     if (name.equals("find_blocks")) return immediate(findBlocks(args));
     if (name.equals("find_chests")) return immediate(findChests(args));
+    if (name.equals("inspect_structures"))
+      return immediate(
+          object(
+              "ok", true, "structures", NpcExpedition.inspect(npc, args.get("radius").getAsInt())));
+    if (name.equals("team_status"))
+      return immediate(NpcTeams.status(npc, args.get("entity_id").getAsInt()));
+    if (name.equals("forget_location"))
+      return immediate(object("ok", npc.locations.forget(args.get("name").getAsString())));
+    if (name.equals("remember_location")) {
+      var p = pos(args);
+      if (!permitted(p, 16)) return immediate(error("Location must be in the nearby loaded area"));
+      boolean isChest = level().getBlockState(p).getBlock() instanceof ChestBlock;
+      if (isChest && chest(p, 16) == null) return immediate(error("Chest is inaccessible"));
+      boolean saved =
+          npc.locations.remember(
+              new dev.avatarcraft.npc.NpcLocationMemory.Place(
+                  args.get("name").getAsString(),
+                  level().dimension().identifier().toString(),
+                  p.getX(),
+                  p.getY(),
+                  p.getZ(),
+                  isChest ? "chest" : "point"));
+      return immediate(
+          saved
+              ? object("ok", true, "locations", npc.locations.snapshot())
+              : error("Location memory is full (8); forget a named place first"));
+    }
     if (name.equals("say")) {
       String text = args.get("text").getAsString().strip();
       if (text.isEmpty() || text.length() > 300)
@@ -163,9 +244,78 @@ public final class NpcSkills {
       cancel("Stopped");
       return immediate(object("ok", true));
     }
-    if (action != null) return immediate(error("Another game action is still in progress"));
-    if (name.equals("deposit")) return immediate(deposit(args));
-    if (name.equals("withdraw")) return immediate(withdraw(args));
+    if (name.equals("release_item")) return interactions.execute(name, args);
+    if (busy()) return immediate(error("Another game action is still in progress"));
+    if (interactions.supports(name)) return interactions.execute(name, args);
+    if (name.equals("delegate"))
+      return immediate(
+          NpcTeams.delegate(
+              npc,
+              args.get("entity_id").getAsInt(),
+              args.get("item").getAsString(),
+              args.get("count").getAsInt()));
+    if (name.equals("delegate_task"))
+      return immediate(
+          NpcTeams.delegatePlan(
+              npc, args.get("entity_id").getAsInt(), args.get("plan_json").getAsString()));
+    if (name.equals("place_workstation"))
+      return immediate(placeWorkstation(args.get("item").getAsString()));
+    if (name.equals("acquire")) {
+      acquisition =
+          new NpcSurvival(
+              npc,
+              args.get("item").getAsString(),
+              args.get("count").getAsInt(),
+              acquisitionDepth + 1);
+      return acquisition.result;
+    }
+    if (name.equals("smelt")) {
+      smelting =
+          new NpcSmelting(
+              npc, this, pos(args), args.get("item").getAsString(), args.get("count").getAsInt());
+      return smelting.result;
+    }
+    if (name.equals("explore_structure")) {
+      expedition = new NpcExpedition(npc, args.get("structure").getAsString());
+      return expedition.result;
+    }
+    if (name.equals("travel_dimension")) {
+      String destination = args.get("dimension").getAsString();
+      if (level().dimension().identifier().toString().equals(destination))
+        return immediate(object("ok", true, "dimension", destination));
+      if (!Set.of("minecraft:overworld", "minecraft:the_nether", "minecraft:the_end")
+          .contains(destination)) return immediate(error("Unsupported dimension target"));
+      Block expected =
+          destination.equals("minecraft:the_end") || level().dimension() == Level.END
+              ? Blocks.END_PORTAL
+              : Blocks.NETHER_PORTAL;
+      BlockPos portal = null;
+      for (var p :
+          BlockPos.betweenClosed(
+              npc.blockPosition().offset(-24, -8, -24), npc.blockPosition().offset(24, 8, 24)))
+        if (level().hasChunkAt(p)
+            && level().getBlockState(p).is(expected)
+            && (portal == null
+                || p.distSqr(npc.blockPosition()) < portal.distSqr(npc.blockPosition())))
+          portal = p.immutable();
+      if (portal == null)
+        return immediate(
+            error(
+                "No observed active portal: acquire materials, build and ignite one or find the"
+                    + " actual end portal"));
+      args = args.deepCopy();
+      args.addProperty("x", portal.getX());
+      args.addProperty("y", portal.getY());
+      args.addProperty("z", portal.getZ());
+    }
+    if (name.equals("deposit")) {
+      var transfer = args.deepCopy();
+      return animateContainer(pos(transfer), 4, () -> deposit(transfer));
+    }
+    if (name.equals("withdraw")) {
+      var transfer = args.deepCopy();
+      return animateContainer(pos(transfer), 4, () -> withdraw(transfer));
+    }
     if (name.equals("give_item")) return immediate(giveItem(args));
     if (name.equals("craft")) return immediate(craft(args));
     if (name.equals("place")) return immediate(place(args));
@@ -180,6 +330,11 @@ public final class NpcSkills {
               ? object("ok", true, "hand", hand, "inventory", observe().get("inventory"))
               : error("Invalid bag slot or an item is still being used"));
     }
+    if (name.equals("move_precisely")) {
+      name = "move_to";
+      args = args.deepCopy();
+      args.addProperty("_arrival", .2);
+    }
     if (Set.of("move_to", "dig").contains(name) && !permitted(pos(args), 64))
       return immediate(error("Target is outside the permitted loaded area"));
     if (name.equals("wait") || name.equals("follow")) {
@@ -187,7 +342,9 @@ public final class NpcSkills {
       if (seconds < 1 || seconds > 60) return immediate(error("Duration must be 1..60 seconds"));
     }
     long duration =
-        name.equals("wait") || name.equals("follow") ? args.get("seconds").getAsInt() * 20L : 1200;
+        name.equals("wait") || name.equals("follow")
+            ? args.get("seconds").getAsInt() * 20L
+            : name.equals("await_teammate") ? 36000 : 1200;
     action =
         new Action(
             name,
@@ -196,10 +353,36 @@ public final class NpcSkills {
             name.equals("dig") ? level().getBlockState(pos(args)) : null);
     following.stop();
     npc.getNavigation().stop();
+    action.started = npc.position();
+    action.progressTick = level().getGameTime();
     return action.result;
   }
 
   public void tick() {
+    if (npc.containerAnimation.busy()) return;
+    interactions.tick();
+    if (interactions.busy()) return;
+    if (acquisition != null) {
+      acquisition.tick();
+      if (acquisition.result.isDone()) {
+        acquisition.close();
+        acquisition = null;
+      }
+      return;
+    }
+    if (smelting != null) {
+      smelting.tick();
+      if (smelting.result.isDone()) smelting = null;
+      return;
+    }
+    if (expedition != null) {
+      expedition.tick();
+      if (expedition.result.isDone()) {
+        expedition.close();
+        expedition = null;
+      }
+      return;
+    }
     var current = action;
     if (current == null) {
       var owner = owner();
@@ -219,18 +402,58 @@ public final class NpcSkills {
         if (now >= current.deadline) finish(object("ok", true));
         return;
       }
+      if (current.name.equals("await_teammate")) {
+        var status = NpcTeams.status(npc, current.args.get("entity_id").getAsInt());
+        if (!status.get("ok").getAsBoolean()) {
+          finish(
+              object(
+                  "ok",
+                  false,
+                  "error",
+                  "A delegated job is missing, cancelled or blocked",
+                  "status",
+                  status));
+          return;
+        }
+        if (!status.get("running").getAsBoolean()) {
+          finish(status);
+          return;
+        }
+        if (now >= current.deadline) finish(error("Team wait timeout"));
+        return;
+      }
       if (now >= current.deadline) {
         finish(
             current.name.equals("follow")
                 ? object("ok", true)
-                : error("Target was not reached before timeout"));
+                : object(
+                    "ok",
+                    false,
+                    "error",
+                    "Target was not reached before timeout",
+                    "position",
+                    vector(npc.position()),
+                    "target",
+                    current.args.deepCopy()));
         return;
       }
-      if (current.name.equals("follow") || current.name.equals("attack")) {
+      if (Set.of("follow", "attack", "hunt").contains(current.name)) {
         entityAction(current, now);
         return;
       }
       var target = pos(current.args);
+      if (current.name.equals("travel_dimension")) {
+        double speed = movementSpeed(npc.distanceToSqr(Vec3.atBottomCenterOf(target)), false);
+        if (npc.tickCount % 10 == 0 || npc.getNavigation().isDone()) {
+          var path = npc.getNavigation().createPath(target, 0);
+          if (path == null || !path.canReach()) {
+            finish(error("No walking path into the observed portal"));
+            return;
+          }
+          npc.getNavigation().moveTo(path, speed);
+        }
+        return;
+      }
       if (!permitted(target, 64)) {
         finish(error("Target became unavailable or protected"));
         return;
@@ -238,14 +461,83 @@ public final class NpcSkills {
       double distance =
           npc.distanceToSqr(
               current.name.equals("dig") ? Vec3.atCenterOf(target) : Vec3.atBottomCenterOf(target));
-      double reach = current.name.equals("dig") ? 16 : .36;
+      double arrival =
+          current.args.has("_arrival") ? current.args.get("_arrival").getAsDouble() : .8;
+      double reach = current.name.equals("dig") ? 16 : arrival * arrival;
+      double speed = movementSpeed(distance, current.args.has("_arrival"));
+      boolean approaching =
+          current.name.equals("move_to")
+              || current.name.equals("dig") && (distance > 16 || !visible(target));
+      if (approaching) {
+        if (distance < current.bestDistance - .02) {
+          current.bestDistance = distance;
+          current.progressTick = now;
+        } else if (now - current.progressTick > 100) {
+          finish(
+              object(
+                  "ok",
+                  false,
+                  "error",
+                  "Path made no progress; target may be blocked",
+                  "position",
+                  vector(npc.position()),
+                  "target",
+                  current.args.deepCopy()));
+          return;
+        }
+      }
+      var straight = Vec3.atBottomCenterOf(target).subtract(npc.position());
+      if (current.name.equals("move_to")
+          && npc.onGround()
+          && npc.blockPosition().getY() == target.getY()
+          && distance <= 2.25
+          && level().noCollision(npc, npc.getBoundingBox().expandTowards(straight))) {
+        boolean sameCell =
+            npc.blockPosition().getX() == target.getX()
+                && npc.blockPosition().getZ() == target.getZ();
+        if (distance <= reach && sameCell) {
+          finish(object("ok", true, "position", vector(npc.position())));
+          return;
+        }
+        npc.getNavigation().stop();
+        npc.getMoveControl()
+            .setWantedPosition(target.getX() + .5, target.getY(), target.getZ() + .5, 1.0);
+        return;
+      }
+      if (current.name.equals("dig")
+          && (!visible(target) || npc.distanceToSqr(Vec3.atCenterOf(target)) > 16)) {
+        var destination = new NpcLocalWorld(npc, this).approach(vector(Vec3.atCenterOf(target)));
+        if (destination == null) {
+          finish(error("No visible mining approach"));
+          return;
+        }
+        if (npc.onGround() && (npc.tickCount % 20 == 0 || npc.getNavigation().isDone())) {
+          var standing =
+              BlockPos.containing(
+                  destination.get("x").getAsDouble(),
+                  destination.get("y").getAsDouble(),
+                  destination.get("z").getAsDouble());
+          var path = npc.getNavigation().createPath(standing, 0);
+          if (path == null || !npc.getNavigation().moveTo(path, speed)) {
+            if (npc.distanceToSqr(Vec3.atBottomCenterOf(standing)) < 4)
+              npc.getMoveControl()
+                  .setWantedPosition(
+                      standing.getX() + .5, standing.getY(), standing.getZ() + .5, 1.0);
+            else finish(error("No path to visible mining approach"));
+          }
+        }
+        return;
+      }
+      // A path may finish while the entity is still settling onto a lower stair.
+      if (current.name.equals("move_to") && !npc.onGround() && !npc.isInWater()) return;
       if (distance > reach) {
+        if (!npc.onGround() && !npc.isInWater()) return;
         if (npc.tickCount % 20 == 0 || npc.getNavigation().isDone()) {
           var navigation = npc.getNavigation();
           boolean path =
               current.name.equals("move_to")
-                  ? navigation.moveTo(navigation.createPath(target, 0), 1.6)
-                  : navigation.moveTo(target.getX() + .5, target.getY(), target.getZ() + .5, 1.6);
+                  ? navigation.moveTo(navigation.createPath(target, 0), speed)
+                  : navigation.moveTo(target.getX() + .5, target.getY(), target.getZ() + .5, speed);
           if (!path)
             finish(
                 object(
@@ -272,13 +564,22 @@ public final class NpcSkills {
   }
 
   private void entityAction(Action current, long now) {
-    var target = level().getEntity(current.args.get("entity_id").getAsInt());
+    var target = NpcCombat.entity(level(), current.args.get("entity_id").getAsInt());
+    if (target instanceof net.minecraft.world.entity.boss.enderdragon.EnderDragon dragon)
+      target = dragon.head;
     if (target == null || !target.isAlive() || npc.distanceToSqr(target) > 64 * 64) {
       finish(error("Target entity is not nearby"));
       return;
     }
-    if (current.name.equals("attack")
-        && (!(target instanceof Enemy) || target instanceof CompanionEntity)) {
+    if ((current.name.equals("attack") || current.name.equals("hunt"))
+        && (target instanceof net.minecraft.world.entity.player.Player
+            || target instanceof CompanionEntity
+            || target instanceof net.minecraft.world.entity.TamableAnimal pet && pet.isTame()
+            || current.name.equals("attack")
+                && !(target instanceof Enemy)
+                && !(target instanceof net.minecraft.world.entity.boss.enderdragon.EnderDragon)
+                && !(target instanceof net.minecraft.world.entity.boss.enderdragon.EnderDragonPart)
+                && !(target instanceof net.minecraft.world.entity.boss.enderdragon.EndCrystal))) {
       finish(error("Only hostile entities can be attacked"));
       return;
     }
@@ -287,13 +588,16 @@ public final class NpcSkills {
       return;
     }
     npc.getLookControl().setLookAt(target);
-    double reach = current.name.equals("attack") ? 6.25 : 9;
+    double reach = current.name.equals("follow") ? 9 : 6.25;
+    double speed = movementSpeed(npc.distanceToSqr(target), false);
     if (npc.distanceToSqr(target) > reach) {
       if (npc.tickCount % 20 == 0 || npc.getNavigation().isDone())
-        if (!npc.getNavigation().moveTo(target, 1.6)) finish(error("No path to target entity"));
+        if (!npc.getNavigation().moveTo(target, speed)) finish(error("No path to target entity"));
       return;
     }
     npc.getNavigation().stop();
+    npc.setSprinting(false);
+    travelPace.reset();
     int interval =
         Math.max(
             1, (int) Math.ceil(20 / Math.max(.1, npc.getAttributeValue(Attributes.ATTACK_SPEED))));
@@ -304,9 +608,28 @@ public final class NpcSkills {
       return;
     }
     npc.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
-    boolean hit = npc.doHurtTarget(level(), target);
+    boolean hit;
+    if (NpcCombat.boss(target)) {
+      hit =
+          NpcCombat.hit(npc, target, npc, (float) npc.getAttributeValue(Attributes.ATTACK_DAMAGE));
+      if (hit && !npc.getMainHandItem().isEmpty())
+        npc.getMainHandItem().hurtAndBreak(1, npc, EquipmentSlot.MAINHAND);
+    } else hit = npc.doHurtTarget(level(), target);
     if (hit) npc.exhaust(.1f);
-    finish(object("ok", hit, "target_alive", target.isAlive()));
+    var living =
+        target instanceof net.minecraft.world.entity.boss.enderdragon.EnderDragonPart part
+            ? part.getParent()
+            : target instanceof LivingEntity l ? l : null;
+    finish(
+        object(
+            "ok",
+            hit,
+            "entity_id",
+            target.getId(),
+            "target_alive",
+            living == null ? target.isAlive() : living.isAlive(),
+            "target_health",
+            living == null ? 0 : living.getHealth()));
   }
 
   private <T> T asPlayer(int slot, Function<FakePlayer, T> operation) {
@@ -315,9 +638,11 @@ public final class NpcSkills {
     var oldMode = fake.gameMode.getGameModeForPlayer();
     var oldPosition = fake.position();
     boolean oldShift = fake.isShiftKeyDown();
+    boolean oldGround = fake.onGround();
     float oldYaw = fake.getYRot(), oldPitch = fake.getXRot();
     fake.gameMode.changeGameModeForPlayer(GameType.SURVIVAL);
     fake.setPos(npc.position());
+    fake.setOnGround(npc.onGround());
     fake.setYRot(npc.getYRot());
     fake.setXRot(npc.getXRot());
     fake.setItemInHand(InteractionHand.MAIN_HAND, npc.inventory.getItem(slot).copy());
@@ -329,6 +654,7 @@ public final class NpcSkills {
       fake.setItemInHand(InteractionHand.MAIN_HAND, oldHand);
       fake.setPos(oldPosition);
       fake.setShiftKeyDown(oldShift);
+      fake.setOnGround(oldGround);
       fake.setYRot(oldYaw);
       fake.setXRot(oldPitch);
       fake.gameMode.changeGameModeForPlayer(oldMode);
@@ -336,6 +662,10 @@ public final class NpcSkills {
   }
 
   private void mine(Action current, BlockPos target) {
+    if (target.equals(npc.blockPosition().below())) {
+      finish(error("Cannot mine the block currently supporting the NPC"));
+      return;
+    }
     npc.setMining(true);
     var state = level().getBlockState(target);
     if (state.isAir() || !state.equals(current.original)) {
@@ -382,7 +712,6 @@ public final class NpcSkills {
     for (var face : Direction.values()) {
       var support = target.relative(face.getOpposite());
       if (!mayChange(support, 5)
-          || !visible(support)
           || level().getBlockState(support).getCollisionShape(level(), support).isEmpty()) continue;
       var hit =
           new BlockHitResult(
@@ -391,6 +720,7 @@ public final class NpcSkills {
               face,
               support,
               false);
+      if (!visibleHit(hit.getLocation(), support)) continue;
       var before = level().getBlockState(target);
       return asPlayer(
           slot,
@@ -455,6 +785,112 @@ public final class NpcSkills {
           || !second.canOpen(owner())) return null;
     }
     return ChestBlock.getContainer(block, state, level(), target, false);
+  }
+
+  private JsonObject placeWorkstation(String item) {
+    if (!Set.of("minecraft:chest", "minecraft:crafting_table", "minecraft:furnace").contains(item))
+      return error("Supported workstation: chest, crafting_table or furnace");
+    int slot = -1;
+    for (int i = 0; i < 36; i++)
+      if (NpcRecipes.id(npc.inventory.getItem(i).getItem()).equals(item)
+          && !npc.inventory.getItem(i).isEmpty()) {
+        slot = i;
+        break;
+      }
+    if (slot < 0) return error("Acquire the actual workstation item first");
+    var sites = new ArrayList<BlockPos>();
+    for (var p :
+        BlockPos.betweenClosed(
+            npc.blockPosition().offset(-3, -2, -3), npc.blockPosition().offset(3, 0, 3)))
+      if (level().hasChunkAt(p)
+          && level().getBlockState(p).isAir()
+          && level().getBlockState(p.below()).isFaceSturdy(level(), p.below(), Direction.UP)
+          && !npc.getBoundingBox().intersects(new AABB(p))
+          && level().getEntities(npc, new AABB(p)).isEmpty()) sites.add(p.immutable());
+    sites.sort(Comparator.comparingDouble(p -> npc.distanceToSqr(Vec3.atCenterOf(p))));
+    for (var p : sites) {
+      var outcome = place(object("x", p.getX(), "y", p.getY(), "z", p.getZ(), "slot", slot));
+      if (outcome.get("ok").getAsBoolean()) {
+        var result =
+            object(
+                "ok",
+                true,
+                "x",
+                p.getX(),
+                "y",
+                p.getY(),
+                "z",
+                p.getZ(),
+                "dimension",
+                level().dimension().identifier().toString());
+        if (item.equals("minecraft:chest")) {
+          var memory =
+              npc.locations.chest(
+                  level().dimension().identifier().toString(), p.getX(), p.getY(), p.getZ());
+          if (memory != null) result.addProperty("location", memory.name());
+        }
+        return result;
+      }
+    }
+    return error("No accessible empty supported workstation site");
+  }
+
+  net.minecraft.world.level.block.entity.FurnaceBlockEntity furnace(BlockPos p) {
+    if (!mayChange(p, 4)
+        || !visible(p)
+        || !(level().getBlockEntity(p)
+            instanceof net.minecraft.world.level.block.entity.FurnaceBlockEntity f)
+        || !f.canOpen(owner())) return null;
+    return f;
+  }
+
+  Container container(BlockPos p, double reach) {
+    if (!mayChange(p, reach) || !visible(p)) return null;
+    if (level().getBlockState(p).getBlock() instanceof ChestBlock) return chest(p, reach);
+    var entity = level().getBlockEntity(p);
+    if (entity instanceof net.minecraft.world.level.block.entity.BaseContainerBlockEntity lockable
+        && !lockable.canOpen(owner())) return null;
+    if (entity instanceof net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity box
+        && box.isClosed()) {
+      var state = level().getBlockState(p);
+      var lid =
+          net.minecraft.world.entity.monster.Shulker.getProgressDeltaAabb(
+                  1f,
+                  state.getValue(net.minecraft.world.level.block.ShulkerBoxBlock.FACING),
+                  0f,
+                  .5f,
+                  Vec3.atBottomCenterOf(p))
+              .deflate(1e-6);
+      if (!level().noCollision(lid)) return null;
+    }
+    return entity instanceof Container c ? c : null;
+  }
+
+  CompletionStage<JsonObject> animateContainer(
+      BlockPos p, double reach, Supplier<JsonObject> operation) {
+    var c = container(p, reach);
+    if (c == null)
+      return immediate(error("Container is blocked, locked, protected or unavailable"));
+    return npc.containerAnimation.use(p, c, () -> container(p, reach) != null, operation);
+  }
+
+  CompletionStage<JsonObject> interactContainer(BlockPos p) {
+    if (level().getBlockEntity(p)
+        instanceof net.minecraft.world.level.block.entity.EnderChestBlockEntity ender) {
+      if (!mayChange(p, 5)
+          || !visible(p)
+          || level().getBlockState(p.above()).isRedstoneConductor(level(), p.above()))
+        return immediate(error("Ender chest is blocked or inaccessible"));
+      return npc.containerAnimation.use(
+          p,
+          null,
+          () ->
+              mayChange(p, 5)
+                  && visible(p)
+                  && !level().getBlockState(p.above()).isRedstoneConductor(level(), p.above()),
+          () -> object("ok", true));
+    }
+    return animateContainer(p, 5, () -> object("ok", true));
   }
 
   private JsonObject withdraw(JsonObject args) {
@@ -548,6 +984,8 @@ public final class NpcSkills {
               container.getContainerSize(),
               "items",
               items));
+      npc.locations.chest(
+          level().dimension().identifier().toString(), target.getX(), target.getY(), target.getZ());
     }
     return object("ok", true, "chests", chests);
   }
@@ -564,9 +1002,11 @@ public final class NpcSkills {
     return object("ok", true, "status", "eating_started");
   }
 
-  private JsonObject craft(JsonObject args) {
-    var id = Identifier.tryParse(args.get("recipe").getAsString());
-    if (id == null) return error("Invalid recipe ID");
+  private record CraftInputs(CraftingRecipe recipe, CraftingInput input, int[] selected) {}
+
+  private CraftInputs prepareCraft(String recipeId) {
+    var id = Identifier.tryParse(recipeId);
+    if (id == null) throw new IllegalArgumentException("Invalid recipe ID");
     var holder =
         level()
             .getServer()
@@ -574,11 +1014,12 @@ public final class NpcSkills {
             .byKey(ResourceKey.create(Registries.RECIPE, id))
             .orElse(null);
     if (holder == null || !(holder.value() instanceof CraftingRecipe recipe))
-      return error("Recipe is not a crafting recipe");
+      throw new IllegalArgumentException("Recipe is not a crafting recipe");
     var placement = recipe.placementInfo();
     if (placement.isImpossibleToPlace() || placement.ingredients().size() > 9)
-      return error("Recipe requires manual special handling");
-    if (placement.ingredients().isEmpty()) return error("Recipe has no consumable materials");
+      throw new IllegalArgumentException("Recipe requires manual special handling");
+    if (placement.ingredients().isEmpty())
+      throw new IllegalArgumentException("Recipe has no consumable materials");
     int width =
         recipe instanceof ShapedRecipe shaped
             ? shaped.getWidth()
@@ -588,7 +1029,7 @@ public final class NpcSkills {
             ? shaped.getHeight()
             : (placement.ingredients().size() + width - 1) / width;
     if ((width > 2 || height > 2 || placement.ingredients().size() > 4) && !hasCraftingTable())
-      return error("A crafting table must be within four blocks");
+      throw new IllegalArgumentException("A crafting table must be within four blocks");
     int[] counts = new int[36];
     for (int i = 0; i < 36; i++) counts[i] = npc.inventory.getItem(i).getCount();
     var candidates = new ArrayList<int[]>();
@@ -598,7 +1039,7 @@ public final class NpcSkills {
       candidates.add(slots.stream().mapToInt(Integer::intValue).toArray());
     }
     var selected = CraftingAssignment.find(candidates, counts).orElse(null);
-    if (selected == null) return error("Missing crafting materials");
+    if (selected == null) throw new IllegalArgumentException("Missing crafting materials");
     var grid = new ArrayList<ItemStack>(Collections.nCopies(width * height, ItemStack.EMPTY));
     for (int i = 0; i < placement.slotsToIngredientIndex().size(); i++) {
       int ingredient = placement.slotsToIngredientIndex().getInt(i);
@@ -606,7 +1047,30 @@ public final class NpcSkills {
         grid.set(i, npc.inventory.getItem(selected[ingredient]).copyWithCount(1));
     }
     var input = CraftingInput.of(width, height, grid);
-    if (!recipe.matches(input, level())) return error("Materials do not match recipe");
+    if (!recipe.matches(input, level()))
+      throw new IllegalArgumentException("Materials do not match recipe");
+    return new CraftInputs(recipe, input, selected);
+  }
+
+  boolean canCraft(String recipe) {
+    try {
+      prepareCraft(recipe);
+      return true;
+    } catch (RuntimeException unavailable) {
+      return false;
+    }
+  }
+
+  private JsonObject craft(JsonObject args) {
+    final CraftInputs prepared;
+    try {
+      prepared = prepareCraft(args.get("recipe").getAsString());
+    } catch (IllegalArgumentException unavailable) {
+      return error(unavailable.getMessage());
+    }
+    var recipe = prepared.recipe();
+    var input = prepared.input();
+    var selected = prepared.selected();
     var output = recipe.assemble(input);
     var remainders = recipe.getRemainingItems(input);
     if (output.isEmpty()) return error("Recipe produced no item");
@@ -627,7 +1091,7 @@ public final class NpcSkills {
     if (!remainder.isEmpty()) npc.spawnAtLocation(level(), remainder);
   }
 
-  private boolean hasCraftingTable() {
+  boolean hasCraftingTable() {
     for (var pos :
         BlockPos.betweenClosed(
             npc.blockPosition().offset(-4, -2, -4), npc.blockPosition().offset(4, 2, 4)))
@@ -696,27 +1160,43 @@ public final class NpcSkills {
         npc.followsOwner(),
         "nearby",
         entities,
+        "locations",
+        npc.locations.snapshot(),
+        "dimension",
+        level().dimension().identifier().toString(),
         "action",
         action == null ? "idle" : action.name);
   }
 
   private JsonObject findBlocks(JsonObject args) {
     int radius = args.get("radius").getAsInt();
-    var id = Identifier.tryParse(args.get("block").getAsString());
-    if (id == null || radius < 1 || radius > 16 || !BuiltInRegistries.BLOCK.containsKey(id))
-      return error("Invalid block search");
+    String wanted = args.get("block").getAsString();
+    boolean isTag = wanted.startsWith("#");
+    var id = Identifier.tryParse(isTag ? wanted.substring(1) : wanted);
+    if (id == null
+        || radius < 1
+        || radius > 16
+        || !isTag && !BuiltInRegistries.BLOCK.containsKey(id)) return error("Invalid block search");
     var block = BuiltInRegistries.BLOCK.getValue(id);
     var found = new ArrayList<BlockPos>();
     for (var target :
         BlockPos.betweenClosed(
             npc.blockPosition().offset(-radius, -Math.min(radius, 8), -radius),
             npc.blockPosition().offset(radius, Math.min(radius, 8), radius)))
-      if (level().hasChunkAt(target) && level().getBlockState(target).is(block))
-        found.add(target.immutable());
+      if (level().hasChunkAt(target)
+          && (isTag
+              ? level()
+                  .getBlockState(target)
+                  .is(net.minecraft.tags.TagKey.create(Registries.BLOCK, id))
+              : level().getBlockState(target).is(block))) found.add(target.immutable());
     found.sort(Comparator.comparingDouble(p -> p.distSqr(npc.blockPosition())));
     var result = new JsonArray();
     found.stream().limit(24).forEach(p -> result.add(vector(Vec3.atCenterOf(p))));
     return object("ok", true, "blocks", result);
+  }
+
+  JsonObject nearbyChests() {
+    return findChests(object("radius", 16));
   }
 
   private static JsonArray vector(Vec3 position) {
@@ -731,9 +1211,16 @@ public final class NpcSkills {
     var current = action;
     action = null;
     following.stop();
+    travelPace.reset();
+    npc.setSprinting(false);
     npc.getNavigation().stop();
     npc.setMining(false);
     if (current != null) {
+      if (current.name.equals("move_to")
+          && result.has("ok")
+          && result.get("ok").getAsBoolean()
+          && current.started != null)
+        result.addProperty("moved_distance", npc.position().distanceTo(current.started));
       if (current.name.equals("dig"))
         level().destroyBlockProgress(npc.getId(), pos(current.args), -1);
       current.result.complete(result);
@@ -742,10 +1229,26 @@ public final class NpcSkills {
 
   public void cancel(String reason) {
     generation++;
+    npc.containerAnimation.close();
+    interactions.close();
+    var acquiring = acquisition;
+    acquisition = null;
+    if (acquiring != null) acquiring.close();
+    var cooking = smelting;
+    smelting = null;
+    if (cooking != null) cooking.close();
+    var exploring = expedition;
+    expedition = null;
+    if (exploring != null) exploring.close();
     finish(error(reason));
   }
 
   public boolean busy() {
-    return action != null;
+    return action != null
+        || acquisition != null
+        || smelting != null
+        || expedition != null
+        || interactions.busy()
+        || npc.containerAnimation.busy();
   }
 }

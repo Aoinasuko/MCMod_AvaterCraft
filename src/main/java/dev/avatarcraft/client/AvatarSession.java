@@ -18,14 +18,18 @@ public final class AvatarSession {
   public final AvatarTextures textures;
 
   public AvatarSession(AvatarArchive a) throws IOException {
+    this(a, false);
+  }
+
+  public AvatarSession(AvatarArchive a, boolean remote) throws IOException {
     archive = a;
     pose = new AvatarPose(a.avatar());
     previewPose = new AvatarPose(a.avatar());
-    leftFirstPerson = new FirstPersonArm(a.avatar(), true);
-    rightFirstPerson = new FirstPersonArm(a.avatar(), false);
+    leftFirstPerson = remote ? null : new FirstPersonArm(a.avatar(), true);
+    rightFirstPerson = remote ? null : new FirstPersonArm(a.avatar(), false);
     config = a.expressions().copy();
     var path = AvatarLibrary.expressionPath(a.avatar().id);
-    if (Files.exists(path)) {
+    if (!remote && Files.exists(path)) {
       if (Files.size(path) > 1 << 20) throw new IOException("Expression config exceeds 1 MiB");
       config = AvatarArchive.GSON.fromJson(Files.readString(path), ExpressionConfig.class);
       config.validate(a.avatar());
@@ -41,11 +45,13 @@ public final class AvatarSession {
     var old = active;
     active = next;
     if (old != null) old.textures.close();
+    ShareClient.selectionChanged();
   }
 
   public void saveExpressions() throws IOException {
     config.validate(archive.avatar());
     AvatarLibrary.atomicWrite(
         AvatarLibrary.expressionPath(archive.avatar().id), AvatarArchive.GSON.toJson(config));
+    ShareClient.selectionChanged();
   }
 }

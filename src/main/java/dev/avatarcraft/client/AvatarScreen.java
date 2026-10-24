@@ -165,7 +165,14 @@ public final class AvatarScreen extends Screen {
           width / 2,
           70,
           0xffbbc9df);
-    g.text(font, font.plainSubstrByWidth(message, width - 16), 8, height - 43, 0xffffdc9b);
+    g.text(
+        font,
+        font.plainSubstrByWidth(
+            message.isEmpty() ? ShareClient.status() : message + " / " + ShareClient.status(),
+            width - 16),
+        8,
+        height - 43,
+        0xffffdc9b);
     super.extractRenderState(g, mx, my, dt);
   }
 

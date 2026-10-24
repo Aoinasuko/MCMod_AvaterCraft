@@ -42,6 +42,38 @@ public record AvatarArchive(
         entries.put(n, bytes);
       }
     }
+    return fromEntries(entries);
+  }
+
+  /** Remote data is validated entirely in memory; no decrypted .avc is written to disk. */
+  public static AvatarArchive read(byte[] data, long maxExpanded) throws IOException {
+    if (data.length > MAX_ARCHIVE || maxExpanded < 1 || maxExpanded > MAX_EXPANDED)
+      throw new IOException("Avatar size limit");
+    var entries = new HashMap<String, byte[]>();
+    long total = 0;
+    int count = 0;
+    try (var zip = new ZipInputStream(new ByteArrayInputStream(data))) {
+      for (var e = zip.getNextEntry(); e != null; e = zip.getNextEntry()) {
+        if (++count > 4096) throw new IOException("Too many archive entries");
+        String n = e.getName();
+        if (n.startsWith("/")
+            || n.contains("..")
+            || n.contains("\\")
+            || n.contains(":")
+            || entries.containsKey(n)) throw new IOException("Unsafe/duplicate archive path");
+        if (e.isDirectory()) continue;
+        int limit = n.endsWith(".json") ? 16 << 20 : 128 << 20;
+        limit = (int) Math.min(limit, maxExpanded - total);
+        byte[] bytes = zip.readNBytes(limit + 1);
+        if (bytes.length > limit || (total += bytes.length) > maxExpanded)
+          throw new IOException("Expanded avatar exceeds multiplayer limit");
+        entries.put(n, bytes);
+      }
+    }
+    return fromEntries(entries);
+  }
+
+  private static AvatarArchive fromEntries(Map<String, byte[]> entries) throws IOException {
     try {
       var avatar =
           GSON.fromJson(

@@ -1,7 +1,7 @@
 package dev.avatarcraft.npc.ai;
 
 /** Runtime snapshot. API secrets stay on the host; OAuth credentials remain managed by Codex. */
-public final class CodexConfig {
+public final class CodexConfig implements Cloneable {
   public enum Provider {
     CODEX,
     OPENAI,
@@ -17,6 +17,7 @@ public final class CodexConfig {
   public String executable =
       System.getProperty("os.name").startsWith("Windows") ? "codex.exe" : "codex";
   public String model = "";
+  public String complexModel = "";
   public int requestTimeoutSeconds = 30,
       turnTimeoutSeconds = 180,
       maxToolCalls = 32,
@@ -50,7 +51,9 @@ public final class CodexConfig {
         || executable.length() > 4096
         || executable.indexOf('\n') >= 0)
       throw new IllegalArgumentException("Invalid Codex executable path");
-    if (model == null
+    if (complexModel == null
+        || complexModel.length() > 128
+        || model == null
         || model.length() > 128
         || requestTimeoutSeconds < 5
         || requestTimeoutSeconds > 120
@@ -70,5 +73,9 @@ public final class CodexConfig {
   public String resolvedApiKey() {
     String value = apiKeyEnvironment.isBlank() ? null : System.getenv(apiKeyEnvironment);
     return value == null || value.isBlank() ? apiKey : value.strip();
+  }
+
+  public String planningModel() {
+    return complexModel.isBlank() ? model : complexModel;
   }
 }

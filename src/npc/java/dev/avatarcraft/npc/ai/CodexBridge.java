@@ -47,7 +47,7 @@ public final class CodexBridge implements NpcBrain {
     var params =
         object(
             "clientInfo",
-            object("name", "avatarcraft_npc", "title", "AvatarCraft NPC", "version", "0.5.1"),
+            object("name", "avatarcraft_npc", "title", "AvatarCraft NPC", "version", "0.6.0"),
             "capabilities",
             object("experimentalApi", true));
     return rpc.request("initialize", params)
@@ -102,6 +102,18 @@ public final class CodexBridge implements NpcBrain {
 
   public CompletableFuture<Session> open(
       Personality personality, BiFunction<String, JsonObject, CompletionStage<JsonObject>> tools) {
+    return open(personality, tools, false);
+  }
+
+  public CompletableFuture<Session> openAdvanced(
+      Personality personality, BiFunction<String, JsonObject, CompletionStage<JsonObject>> tools) {
+    return open(personality, tools, true);
+  }
+
+  private CompletableFuture<Session> open(
+      Personality personality,
+      BiFunction<String, JsonObject, CompletionStage<JsonObject>> tools,
+      boolean advanced) {
     var value = Personality.parse(personality.json());
     var params =
         object(
@@ -137,12 +149,13 @@ public final class CodexBridge implements NpcBrain {
                 "disabled",
                 "features",
                 disabledFeatures()));
-    if (!config.model.isBlank()) params.addProperty("model", config.model);
+    String selected = advanced ? config.planningModel() : config.model;
+    if (!selected.isBlank()) params.addProperty("model", selected);
     return rpc.request("thread/start", params)
         .thenCompose(
             result -> {
               String id = result.getAsJsonObject("thread").get("id").getAsString();
-              var session = new Session(id, value, tools);
+              var session = new Session(id, value, tools, advanced);
               sessions.put(id, session);
               return rpc.request(
                       "mcpServerStatus/list",
@@ -252,21 +265,27 @@ public final class CodexBridge implements NpcBrain {
       final ConcurrentMap<String, CompletionStage<JsonObject>> calls = new ConcurrentHashMap<>();
       final AtomicInteger callCount = new AtomicInteger();
       final boolean speechOnly;
+      final boolean planning;
       volatile String turnId, text = "";
 
-      Active(boolean speechOnly) {
+      Active(boolean speechOnly, boolean planning) {
         this.speechOnly = speechOnly;
+        this.planning = planning;
       }
     }
 
     private Session(
         String id,
         Personality personality,
-        BiFunction<String, JsonObject, CompletionStage<JsonObject>> tools) {
+        BiFunction<String, JsonObject, CompletionStage<JsonObject>> tools,
+        boolean advanced) {
       this.id = id;
       this.personality = personality;
       this.tools = tools;
+      this.advanced = advanced;
     }
+
+    private final boolean advanced;
 
     public boolean busy() {
       return active.get() != null;
@@ -289,23 +308,32 @@ public final class CodexBridge implements NpcBrain {
     }
 
     public CompletableFuture<Reply> turn(String prompt, boolean speechOnly) {
+      return turn(prompt, speechOnly, false);
+    }
+
+    public CompletableFuture<TaskPlan> plan(String prompt) {
+      return turn(prompt, true, true).thenApply(Reply::plan);
+    }
+
+    private CompletableFuture<Reply> turn(String prompt, boolean speechOnly, boolean planning) {
+      boolean workTurn = !speechOnly || planning;
       if (closed.get() || disposed.get())
         return CompletableFuture.failedFuture(new IOException("NPC session is closed"));
       if (prompt == null || prompt.length() > 32768)
         return CompletableFuture.failedFuture(
             new IllegalArgumentException("NPC input exceeds its bounds"));
-      if (!speechOnly && !workPermits.tryAcquire())
+      if (workTurn && !workPermits.tryAcquire())
         return CompletableFuture.failedFuture(
             new RejectedExecutionException("Codex NPC work limit reached"));
       if (!permits.tryAcquire()) {
-        if (!speechOnly) workPermits.release();
+        if (workTurn) workPermits.release();
         return CompletableFuture.failedFuture(
             new RejectedExecutionException("Codex NPC concurrency limit reached"));
       }
-      var turn = new Active(speechOnly);
+      var turn = new Active(speechOnly, planning);
       if (!active.compareAndSet(null, turn)) {
         permits.release();
-        if (!speechOnly) workPermits.release();
+        if (workTurn) workPermits.release();
         return CompletableFuture.failedFuture(new IllegalStateException("NPC is already thinking"));
       }
       turn.reply
@@ -315,7 +343,7 @@ public final class CodexBridge implements NpcBrain {
                 if (active.compareAndSet(turn, null)) {
                   if (turn.turnId != null) retire(turn.turnId);
                   permits.release();
-                  if (!speechOnly) workPermits.release();
+                  if (workTurn) workPermits.release();
                   if (error != null && turn.turnId != null)
                     rpc.request("turn/interrupt", object("threadId", id, "turnId", turn.turnId));
                 }
@@ -326,7 +354,10 @@ public final class CodexBridge implements NpcBrain {
               "type",
               "text",
               "text",
-              (speechOnly ? "発言のみ。行動ツールを呼ばないでください。\n" : "所有者の作業指示に取り組んでください。\n") + prompt));
+              (planning
+                      ? TaskPlan.instructions() + "\n"
+                      : speechOnly ? "発言のみ。行動ツールを呼ばないでください。\n" : "所有者の作業指示に取り組んでください。\n")
+                  + prompt));
       var properties =
           object(
               "speech",
@@ -349,17 +380,19 @@ public final class CodexBridge implements NpcBrain {
               properties,
               "required",
               required);
-      rpc.request(
-              "turn/start",
-              object(
-                  "threadId",
-                  id,
-                  "input",
-                  input,
-                  "environments",
-                  new JsonArray(),
-                  "outputSchema",
-                  schema))
+      if (planning) schema = TaskPlan.schema();
+      var turnParams =
+          object(
+              "threadId",
+              id,
+              "input",
+              input,
+              "environments",
+              new JsonArray(),
+              "outputSchema",
+              schema);
+      if (advanced && planning) turnParams.addProperty("effort", "high");
+      rpc.request("turn/start", turnParams)
           .whenComplete(
               (result, error) -> {
                 if (error != null) {
@@ -436,6 +469,10 @@ public final class CodexBridge implements NpcBrain {
           return;
         }
         try {
+          if (current.planning) {
+            current.reply.complete(new Reply("", false, "", TaskPlan.parse(current.text)));
+            return;
+          }
           var value = JsonParser.parseString(current.text).getAsJsonObject();
           String speech = value.get("speech").getAsString();
           if (speech.length() > 512)

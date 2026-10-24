@@ -12,3 +12,5 @@ __pycache__/
 tools/unity-tools.json
 PublishPackage/
 Docs/
+**/avatarcraft-private-cache/
+**/avatarcraft/remote-cache/

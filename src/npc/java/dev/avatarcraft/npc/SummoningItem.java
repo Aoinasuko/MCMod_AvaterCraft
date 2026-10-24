@@ -16,6 +16,13 @@ public final class SummoningItem extends Item {
     if (player == null || !player.mayBuild()) return InteractionResult.FAIL;
     var level = context.getLevel();
     if (!(level instanceof ServerLevel server)) return InteractionResult.SUCCESS;
+    var roster = NpcRoster.get(server.getServer());
+    if (!roster.canSummon(player.getUUID(), NpcSettings.MAX_PER_PLAYER.get())) {
+      player.sendOverlayMessage(
+          net.minecraft.network.chat.Component.translatable(
+              "message.avatarcraftnpc.summon_limit", NpcSettings.MAX_PER_PLAYER.get()));
+      return InteractionResult.FAIL;
+    }
     var pos = context.getClickedPos().relative(context.getClickedFace());
     if (!server.mayInteract(player, pos) || !server.hasChunkAt(pos)) return InteractionResult.FAIL;
     var npc = NpcMod.COMPANION.get().create(server, EntitySpawnReason.SPAWN_ITEM_USE);
@@ -24,6 +31,7 @@ public final class SummoningItem extends Item {
     npc.setYRot(player.getYRot());
     npc.initialize(player, "tortobu");
     if (!server.noCollision(npc) || !server.addFreshEntity(npc)) return InteractionResult.FAIL;
+    roster.update(npc);
     dev.avatarcraft.npc.ai.NpcService.get(server.getServer())
         .record(npc, "summoned", "召喚されました", null, new com.google.gson.JsonObject());
     if (!player.getAbilities().instabuild) context.getItemInHand().shrink(1);

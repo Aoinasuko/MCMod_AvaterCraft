@@ -34,8 +34,10 @@ public final class Personality {
               "eat",
               "say",
               "wait",
-              "stop"));
-  public int workSpeechSeconds = 60, nearbyConversationSeconds = 30;
+              "stop",
+              "remember_location",
+              "forget_location"));
+  public int workSpeechSeconds = 45, nearbyConversationSeconds = 30;
 
   public void validate() {
     if (version != 1 || !AvatarCatalog.validId(id))
@@ -48,11 +50,12 @@ public final class Personality {
         || speakingStyle.length() > 1000
         || goal.length() > 1000)
       throw new IllegalArgumentException("Personality text exceeds its bounds");
-    if (workSpeechSeconds != 60
+    if (workSpeechSeconds < 30
+        || workSpeechSeconds > 60
         || nearbyConversationSeconds < 15
         || nearbyConversationSeconds > 3600)
       throw new IllegalArgumentException(
-          "Work speech must be every 60 seconds; conversation interval must be 15..3600");
+          "Periodic speech must be every 30..60 seconds; conversation interval must be 15..3600");
     var known =
         Set.of(
             "observe",
@@ -71,10 +74,13 @@ public final class Personality {
             "eat",
             "say",
             "wait",
-            "stop");
+            "stop",
+            "remember_location",
+            "forget_location");
+    var allKnown = dev.avatarcraft.npc.ai.NpcTools.names();
     if (allowedSkills == null
-        || allowedSkills.size() > known.size()
-        || !known.containsAll(allowedSkills))
+        || allowedSkills.size() > allKnown.size()
+        || !allKnown.containsAll(allowedSkills))
       throw new IllegalArgumentException("Unknown or excessive skills");
     if (new HashSet<>(allowedSkills).size() != allowedSkills.size())
       throw new IllegalArgumentException("Duplicate skills");

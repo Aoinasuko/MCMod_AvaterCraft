@@ -22,6 +22,14 @@ public final class AvatarClient {
 
   public AvatarClient(IEventBus bus) {
     bus.addListener(
+        net.neoforged.neoforge.client.network.event.RegisterClientPayloadHandlersEvent.class,
+        event ->
+            event.register(
+                dev.avatarcraft.multiplayer.ShareNetwork.Down.TYPE,
+                (packet, context) -> ShareClient.receive(packet.message())));
+    NeoForge.EVENT_BUS.addListener(
+        ClientPlayerNetworkEvent.LoggingOut.class, e -> ShareClient.disconnect());
+    bus.addListener(
         RegisterKeyMappingsEvent.class,
         e -> {
           e.registerCategory(CATEGORY);
@@ -58,5 +66,6 @@ public final class AvatarClient {
     }
     while (OPEN.consumeClick())
       if (mc.gui.screen() == null && mc.player != null) mc.gui.setScreen(new AvatarScreen());
+    ShareClient.tick();
   }
 }

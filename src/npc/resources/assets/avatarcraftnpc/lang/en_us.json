@@ -1,4 +1,9 @@
 {
+  "item.avatarcraftnpc.recall_map": "Recall Map",
+  "message.avatarcraftnpc.summon_limit": "You can summon at most %s companions.",
+  "avatarcraftnpc.configuration.companions": "Companion summoning and recovery",
+  "avatarcraftnpc.configuration.maxPerPlayer": "Maximum companions per player (-1 for unlimited)",
+  "avatarcraftnpc.configuration.dropItemsOnDeath": "Drop companion inventory on death",
   "item.avatarcraftnpc.memory_journal": "Avatar Memory Journal",
   "entity.avatarcraftnpc.companion": "Avatar Companion",
   "message.avatarcraftnpc.not_owner": "Only the owner can manage this companion.",

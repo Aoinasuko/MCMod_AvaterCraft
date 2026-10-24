@@ -30,15 +30,16 @@ public final class AvatarRenderer {
   }
 
   public static void render(RenderPlayerEvent.Pre<?> event) {
-    var session = AvatarSession.active;
-    var player = Minecraft.getInstance().player;
+    var minecraft = Minecraft.getInstance();
+    var local = minecraft.player;
     var state = event.getRenderState();
     boolean preview = PREVIEWS.remove(state);
-    if (session == null
-        || player == null
-        || state.id != player.getId()
-        || state.isInvisible
-        || state.isSpectator) return;
+    if (local == null || minecraft.level == null || state.isInvisible || state.isSpectator) return;
+    var entity = minecraft.level.getEntity(state.id);
+    if (!(entity instanceof net.minecraft.client.player.AbstractClientPlayer player)) return;
+    var session = player == local ? AvatarSession.active : ShareClient.session(player.getUUID());
+    // Pending, invalid and unavailable remote models leave vanilla's renderer untouched.
+    if (session == null) return;
     try {
       submit(
           session,
@@ -46,13 +47,66 @@ public final class AvatarRenderer {
           event.getPoseStack(),
           event.getSubmitNodeCollector(),
           event.getRenderer().getModel(),
-          preview);
+          preview,
+          player);
+      if (!preview) submitNames(event);
       event.setCanceled(true);
     } catch (Exception e) {
       System.getLogger("AvatarCraft")
           .log(System.Logger.Level.ERROR, "Avatar rendering failed; restoring vanilla model", e);
-      AvatarSession.active = null;
+      if (player == local) {
+        session.textures.close();
+        AvatarSession.active = null;
+      } else ShareClient.failed(player.getUUID());
     }
+  }
+
+  private static void submitNames(RenderPlayerEvent.Pre<?> event) {
+    var s = event.getRenderState();
+    if (s.nameTag == null && s.scoreText == null) return;
+    var camera = Minecraft.getInstance().gameRenderer.mainCamera();
+    var view = new net.minecraft.client.renderer.state.level.CameraRenderState();
+    view.orientation = new Quaternionf(camera.rotation());
+    view.pos = camera.position();
+    view.initialized = true;
+    var stack = event.getPoseStack();
+    stack.pushPose();
+    try {
+      if (s.scoreText != null) {
+        submitName(event, view, s.scoreText);
+        stack.translate(0, 9f * 1.15f * .025f, 0);
+      }
+      if (s.nameTag != null) submitName(event, view, s.nameTag);
+    } finally {
+      stack.popPose();
+    }
+  }
+
+  private static void submitName(
+      RenderPlayerEvent.Pre<?> event,
+      net.minecraft.client.renderer.state.level.CameraRenderState view,
+      net.minecraft.network.chat.Component text) {
+    var s = event.getRenderState();
+    var hook =
+        new net.neoforged.neoforge.client.event.RenderNameTagEvent.DoRender(
+            s,
+            text,
+            event.getRenderer(),
+            event.getPoseStack(),
+            event.getSubmitNodeCollector(),
+            view,
+            s.partialTick);
+    if (!net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(hook).isCanceled())
+      event
+          .getSubmitNodeCollector()
+          .submitNameTag(
+              event.getPoseStack(),
+              s.nameTagAttachment,
+              s.showExtraEars ? -10 : 0,
+              text,
+              !s.isDiscrete,
+              s.lightCoords,
+              view);
   }
 
   private static void submit(
@@ -61,7 +115,8 @@ public final class AvatarRenderer {
       PoseStack stack,
       SubmitNodeCollector collector,
       PlayerModel itemModel,
-      boolean preview) {
+      boolean preview,
+      net.minecraft.client.player.AbstractClientPlayer player) {
     var a = session.archive.avatar();
     var pose = preview ? session.previewPose : session.pose;
     double now = System.nanoTime() * 1e-9;
@@ -74,7 +129,6 @@ public final class AvatarRenderer {
     var movement = new Vector3f((float) s.x, (float) s.y, (float) s.z);
     float bodyYaw = s.bodyRot;
     if (a.motions != null) {
-      var player = Minecraft.getInstance().player;
       var signals = new MotionSignals();
       signals.grounded = player.onGround();
       signals.sprinting = player.isSprinting();
@@ -89,7 +143,10 @@ public final class AvatarRenderer {
       signals.sleeping = s.hasPose(Pose.SLEEPING);
       signals.dead = s.deathTime > 0;
       signals.hurt = s.hasRedOverlay;
-      var velocity = player.getDeltaMovement();
+      var velocity =
+          player == Minecraft.getInstance().player
+              ? player.getDeltaMovement()
+              : player.getPosition(1).subtract(player.getPosition(0));
       signals.speed = (float) velocity.horizontalDistance();
       signals.verticalSpeed = (float) velocity.y;
       float lookYaw = s.bodyRot + s.yRot;
@@ -110,7 +167,10 @@ public final class AvatarRenderer {
       signals.hasItem = !s.getMainHandItemStack().isEmpty();
       signals.leftHand =
           (s.isUsingItem ? s.useItemHand.asArm(s.mainArm) : s.mainArm) == HumanoidArm.LEFT;
-      signals.mining = Minecraft.getInstance().hitResult instanceof BlockHitResult;
+      signals.mining =
+          player == Minecraft.getInstance().player
+              ? Minecraft.getInstance().hitResult instanceof BlockHitResult
+              : s.swingAnimation > 0;
       signals.chargedCrossbow = CrossbowItem.isCharged(s.getMainHandItemStack());
       if (s.isUsingItem)
         signals.useAction =
@@ -139,7 +199,7 @@ public final class AvatarRenderer {
           now,
           movement,
           s.bodyRot);
-    if (!preview) AvatarQa.record(session);
+    if (!preview && player == Minecraft.getInstance().player) AvatarQa.record(session);
     Quaternionf leftAim = null, rightAim = null;
     boolean aiming =
         s.isUsingItem

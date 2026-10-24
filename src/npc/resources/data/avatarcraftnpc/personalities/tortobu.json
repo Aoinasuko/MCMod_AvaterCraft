@@ -25,6 +25,6 @@
     "wait",
     "stop"
   ],
-  "workSpeechSeconds": 60,
+  "workSpeechSeconds": 45,
   "nearbyConversationSeconds": 30
 }

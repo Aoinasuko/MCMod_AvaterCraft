@@ -33,7 +33,15 @@ public final class NpcClient {
                 NpcNetwork.Response.TYPE,
                 (response, context) -> {
                   var minecraft = net.minecraft.client.Minecraft.getInstance();
-                  if (response.action().equals("actors")) {
+                  if (response.action().equals("recall_list")) {
+                    if (minecraft.gui.screen() != null
+                        && !(minecraft.gui.screen() instanceof RecallScreen)) return;
+                    if (!(minecraft.gui.screen() instanceof RecallScreen))
+                      minecraft.gui.setScreen(new RecallScreen());
+                    ((RecallScreen) minecraft.gui.screen()).receive(response);
+                  } else if (minecraft.gui.screen() instanceof RecallScreen screen)
+                    screen.receive(response);
+                  else if (response.action().equals("actors")) {
                     if (minecraft.gui.screen() != null
                         && !(minecraft.gui.screen() instanceof JournalScreen)) return;
                     var screen = new JournalScreen();

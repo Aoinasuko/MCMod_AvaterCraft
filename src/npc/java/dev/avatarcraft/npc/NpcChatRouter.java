@@ -28,8 +28,16 @@ public final class NpcChatRouter {
                             n.hasLineOfSight(player)))
                 .toList());
     if (selected.isEmpty()) return -1;
+    // A group request has one planning owner. The coordinator explicitly assigns the others;
+    // broadcasting independent work plans would multiply requested quantities by the team size.
+    boolean ownGroup =
+        selected.size() > 1
+            && candidates.stream()
+                .filter(n -> selected.contains(n.getId()))
+                .allMatch(n -> n.ownedBy(player));
     for (var npc : candidates)
-      if (selected.contains(npc.getId())) npc.mind().hearPlayer(player, text);
+      if (selected.contains(npc.getId()) && (!ownGroup || npc.getId() == selected.getFirst()))
+        npc.mind().hearPlayer(player, text);
     return selected.getFirst();
   }
 

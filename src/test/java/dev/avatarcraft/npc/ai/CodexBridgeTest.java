@@ -25,6 +25,8 @@ class CodexBridgeTest {
     final AtomicInteger turns = new AtomicInteger();
     volatile boolean rejectedTool, rejectedApproval;
     volatile String turnId;
+    volatile boolean planning;
+    volatile int dynamicTools;
 
     Peer(boolean oauth) throws IOException {
       var config = new CodexConfig();
@@ -59,7 +61,12 @@ class CodexBridgeTest {
                                       "type",
                                       "agentMessage",
                                       "text",
-                                      "{\"speech\":\"確認できたよ！\",\"taskComplete\":true}"))));
+                                      planning
+                                          ? new Gson()
+                                              .toJson(
+                                                  LocalTaskRunnerTest.plan(
+                                                      LocalTaskRunnerTest.step("wait", "", 1)))
+                                          : "{\"speech\":\"確認できたよ！\",\"taskComplete\":true}"))));
                       send(
                           object(
                               "method",
@@ -96,10 +103,16 @@ class CodexBridgeTest {
                               .get("enabled")
                               .getAsBoolean());
                       assertEquals(0, params.getAsJsonArray("environments").size());
-                      assertFalse(params.getAsJsonArray("dynamicTools").isEmpty());
+                      dynamicTools = params.getAsJsonArray("dynamicTools").size();
                       result = object("thread", object("id", "fixture"));
                     }
                     if (method.equals("turn/start")) {
+                      planning =
+                          message
+                              .getAsJsonObject("params")
+                              .getAsJsonObject("outputSchema")
+                              .getAsJsonObject("properties")
+                              .has("steps");
                       turnId = "turn-" + turns.incrementAndGet();
                       result = object("turn", object("id", turnId));
                     }
@@ -157,6 +170,28 @@ class CodexBridgeTest {
       bridge.close();
       peerOutput.close();
       peerInput.close();
+    }
+  }
+
+  @Test
+  void instructionPlannerUsesTaskSchemaAndRejectsEvenUnexpectedCodexToolCalls() throws Exception {
+    try (var peer = new Peer(true)) {
+      peer.bridge.initialize().get();
+      var profile = Personality.preset("tortobu");
+      profile.allowedSkills.clear();
+      var session =
+          peer.bridge
+              .open(
+                  profile,
+                  (name, args) -> {
+                    throw new AssertionError("Planning cannot mutate world");
+                  })
+              .get();
+      var plan = session.plan("待って / wait").get();
+      assertEquals("wait", plan.steps().getFirst().action());
+      assertTrue(peer.rejectedTool);
+      assertEquals(0, peer.dynamicTools);
+      session.close();
     }
   }
 

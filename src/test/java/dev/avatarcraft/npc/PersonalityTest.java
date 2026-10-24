@@ -9,7 +9,7 @@ class PersonalityTest {
   void standardCharacterUsesOnlyTheRedistributableAvatar() {
     var standard = Personality.preset("tortobu");
     assertEquals("tortobu", standard.avatar);
-    assertEquals(60, standard.workSpeechSeconds);
+    assertEquals(45, standard.workSpeechSeconds);
     assertEquals(standard.instructions, Personality.parse(standard.json()).instructions);
     assertThrows(IllegalArgumentException.class, () -> Personality.preset("clonka"));
     assertThrows(IllegalArgumentException.class, () -> Personality.preset("yilnel"));

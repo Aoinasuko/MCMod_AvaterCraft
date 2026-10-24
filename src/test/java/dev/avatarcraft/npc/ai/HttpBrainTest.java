@@ -16,6 +16,85 @@ import org.junit.jupiter.api.*;
 
 @Timeout(15)
 class HttpBrainTest {
+  @Test
+  void advancedSessionsUseConfiguredModelWithoutChangingSpeechModel() throws Exception {
+    for (boolean anthropic : new boolean[] {false, true})
+      try (var peer = new Peer(anthropic, 4, r -> finalResponse(anthropic))) {
+        var reject =
+            (java.util.function.BiFunction<String, JsonObject, CompletionStage<JsonObject>>)
+                (n, a) -> {
+                  throw new AssertionError("No tools expected");
+                };
+        var profile = Personality.preset("tortobu");
+        profile.allowedSkills.clear();
+        peer.brain.openAdvanced(profile, reject).get().turn("Return speech only", false).get();
+        peer.brain.open(profile, reject).get().turn("Return speech only", false).get();
+        assertEquals("test-planner-model", peer.requests.get(0).get("model").getAsString());
+        assertEquals("test-tool-model", peer.requests.get(1).get("model").getAsString());
+        assertFalse(peer.requests.get(0).has("reasoning_effort"));
+      }
+  }
+
+  @Test
+  void japaneseAndEnglishInstructionPlanningIsStructuredAndCannotInvokeTools() throws Exception {
+    var expected =
+        LocalTaskRunnerTest.plan(LocalTaskRunnerTest.step("collect", "minecraft:cobblestone", 16));
+    String json = new Gson().toJson(expected);
+    for (boolean anthropic : new boolean[] {false, true}) {
+      try (var peer =
+          new Peer(
+              anthropic,
+              4,
+              r ->
+                  anthropic
+                      ? object(
+                          "stop_reason",
+                          "end_turn",
+                          "content",
+                          array(object("type", "text", "text", json)))
+                      : object(
+                          "choices",
+                          array(
+                              object(
+                                  "finish_reason",
+                                  "stop",
+                                  "message",
+                                  object("role", "assistant", "content", json)))))) {
+        var profile = Personality.preset("tortobu");
+        profile.allowedSkills.clear();
+        var session =
+            peer.brain
+                .open(
+                    profile,
+                    (n, a) -> {
+                      throw new AssertionError("Planner must not execute tools");
+                    })
+                .get();
+        for (String prompt : List.of("丸石を16個集めて", "Collect 16 cobblestone"))
+          assertEquals(expected, session.plan(prompt).get());
+        assertEquals(2, peer.requests.size());
+        for (var request : peer.requests) {
+          assertFalse(request.has("tools"));
+          assertTrue(
+              request.toString().contains("language")
+                  || request.toString().contains("Japanese or English"));
+        }
+      }
+    }
+    try (var peer =
+        new Peer(false, 4, r -> call(false, "bad", "npc_dig", object("x", 1, "y", 2, "z", 3)))) {
+      var session =
+          peer.brain
+              .open(
+                  Personality.preset("tortobu"),
+                  (n, a) -> {
+                    throw new AssertionError("Planner must reject tools");
+                  })
+              .get();
+      assertThrows(ExecutionException.class, () -> session.plan("石を掘って").get());
+    }
+  }
+
   private final class Peer implements AutoCloseable {
     final HttpServer server;
     final HttpBrain brain;
@@ -54,6 +133,7 @@ class HttpBrainTest {
       c.apiKey = "test-only-key";
       c.apiKeyEnvironment = "";
       c.model = "test-tool-model";
+      c.complexModel = "test-planner-model";
       c.maxToolCalls = limit;
       brain = new HttpBrain(c);
       brain.initialize().get();
@@ -362,6 +442,7 @@ class HttpBrainTest {
       assertFalse(voice.canStart(false));
       assertTrue(voice.canStart(true));
       assertThrows(ExecutionException.class, () -> voice.turn("追加の作業", false).get());
+      assertThrows(ExecutionException.class, () -> voice.plan("新しい計画").get());
       assertEquals("渡しました", voice.turn("発言", true).get().speech());
       a.stop();
       b.stop();

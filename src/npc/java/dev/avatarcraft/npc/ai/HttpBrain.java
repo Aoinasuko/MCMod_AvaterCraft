@@ -63,8 +63,20 @@ public final class HttpBrain implements NpcBrain {
 
   public CompletableFuture<HttpSession> open(
       Personality p, BiFunction<String, JsonObject, CompletionStage<JsonObject>> tools) {
+    return open(p, tools, false);
+  }
+
+  public CompletableFuture<HttpSession> openAdvanced(
+      Personality p, BiFunction<String, JsonObject, CompletionStage<JsonObject>> tools) {
+    return open(p, tools, true);
+  }
+
+  private CompletableFuture<HttpSession> open(
+      Personality p,
+      BiFunction<String, JsonObject, CompletionStage<JsonObject>> tools,
+      boolean advanced) {
     if (closed) return CompletableFuture.failedFuture(new IOException("AI is closed"));
-    var session = new HttpSession(Personality.parse(p.json()), tools);
+    var session = new HttpSession(Personality.parse(p.json()), tools, advanced);
     sessions.add(session);
     if (closed) {
       session.close();
@@ -108,9 +120,15 @@ public final class HttpBrain implements NpcBrain {
     private final Deque<JsonArray> history = new ArrayDeque<>();
     private volatile boolean disposed;
 
-    HttpSession(Personality p, BiFunction<String, JsonObject, CompletionStage<JsonObject>> tools) {
+    private final boolean advanced;
+
+    HttpSession(
+        Personality p,
+        BiFunction<String, JsonObject, CompletionStage<JsonObject>> tools,
+        boolean advanced) {
       personality = p;
       this.tools = tools;
+      this.advanced = advanced;
     }
 
     public boolean busy() {
@@ -137,20 +155,29 @@ public final class HttpBrain implements NpcBrain {
     }
 
     public CompletableFuture<Reply> turn(String prompt, boolean speechOnly) {
+      return turn(prompt, speechOnly, false);
+    }
+
+    public CompletableFuture<TaskPlan> plan(String prompt) {
+      return turn(prompt, true, true).thenApply(Reply::plan);
+    }
+
+    private CompletableFuture<Reply> turn(String prompt, boolean speechOnly, boolean planning) {
+      boolean workTurn = !speechOnly || planning;
       if (!connected() || prompt == null || prompt.length() > 32768)
         return CompletableFuture.failedFuture(new IOException("Invalid or closed NPC turn"));
-      if (!speechOnly && !workPermits.tryAcquire())
+      if (workTurn && !workPermits.tryAcquire())
         return CompletableFuture.failedFuture(
             new RejectedExecutionException("NPC work limit reached"));
       if (!permits.tryAcquire()) {
-        if (!speechOnly) workPermits.release();
+        if (workTurn) workPermits.release();
         return CompletableFuture.failedFuture(
             new RejectedExecutionException("NPC concurrency limit reached"));
       }
       var turn = new Active(config.turnTimeoutSeconds);
       if (!active.compareAndSet(null, turn)) {
         permits.release();
-        if (!speechOnly) workPermits.release();
+        if (workTurn) workPermits.release();
         return CompletableFuture.failedFuture(new IllegalStateException("NPC is already thinking"));
       }
       turn.reply
@@ -160,7 +187,7 @@ public final class HttpBrain implements NpcBrain {
                 if (error != null) turn.cancel();
                 if (active.compareAndSet(turn, null)) {
                   permits.release();
-                  if (!speechOnly) workPermits.release();
+                  if (workTurn) workPermits.release();
                 }
               });
       try {
@@ -168,7 +195,7 @@ public final class HttpBrain implements NpcBrain {
             workers.submit(
                 () -> {
                   try {
-                    run(turn, prompt, speechOnly);
+                    run(turn, prompt, speechOnly, planning);
                   } catch (Exception e) {
                     turn.reply.completeExceptionally(e);
                   }
@@ -208,7 +235,8 @@ public final class HttpBrain implements NpcBrain {
       return result;
     }
 
-    private void run(Active turn, String prompt, boolean speechOnly) throws Exception {
+    private void run(Active turn, String prompt, boolean speechOnly, boolean planning)
+        throws Exception {
       var messages = new JsonArray();
       synchronized (this) {
         for (var part : history) messages.addAll(part.deepCopy());
@@ -219,7 +247,10 @@ public final class HttpBrain implements NpcBrain {
               "role",
               "user",
               "content",
-              (speechOnly ? "発言のみ。ツールは禁止。\n" : "所有者の指示に取り組んでください。\n") + prompt));
+              (planning
+                      ? "Plan only; no speech or tools.\n"
+                      : speechOnly ? "発言のみ。ツールは禁止。\n" : "所有者の指示に取り組んでください。\n")
+                  + prompt));
       var completedCalls = new HashMap<String, JsonObject>();
       var signatures = new HashMap<String, String>();
       int calls = 0;
@@ -236,13 +267,16 @@ public final class HttpBrain implements NpcBrain {
                 + " complete. Inventory bag slots are 0..35; main hand 41, offhand 40. Use"
                 + " npc_find_chests, npc_deposit, npc_withdraw and npc_give_item for transfers."
                 + (speechOnly ? " This turn is speech-only. Never request any tools." : "");
+        if (planning)
+          instructions =
+              TaskPlan.instructions() + "\nPersonality/allowedSkills: " + personality.json();
         var wire = messages.deepCopy();
         JsonObject request;
         if (anthropic)
           request =
               object(
                   "model",
-                  config.model,
+                  advanced ? config.planningModel() : config.model,
                   "system",
                   instructions,
                   "messages",
@@ -255,7 +289,14 @@ public final class HttpBrain implements NpcBrain {
           var withSystem = new JsonArray();
           withSystem.add(object("role", "system", "content", instructions));
           withSystem.addAll(wire);
-          request = object("model", config.model, "messages", withSystem, "stream", false);
+          request =
+              object(
+                  "model",
+                  advanced ? config.planningModel() : config.model,
+                  "messages",
+                  withSystem,
+                  "stream",
+                  false);
           request.addProperty(
               "api.openai.com".equals(endpoint.getHost()) ? "max_completion_tokens" : "max_tokens",
               config.maxOutputTokens);
@@ -314,7 +355,10 @@ public final class HttpBrain implements NpcBrain {
                   : "";
         }
         if (requested.isEmpty()) {
-          var reply = parseReply(text, speechOnly);
+          var reply =
+              planning
+                  ? new Reply("", false, "", TaskPlan.parse(unfence(text)))
+                  : parseReply(text, speechOnly);
           synchronized (this) {
             check(turn);
             var chunk = new JsonArray();
@@ -430,11 +474,7 @@ public final class HttpBrain implements NpcBrain {
   }
 
   static Reply parseReply(String text, boolean speechOnly) throws IOException {
-    String raw = text.strip();
-    if (raw.startsWith("```")) {
-      int line = raw.indexOf('\n');
-      if (line >= 0 && raw.endsWith("```")) raw = raw.substring(line + 1, raw.length() - 3).strip();
-    }
+    String raw = unfence(text);
     try {
       var value = JsonParser.parseString(raw).getAsJsonObject();
       if (!value.get("speech").isJsonPrimitive()
@@ -451,6 +491,15 @@ public final class HttpBrain implements NpcBrain {
     } catch (RuntimeException e) {
       throw new IOException("Invalid NPC JSON reply");
     }
+  }
+
+  private static String unfence(String text) {
+    String raw = text.strip();
+    if (raw.startsWith("```")) {
+      int line = raw.indexOf('\n');
+      if (line >= 0 && raw.endsWith("```")) raw = raw.substring(line + 1, raw.length() - 3).strip();
+    }
+    return raw;
   }
 
   public void close() {

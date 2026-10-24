@@ -7,12 +7,19 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.server.level.ServerLevel;
 
-/** Per-NPC inference, real skill execution, reciprocal nearby speech and minute work updates. */
+/** Independent instruction planner, embedded action policy, and periodic speech. */
 public final class NpcMind implements AutoCloseable {
   private final CompanionEntity npc;
   private final ServerLevel level;
   private final NpcService service;
   private final NpcSkills skills;
+  private final NpcBrain testBrain;
+  private LocalTaskRunner local;
+  private int replans;
+  private int phases;
+  private final com.google.gson.JsonArray completedPhases = new com.google.gson.JsonArray();
+  private String planningContext = "", blockedReason = "";
+  private String pausedState = "";
   private NpcBrain.Session work, speech, playerChat;
   private boolean openingPlayerChat;
   private long nextPlayerChat, chatSequence, latestOwnerChat;
@@ -22,18 +29,29 @@ public final class NpcMind implements AutoCloseable {
   private final Deque<HumanChat> playerChats = new ArrayDeque<>();
   private boolean openingWork, openingSpeech, heard;
   private long epoch, nextThink, nextConversation;
+  private long nextSpeechOpen;
+  private boolean announcedBlock;
+  private boolean advancedPlanning;
   private final NpcSpeechClock speechClock;
   private final Deque<String> memories = new ArrayDeque<>();
   private final LinkedHashSet<UUID> heardEvents = new LinkedHashSet<>();
   private int listener = -1;
 
   public NpcMind(CompanionEntity npc, NpcService service) {
+    this(npc, service, null);
+  }
+
+  /** Package-private provider seam for isolated server GameTests; never selects a live provider. */
+  NpcMind(CompanionEntity npc, NpcService service, NpcBrain testBrain) {
     this.npc = npc;
     this.service = service;
+    this.testBrain = testBrain;
+    advancedPlanning = NpcPlanningTier.advanced(npc.instruction());
     level = (ServerLevel) npc.level();
     skills = new NpcSkills(npc, (message, target) -> service.say(npc, message, target));
-    speechClock = new NpcSpeechClock(level.getGameTime());
+    speechClock = new NpcSpeechClock(level.getGameTime(), npc.personality().workSpeechSeconds);
     nextConversation = level.getGameTime() + npc.personality().nearbyConversationSeconds * 20L;
+    restoreState(npc.localTaskState());
   }
 
   public void tick() {
@@ -52,13 +70,22 @@ public final class NpcMind implements AutoCloseable {
           || openingSpeech
           || openingPlayerChat
           || !playerChats.isEmpty()
-          || skills.busy()) stop();
+          || local != null
+          || skills.busy()) {
+        pausedState = saveState();
+        stop();
+      }
       npc.setAiStatus("所有者が接続していません");
       return;
     }
-    if (!service.config.enabled) {
+    if (!service.config.enabled && testBrain == null && local == null) {
       npc.setAiStatus(service.status());
       return;
+    }
+    if (!pausedState.isEmpty()) {
+      String resume = pausedState;
+      pausedState = "";
+      restoreState(resume);
     }
     tickPlayerChat(now);
     if (work != null && !work.connected()) {
@@ -83,15 +110,15 @@ public final class NpcMind implements AutoCloseable {
             .orElse(null);
     boolean conversation =
         now >= nextConversation && buddy != null && (heard || npc.getId() < buddy.getId());
-    boolean report = speechClock.due(now, working);
-    if ((report || conversation) && (speech == null || !speech.busy()) && now >= nextThink) {
+    boolean report = (service.config.enabled || testBrain != null) && speechClock.due(now, true);
+    if (report && (speech == null || !speech.busy())) {
       if (speech == null) open(true);
       else if (speech.canStart(true) && service.requestSlot(now)) {
         String context =
-            report
-                ? "作業中の1分ごとの短い進捗発言です。未完了の作業を完了したと言わないでください。"
-                : "近くにいる " + buddy.getName().getString() + " と自然な短い会話をしてください。";
-        int target = report ? -1 : buddy.getId();
+            conversation
+                ? "近くにいる " + buddy.getName().getString() + " と自然な短い会話をしてください。"
+                : "現在の状況について自然な短い発言をしてください。未完了の作業を完了したと言わないでください。";
+        int target = conversation ? buddy.getId() : -1;
         long generation = epoch;
         if (report) speechClock.reported(now);
         if (conversation) {
@@ -105,6 +132,13 @@ public final class NpcMind implements AutoCloseable {
                     + npc.instruction()
                     + "\n観察: "
                     + skills.observe()
+                    + "\n検証済みのローカル作業進捗: "
+                    + (local == null ? planningContext : local.progress())
+                    + "\n保留理由: "
+                    + blockedReason
+                    + "\n発言の制約: 作業が保留中なら、その理由と再開に必要な条件を優先してください。"
+                    + "行動を開始していないのに探索・採掘・道具作成を進めているように話さず、"
+                    + "対応していない仲間への作業委任や分担を約束しないでください。"
                     + "\n最近の会話: "
                     + memories,
                 true)
@@ -120,7 +154,7 @@ public final class NpcMind implements AutoCloseable {
                               else if (error != null) {
                                 speech.close();
                                 speech = null;
-                                npc.setAiStatus(service.status());
+                                if (local == null) npc.setAiStatus(service.status());
                               }
                             }));
       }
@@ -130,6 +164,84 @@ public final class NpcMind implements AutoCloseable {
           npc.followsOwner() && !npc.getNavigation().isDone()
               ? (npc.isSprinting() ? "ダッシュで追従中" : "追従中")
               : "待機中");
+      return;
+    }
+    if (local == null && !NpcTeams.coordinates(npc)) {
+      npc.setAiStatus("同じ依頼のリーダーからの分担待ち");
+      return;
+    }
+    if (local != null) {
+      local.tick(now);
+      if (local.complete()) {
+        NpcTeams.finished(npc, "");
+        NpcTeams.changed(npc);
+        planningContext = local.progress().toString();
+        service.record(npc, "local_complete", "Verified task completed", null, local.progress());
+        local.close();
+        local = null;
+        if (work != null) work.close();
+        work = null;
+        npc.completeInstruction();
+        npc.setAiStatus("作業完了");
+        return;
+      }
+      if (!local.needsReplan()) {
+        npc.setAiStatus(local.activity());
+        return;
+      }
+      planningContext = NpcObservations.bounded(local.progress(), 10000).toString();
+      if (local.phaseComplete()) {
+        completedPhases.add(
+            object(
+                "summary",
+                local.progress().get("summary"),
+                "verifiedSteps",
+                local.progress().get("step")));
+        if (completedPhases.size() > 16) completedPhases.remove(0);
+        planningContext =
+            object("completedPhases", completedPhases.deepCopy(), "lastPhase", local.progress())
+                .toString();
+        service.record(
+            npc,
+            "phase_complete",
+            "Verified phase; planning remaining mission",
+            null,
+            object("phase", phases, "summary", local.progress().get("summary")));
+        local.close();
+        local = null;
+        if (work != null) work.close();
+        work = null;
+        advancedPlanning = true;
+        replans = 0;
+        blockedReason = "";
+        nextThink = now + 20;
+        if (++phases > 64) {
+          replans = 3;
+          blockedReason = "上位計画の段階上限64に達しました";
+          announceBlock();
+        }
+        return;
+      }
+      blockedReason = local.problem();
+      service.record(npc, "local_blocked", blockedReason, null, local.progress());
+      if (!service.config.enabled && testBrain == null) {
+        local.close();
+        local = null;
+        replans = 3;
+        announceBlock();
+        return;
+      }
+      local.close();
+      local = null;
+      if (++replans > 2) {
+        blockedReason = "再計画の上限に達しました: " + blockedReason;
+        announceBlock();
+        return;
+      }
+      nextThink = now + 100;
+    }
+    if (replans > 2 || !blockedReason.isEmpty() && planningContext.isEmpty()) {
+      announceBlock();
       return;
     }
     if (work == null) {
@@ -143,84 +255,101 @@ public final class NpcMind implements AutoCloseable {
     if (now < nextThink || !work.canStart(false) || !service.requestSlot(now)) return;
     long generation = epoch;
     nextThink = now + 60;
-    npc.setAiStatus("AI思考中");
-    work.turn(
-            "指示: " + npc.instruction() + "\n観察: " + skills.observe() + "\n最近の会話: " + memories,
-            false)
+    npc.setAiStatus("AIが指示を理解しています");
+    service.record(
+        npc,
+        "planning_start",
+        "Instruction planning started",
+        null,
+        object("replans", replans, "policyVersion", 3, "advancedPlanning", advancedPlanning));
+    work.plan(
+            "Authenticated owner instruction: "
+                + npc.instruction()
+                + "\nObservation: "
+                + new NpcLocalWorld(npc, skills).planningObservation()
+                + "\nLocal executor allowedSkills (the planner itself has no tools): "
+                + NpcTools.effective(npc.personality().allowedSkills)
+                + "\nVerified prior progress (preserve completed work, plan remaining only): "
+                + planningContext)
         .whenComplete(
-            (reply, error) ->
+            (plan, error) ->
                 level
                     .getServer()
                     .execute(
                         () -> {
                           if (generation != epoch || !npc.isAlive()) return;
                           if (error != null) {
-                            skills.cancel("Codex turn failed");
                             work.close();
                             work = null;
                             nextThink = level.getGameTime() + 600;
                             npc.setAiStatus("AI応答エラー。再試行待ち");
-                            service.record(
-                                npc, "error", "Codex turn failed", null, object("retry", true));
+                            recordFailure("planning", error);
+                            var cause = error;
+                            while (cause.getCause() != null) cause = cause.getCause();
+                            if (cause instanceof IllegalArgumentException) {
+                              planningContext =
+                                  "The last plan was rejected by the strict local contract. Use"
+                                      + " documented argument bounds, validate every delegated"
+                                      + " subplan and preserve the verified remaining goal.";
+                              if (++replans > 2) {
+                                blockedReason = "AIの計画が操作の形式・引数条件を満たしません。設定・指示を確認して再実行してください";
+                                announceBlock();
+                              }
+                            }
                             return;
                           }
-                          if (!reply.speech().isBlank()) service.say(npc, reply.speech(), -1);
-                          if (reply.taskComplete()) {
-                            npc.completeInstruction();
-                            npc.setAiStatus("作業完了");
+                          if (!plan.blocked().isEmpty()) {
+                            blockedReason = plan.blocked();
+                            replans = 3;
+                            announceBlock();
+                          } else {
+                            var boundPlan = new NpcLocalWorld(npc, skills).bindLocations(plan);
+                            local =
+                                new LocalTaskRunner(
+                                    boundPlan,
+                                    new NpcLocalWorld(npc, skills),
+                                    npc.personality().allowedSkills);
+                            blockedReason = "";
+                            announcedBlock = false;
+                            service.record(
+                                npc,
+                                "local_plan",
+                                plan.summary(),
+                                null,
+                                boundPlan.journalDetails());
                           }
                           nextThink = level.getGameTime() + 60;
                         }));
   }
 
   private void open(boolean voice) {
+    if (voice && level.getGameTime() < nextSpeechOpen) return;
     if (voice ? openingSpeech : openingWork) return;
     if (voice) openingSpeech = true;
     else openingWork = true;
     long generation = epoch;
     var personality = npc.personality();
-    if (voice) personality.allowedSkills.clear();
-    service
-        .brain()
+    personality.allowedSkills.clear();
+    brain()
         .thenCompose(
-            bridge ->
-                bridge.open(
-                    personality,
-                    (name, arguments) -> {
-                      var output = new CompletableFuture<com.google.gson.JsonObject>();
-                      level
-                          .getServer()
-                          .execute(
-                              () -> {
-                                if (generation != epoch || !npc.isAlive()) {
-                                  output.complete(
-                                      object("ok", false, "error", "Instruction changed"));
-                                  return;
-                                }
-                                service.record(npc, "tool_start", name, null, arguments.deepCopy());
-                                skills
-                                    .execute(name, arguments)
-                                    .whenComplete(
-                                        (result, failure) ->
-                                            level
-                                                .getServer()
-                                                .execute(
-                                                    () -> {
-                                                      if (failure != null) {
-                                                        output.completeExceptionally(failure);
-                                                        return;
-                                                      }
-                                                      service.record(
-                                                          npc,
-                                                          "tool_result",
-                                                          name,
-                                                          null,
-                                                          result.deepCopy());
-                                                      output.complete(result);
-                                                    }));
-                              });
-                      return output;
-                    }))
+            bridge -> {
+              java.util.function.BiFunction<
+                      String,
+                      com.google.gson.JsonObject,
+                      java.util.concurrent.CompletionStage<com.google.gson.JsonObject>>
+                  reject =
+                      (name, arguments) ->
+                          CompletableFuture.completedFuture(
+                              object(
+                                  "ok",
+                                  false,
+                                  "error",
+                                  "Planning and speech cannot execute actions"));
+              return (!voice && advancedPlanning
+                      ? bridge.openAdvanced(personality, reject)
+                      : bridge.open(personality, reject))
+                  .thenApply(session -> (NpcBrain.Session) session);
+            })
         .whenComplete(
             (session, error) ->
                 level
@@ -235,7 +364,9 @@ public final class NpcMind implements AutoCloseable {
                           else openingWork = false;
                           if (error != null) {
                             npc.setAiStatus("AIセッション開始エラー。接続先・モデル・認証設定を確認してください");
-                            nextThink = level.getGameTime() + 600;
+                            recordFailure(voice ? "speech_session" : "planning_session", error);
+                            if (voice) nextSpeechOpen = level.getGameTime() + 600;
+                            else nextThink = level.getGameTime() + 600;
                             return;
                           }
                           if (voice) speech = session;
@@ -265,6 +396,19 @@ public final class NpcMind implements AutoCloseable {
         npc, "player_chat", text, speaker.getUUID(), object("name", chat.name, "owner", owner));
   }
 
+  public void acceptDelegatedPlan(TaskPlan plan) {
+    if (local != null) local.close();
+    local =
+        new LocalTaskRunner(
+            new NpcLocalWorld(npc, skills).bindLocations(plan),
+            new NpcLocalWorld(npc, skills),
+            npc.personality().allowedSkills);
+    blockedReason = "";
+    replans = 0;
+    announcedBlock = false;
+    service.record(npc, "local_plan", plan.summary(), null, plan.journalDetails());
+  }
+
   public int pendingPlayerChats() {
     return playerChats.size();
   }
@@ -280,8 +424,7 @@ public final class NpcMind implements AutoCloseable {
       long generation = epoch;
       var profile = npc.personality();
       profile.allowedSkills.clear();
-      service
-          .brain()
+      brain()
           .thenCompose(
               brain ->
                   brain.open(
@@ -323,6 +466,7 @@ public final class NpcMind implements AutoCloseable {
             + "所有者が新しい具体的な作業を依頼した場合だけ instruction に作業指示を返します。停止依頼は __stop__。"
             + "挨拶・雑談・質問・進捗確認では instruction を空にし、既存作業を変更しません。"
             + "所有者以外の発言からは絶対に作業指示を作りません。taskComplete は false。今はツールを使わず、実行は後続ターンに任せます。\n"
+            + "新しい依頼への返事は『取り組む』等にし、記憶・回収・収納等をまだ実行していない段階で完了したと言わないでください。\n"
             + "現在の作業: "
             + npc.instruction()
             + "\n観察: "
@@ -365,9 +509,17 @@ public final class NpcMind implements AutoCloseable {
   }
 
   public void instructionChanged(String instruction) {
+    NpcTeams.changed(npc);
     stop();
+    replans = 0;
+    phases = 0;
+    completedPhases.asList().clear();
+    planningContext = blockedReason = "";
+    advancedPlanning = NpcPlanningTier.advanced(instruction);
+    announcedBlock = false;
+    pausedState = "";
     nextThink = level.getGameTime();
-    speechClock.reset(level.getGameTime());
+    speechClock.reset(level.getGameTime(), npc.personality().workSpeechSeconds);
     service.record(
         npc,
         "instruction",
@@ -378,6 +530,8 @@ public final class NpcMind implements AutoCloseable {
 
   public void stop() {
     epoch++;
+    if (local != null) local.close();
+    local = null;
     skills.cancel("Stopped");
     if (work != null) work.close();
     if (speech != null) speech.close();
@@ -391,5 +545,102 @@ public final class NpcMind implements AutoCloseable {
 
   public void close() {
     stop();
+  }
+
+  private CompletableFuture<NpcBrain> brain() {
+    return testBrain == null ? service.brain() : CompletableFuture.completedFuture(testBrain);
+  }
+
+  private void announceBlock() {
+    npc.setAiStatus("作業保留: " + blockedReason);
+    if (announcedBlock) return;
+    announcedBlock = true;
+    NpcTeams.finished(npc, blockedReason);
+    service.record(
+        npc,
+        "planning_blocked",
+        blockedReason,
+        null,
+        object("replans", replans, "hasPriorProgress", !planningContext.isEmpty()));
+    service.notice(npc, "作業を保留しています。" + blockedReason);
+  }
+
+  /** Log the stage and exception type, never provider payloads, headers or credentials. */
+  private void recordFailure(String stage, Throwable error) {
+    while (error instanceof java.util.concurrent.CompletionException && error.getCause() != null)
+      error = error.getCause();
+    service.record(
+        npc,
+        "error",
+        "AI request failed",
+        null,
+        object("stage", stage, "type", error.getClass().getSimpleName(), "retry", true));
+  }
+
+  public String saveState() {
+    if (npc.instruction().isBlank()) return "";
+    if (!pausedState.isEmpty()) return pausedState;
+    var checkpoint = local == null ? null : local.checkpoint();
+    return object(
+            "instruction",
+            npc.instruction(),
+            "plan",
+            checkpoint == null
+                ? com.google.gson.JsonNull.INSTANCE
+                : dev.avatarcraft.avatar.AvatarArchive.GSON.toJsonTree(checkpoint),
+            "navigation",
+            local == null ? new com.google.gson.JsonObject() : local.navigation(),
+            "completed",
+            local != null && checkpoint == null,
+            "replans",
+            replans,
+            "phases",
+            phases,
+            "completedPhases",
+            completedPhases.deepCopy(),
+            "context",
+            planningContext,
+            "blocked",
+            blockedReason)
+        .toString();
+  }
+
+  public void restoreState(String json) {
+    if (json == null || json.isBlank()) return;
+    try {
+      if (json.length() > 65536) throw new IllegalArgumentException();
+      var o = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+      if (!o.get("instruction").getAsString().equals(npc.instruction())) return;
+      int attempts = o.get("replans").getAsInt();
+      String context = o.get("context").getAsString(), blocked = o.get("blocked").getAsString();
+      if (attempts < 0 || attempts > 3 || context.length() > 32768 || blocked.length() > 2048)
+        throw new IllegalArgumentException();
+      replans = attempts;
+      if (o.has("phases")) {
+        phases = o.get("phases").getAsInt();
+        if (phases < 0 || phases > 65) throw new IllegalArgumentException();
+      }
+      if (o.has("completedPhases")) {
+        var saved = o.getAsJsonArray("completedPhases");
+        if (saved.size() > 32) throw new IllegalArgumentException();
+        completedPhases.asList().clear();
+        for (var entry : saved) completedPhases.add(entry.deepCopy());
+      }
+      planningContext = context;
+      blockedReason = blocked;
+      if (o.get("completed").getAsBoolean()) npc.completeInstruction();
+      else if (!o.get("plan").isJsonNull()) {
+        local =
+            new LocalTaskRunner(
+                TaskPlan.parse(o.get("plan").toString()),
+                new NpcLocalWorld(npc, skills),
+                npc.personality().allowedSkills);
+        if (o.has("navigation") && o.getAsJsonObject("navigation").has("actions"))
+          local.restoreNavigation(o.getAsJsonObject("navigation"));
+      }
+    } catch (RuntimeException e) {
+      replans = 3;
+      blockedReason = "保存された作業状態を復元できません。指示を再入力してください";
+    }
   }
 }

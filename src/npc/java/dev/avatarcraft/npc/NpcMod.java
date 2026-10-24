@@ -38,6 +38,8 @@ public final class NpcMod {
       ITEMS.registerItem("soulstone", SummoningItem::new, p -> p.stacksTo(16));
   public static final DeferredItem<MemoryJournalItem> MEMORY_JOURNAL =
       ITEMS.registerItem("memory_journal", MemoryJournalItem::new, p -> p.stacksTo(1));
+  public static final DeferredItem<RecallMapItem> RECALL_MAP =
+      ITEMS.registerItem("recall_map", RecallMapItem::new, p -> p.stacksTo(1));
   public static final DeferredHolder<MenuType<?>, MenuType<CompanionMenu>> COMPANION_MENU =
       MENUS.register("companion", () -> IMenuTypeExtension.create(CompanionMenu::new));
 
@@ -46,6 +48,29 @@ public final class NpcMod {
   }
 
   public NpcMod(IEventBus bus, net.neoforged.fml.ModContainer container) {
+    bus.addListener(
+        net.neoforged.neoforge.common.world.chunk.RegisterTicketControllersEvent.class,
+        event -> {
+          event.register(NpcChunkLoading.CONTROLLER);
+          event.register(NpcRecall.CONTROLLER);
+        });
+    container.registerConfig(
+        net.neoforged.fml.config.ModConfig.Type.SYNCED,
+        NpcSettings.SPEC,
+        "avatarcraftnpc-server.toml");
+    NeoForge.EVENT_BUS.addListener(
+        net.neoforged.neoforge.event.entity.EntityJoinLevelEvent.class,
+        event -> {
+          if (event.getLevel() instanceof net.minecraft.server.level.ServerLevel level
+              && event.getEntity() instanceof CompanionEntity npc)
+            NpcRoster.get(level.getServer()).update(npc);
+        });
+    NeoForge.EVENT_BUS.addListener(
+        net.neoforged.neoforge.event.tick.ServerTickEvent.Post.class,
+        event -> NpcRecall.tick(event.getServer()));
+    NeoForge.EVENT_BUS.addListener(
+        net.neoforged.neoforge.event.entity.ProjectileImpactEvent.class,
+        dev.avatarcraft.npc.ai.NpcCombat::projectile);
     container.registerConfig(
         net.neoforged.fml.config.ModConfig.Type.LOCAL,
         dev.avatarcraft.npc.ai.NpcAiSettings.SPEC,
@@ -68,6 +93,7 @@ public final class NpcMod {
         event -> {
           NpcService.stop(event.getServer());
           NpcNetwork.clear();
+          NpcRecall.clear(event.getServer());
         });
     bus.addListener(
         net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent.class,
@@ -90,6 +116,7 @@ public final class NpcMod {
           if (event.getTabKey().equals(CreativeModeTabs.TOOLS_AND_UTILITIES)) {
             event.accept(SOULSTONE);
             event.accept(MEMORY_JOURNAL);
+            event.accept(RECALL_MAP);
           }
         });
   }

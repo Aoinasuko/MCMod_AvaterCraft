@@ -16,6 +16,15 @@ import net.neoforged.fml.loading.FMLPaths;
  * World-scoped OAuth process, journal IO and rate limits. Never puts credentials in entity data.
  */
 public final class NpcService implements AutoCloseable {
+  public enum SpeechAudience {
+    NEARBY,
+    OWNER_IMPORTANT;
+
+    public boolean canHear(boolean owner, boolean sameDimension, double distanceSquared) {
+      return this == OWNER_IMPORTANT ? owner : sameDimension && distanceSquared <= 64 * 64;
+    }
+  }
+
   private static final Map<MinecraftServer, NpcService> SERVICES = new WeakHashMap<>();
 
   public static synchronized NpcService get(MinecraftServer server) {
@@ -149,6 +158,14 @@ public final class NpcService implements AutoCloseable {
   }
 
   public void say(CompanionEntity npc, String message, int targetId) {
+    say(npc, message, targetId, SpeechAudience.NEARBY);
+  }
+
+  public void notice(CompanionEntity npc, String message) {
+    say(npc, message, -1, SpeechAudience.OWNER_IMPORTANT);
+  }
+
+  public void say(CompanionEntity npc, String message, int targetId, SpeechAudience audience) {
     String text = message.replaceAll("[\\p{Cntrl}&&[^\\n]]", " ").strip();
     if (text.isEmpty()) return;
     if (text.length() > 512) text = text.substring(0, 512);
@@ -158,9 +175,18 @@ public final class NpcService implements AutoCloseable {
     var peer = target == null ? null : target.getUUID();
     var event = UUID.randomUUID();
     var component = Component.literal("<" + npc.getName().getString() + "> " + text);
-    for (var player : level.getPlayers(p -> p.distanceToSqr(npc) <= 32 * 32))
-      player.sendSystemMessage(component);
-    record(npc, "speech", text, peer, new JsonObject());
+    for (var player : server.getPlayerList().getPlayers())
+      if (audience.canHear(npc.ownedBy(player), player.level() == level, player.distanceToSqr(npc)))
+        player.sendSystemMessage(component);
+    var details = new JsonObject();
+    details.addProperty("audience", audience.name());
+    record(
+        npc,
+        audience == SpeechAudience.NEARBY ? "speech" : "important_notice",
+        text,
+        peer,
+        details);
+    if (audience != SpeechAudience.NEARBY) return;
     for (var actor :
         level.getEntitiesOfClass(
             CompanionEntity.class, npc.getBoundingBox().inflate(12), n -> n != npc && n.isAlive()))

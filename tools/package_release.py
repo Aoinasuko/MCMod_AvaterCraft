@@ -40,6 +40,8 @@ def verify_jar(data, npc=False):
         else:
             assert "dev/avatarcraft/api/AvatarActor.class" in jar.namelist()
             assert "dev/avatarcraft/avatar/SurfaceAtlas.class" in jar.namelist()
+            assert "dev/avatarcraft/multiplayer/PrivateAvatarHub.class" in jar.namelist()
+            assert "dev/avatarcraft/client/ShareClient.class" in jar.namelist()
             assert jar.read("assets/avatarcraft/surface.json") == (PACKAGE / "Editor/Resources/AvatarCraft/surface.json").read_bytes()
             for include in ("surface_textures", "surface_common", "surface_effects"):
                 assert f"assets/avatarcraft/shaders/include/{include}.glsl" in jar.namelist()
@@ -102,7 +104,10 @@ def main():
             shutil.copy2(ROOT / "release" / name, stage / name)
         shutil.copy2(ROOT / "release/Guide_ja.md", stage / "Docs/Guide_ja.md")
         shutil.copy2(ROOT / "release/NPC_Guide_ja.md", stage / "Docs/NPC_Guide_ja.md")
+        shutil.copy2(ROOT / "release/NPC_LocalAI_ja.md", stage / "Docs/NPC_LocalAI_ja.md")
+        shutil.copy2(ROOT / "release/NPC_Tools_ja.md", stage / "Docs/NPC_Tools_ja.md")
         shutil.copy2(ROOT / "release/LilToon_ja.md", stage / "Docs/LilToon_ja.md")
+        shutil.copy2(ROOT / "release/Multiplayer_ja.md", stage / "Docs/Multiplayer_ja.md")
         make_upm(stage / f"Unity/dev.avatarcraft.exporter-{VERSION}.tgz")
         for document in stage.rglob("*"):
             if document.is_file() and document.suffix in {".md", ".txt"}:
@@ -123,6 +128,7 @@ def main():
                 assert model_info["name"] == "tortobu"
             assert not any("clonka" in n or "yilnel" in n for n in npc_jar.namelist())
             manifest["bundledAvatars"] = [{"id": "tortobu", "name": "タートブ", "author": "aoi_nasuko", "entry": bundled[0], "sha256": sha(avatar_data)}]
+        manifest["privatePlayerAvatarSync"] = {"protocol": "private-1", "ownerOnly": True, "cipher": "AES-256-GCM", "keyEnvelope": "RSA-OAEP-SHA256", "maxEncryptedBytes": 67108864}
         manifest["codexTested"] = "0.163.0"
         manifest["npcAuthentication"] = "Host-only Codex OAuth, OpenAI-compatible API, or Anthropic-compatible API"
         (stage / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

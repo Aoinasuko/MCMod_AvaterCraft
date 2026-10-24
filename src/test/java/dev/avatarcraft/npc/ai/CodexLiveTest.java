@@ -20,6 +20,158 @@ class CodexLiveTest {
   @TempDir Path workspace;
 
   @Test
+  void cooperativeMiningPlansReachLocalExecutorAndRealBlockersRemainExplicit() throws Exception {
+    var config = new CodexConfig();
+    if (System.getenv("AVATARCRAFT_CODEX_EXECUTABLE") != null)
+      config.executable = System.getenv("AVATARCRAFT_CODEX_EXECUTABLE");
+    var profile = Personality.preset("tortobu");
+    String permissions = NpcTools.effective(profile.allowedSkills).toString();
+    profile.allowedSkills.clear();
+    String observation =
+        """
+        Observation: {"health":20,"food":20,"position":[8,67,5],
+        "inventory":[{"slot":41,"item":"minecraft:diamond_pickaxe","count":1,"equipment":"mainhand"}],
+        "dimension":"minecraft:overworld","locations":[{"name":"chest_1","dimension":"minecraft:overworld","x":10,"y":67,"z":3,"kind":"chest"}],
+        "nearby_chests":[{"x":10,"y":67,"z":3,"items":[]}],
+        "teammates":[],"local_exploration":"Recursive acquire, real recipes, smelting and same-owner delegation; no available teammates in this observation."}
+        """;
+    try (var bridge = new CodexBridge(config, workspace)) {
+      bridge.initialize().get(40, TimeUnit.SECONDS);
+      for (String instruction :
+          java.util.List.of(
+              "仲間と協力して必要な道具を用意し、ダイヤモンドを1個採掘してチェストに入れる。",
+              "Work together to prepare tools, mine one diamond, and put it in the chest.")) {
+        var session =
+            bridge
+                .open(
+                    profile,
+                    (name, args) -> {
+                      fail("The planner must not execute tools");
+                      return CompletableFuture.completedFuture(object("ok", false));
+                    })
+                .get(40, TimeUnit.SECONDS);
+        var plan =
+            session
+                .plan(
+                    "Authenticated owner instruction: "
+                        + instruction
+                        + "\n"
+                        + observation
+                        + "\nLocal executor allowedSkills: "
+                        + permissions)
+                .get(180, TimeUnit.SECONDS);
+        assertTrue(plan.blocked().isEmpty(), plan.blocked());
+        assertTrue(
+            plan.steps().stream()
+                .anyMatch(
+                    s ->
+                        java.util.Set.of("collect", "acquire").contains(s.action())
+                            && s.target().equals("minecraft:diamond")
+                            && s.count() == 1));
+        assertTrue(
+            plan.steps().stream()
+                .anyMatch(
+                    s ->
+                        s.action().equals("deposit")
+                            && s.target().equals("minecraft:diamond")
+                            && s.count() == 1));
+        session.close();
+      }
+      var strict =
+          bridge
+              .open(profile, (name, args) -> CompletableFuture.completedFuture(object("ok", false)))
+              .get(40, TimeUnit.SECONDS);
+      var blocked =
+          strict
+              .plan(
+                  "Authenticated owner instruction: 仲間のNPCへ採掘作業を委任してください。単独での採掘は禁止します。"
+                      + "\n"
+                      + observation
+                      + "\nLocal executor allowedSkills: "
+                      + permissions)
+              .get(180, TimeUnit.SECONDS);
+      assertFalse(blocked.blocked().isBlank());
+      assertTrue(blocked.steps().isEmpty());
+      strict.close();
+      System.out.println(
+          "Live planning: Japanese/English cooperative mining accepted; mandatory delegation"
+              + " refused");
+    }
+  }
+
+  @Test
+  void advancedPlannerDividesEmptyHandedAndNetherMissions() throws Exception {
+    var config = new CodexConfig();
+    if (System.getenv("AVATARCRAFT_CODEX_EXECUTABLE") != null)
+      config.executable = System.getenv("AVATARCRAFT_CODEX_EXECUTABLE");
+    var profile = Personality.preset("tortobu");
+    String allowed = NpcTools.effective(profile.allowedSkills).toString();
+    profile.allowedSkills.clear();
+    try (var bridge = new CodexBridge(config, workspace)) {
+      bridge.initialize().get(40, TimeUnit.SECONDS);
+      var inventory = bridge.models().get(30, TimeUnit.SECONDS).getAsJsonArray("data");
+      assertNotNull(inventory);
+      var preferred =
+          inventory.asList().stream()
+              .map(com.google.gson.JsonElement::getAsJsonObject)
+              .filter(m -> m.has("isDefault") && m.get("isDefault").getAsBoolean())
+              .findFirst()
+              .orElse(inventory.get(0).getAsJsonObject());
+      config.complexModel = preferred.get("model").getAsString();
+      String observation =
+          """
+          Observation: {"health":20,"food":20,"position":[8,67,5],"inventory":[],"dimension":"minecraft:overworld",
+          "locations":[{"name":"chest_1","dimension":"minecraft:overworld","x":10,"y":67,"z":3,"kind":"chest"}],
+          "nearby_chests":[{"x":10,"y":67,"z":3,"items":[]}],
+          "teammates":[{"entity_id":101,"name":"workerA","task":"","available":true,"inventory":[]},{"entity_id":102,"name":"workerB","task":"","available":true,"inventory":[]}],
+          "local_exploration":"Recursive acquire from empty inventory, vanilla smelting, real crafting, actual delivery, safe stairs, finite delegated plans and native portal walking."}
+          """;
+      var results = new com.google.gson.JsonArray();
+      for (String instruction :
+          java.util.List.of(
+              "仲間と木材・石材の準備を分担して、何も持っていない状態から道具を作り、ダイヤモンドを1個採掘して拠点のチェストへ収納して。",
+              "複数NPCでネザーへ行ってネザー要塞を探してください。探索する担当と、道具・資材を準備する担当に分け、必要なら段階ごとに再計画してください。")) {
+        var session =
+            bridge
+                .openAdvanced(
+                    profile,
+                    (name, args) -> {
+                      fail("Planner must not execute tools while making assignments");
+                      return CompletableFuture.completedFuture(object("ok", false));
+                    })
+                .get(40, TimeUnit.SECONDS);
+        var plan =
+            session
+                .plan(
+                    "Authenticated owner instruction: "
+                        + instruction
+                        + "\n"
+                        + observation
+                        + "\nLocal executor allowedSkills: "
+                        + allowed)
+                .get(180, TimeUnit.SECONDS);
+        assertTrue(plan.blocked().isEmpty(), plan.blocked());
+        assertTrue(
+            plan.steps().stream()
+                .anyMatch(
+                    s ->
+                        s.action().equals("delegate")
+                            || s.action().equals("tool")
+                                && s.target().equals("avatarcraftnpc:delegate_task")),
+            "Advanced planner must actually assign work");
+        results.add(new com.google.gson.Gson().toJsonTree(plan));
+        session.close();
+      }
+      var report = object("model", config.complexModel, "reasoning", "high", "plans", results);
+      java.nio.file.Files.writeString(
+          Path.of("build/advanced-live-plan-result.json"),
+          new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(report));
+      System.out.println(
+          "Advanced live cooperative and Nether planning verified with " + config.complexModel);
+    }
+  }
+
+  @Test
   void managedOAuthInvokesNpcToolAndReturnsCharacterSpeech() throws Exception {
     var config = new CodexConfig();
     if (System.getenv("AVATARCRAFT_CODEX_EXECUTABLE") != null)

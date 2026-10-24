@@ -8,6 +8,8 @@ final class NpcFollowing {
   private final CompanionEntity npc;
   private final FollowPace pace = new FollowPace();
   private long nextPath;
+  private long nextPathNotice;
+  private boolean missingNotified, pathNotified;
 
   NpcFollowing(CompanionEntity npc) {
     this.npc = npc;
@@ -19,9 +21,17 @@ final class NpcFollowing {
         || target.level() != npc.level()
         || npc.isPassenger()
         || npc.isUsingItem()) {
+      if ((target == null || !target.isAlive() || target.level() != npc.level())
+          && !missingNotified
+          && npc.level().getServer().getPlayerList().getPlayer(npc.ownerId()) != null) {
+        missingNotified = true;
+        NpcService.get(npc.level().getServer())
+            .notice(npc, "追従先のオーナーが見つからないか、別のディメンジョンにいます。呼び戻しの地図で呼び戻せます。");
+      }
       stop();
       return;
     }
+    missingNotified = false;
     boolean wasMoving = pace.moving(), wasSprinting = pace.sprinting();
     pace.update(npc.distanceToSqr(target));
     npc.setSprinting(pace.sprinting());
@@ -34,7 +44,13 @@ final class NpcFollowing {
     if (!wasMoving || wasSprinting != pace.sprinting() || now >= nextPath) {
       nextPath = now + 10;
       // A temporarily blocked path is retried; foliage and corners must not cancel following.
-      npc.getNavigation().moveTo(target, pace.speed());
+      boolean found = npc.getNavigation().moveTo(target, pace.speed());
+      if (!found && !pathNotified && now >= nextPathNotice) {
+        pathNotified = true;
+        nextPathNotice = now + 1200;
+        NpcService.get(npc.level().getServer()).notice(npc, "オーナーへの追従経路が見つかりません。経路を再探索しています。");
+      }
+      if (found) pathNotified = false;
     }
   }
 

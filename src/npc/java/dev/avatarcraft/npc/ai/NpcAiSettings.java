@@ -7,7 +7,12 @@ public final class NpcAiSettings {
   public static final ModConfigSpec SPEC;
   private static final ModConfigSpec.BooleanValue ENABLED;
   private static final ModConfigSpec.EnumValue<CodexConfig.Provider> PROVIDER;
-  private static final ModConfigSpec.ConfigValue<String> URL, KEY, KEY_ENV, MODEL, EXECUTABLE;
+  private static final ModConfigSpec.ConfigValue<String> URL,
+      KEY,
+      KEY_ENV,
+      MODEL,
+      COMPLEX_MODEL,
+      EXECUTABLE;
   private static final ModConfigSpec.IntValue REQUEST_TIMEOUT,
       TURN_TIMEOUT,
       CALLS,
@@ -30,6 +35,13 @@ public final class NpcAiSettings {
     MODEL =
         b.comment("API model ID. Empty uses the Codex default only. / APIの場合はモデルIDが必須")
             .define("model", "");
+    COMPLEX_MODEL =
+        b.comment(
+                "High-capability model ID for cooperative, multi-stage and dimension/dragon plans."
+                    + " Empty uses the provider default/model; Codex complex plans also request"
+                    + " high reasoning effort.",
+                "複雑な計画専用の高性能モデルID。空欄は通常モデル／Codex既定。Codexでは推論強度highも使用。")
+            .define("complexModel", "");
     URL =
         b.comment(
                 "API base URL, including /v1. Examples: https://api.openai.com/v1,"
@@ -69,6 +81,7 @@ public final class NpcAiSettings {
     c.apiKey = KEY.get();
     c.apiKeyEnvironment = KEY_ENV.get();
     c.model = MODEL.get();
+    c.complexModel = COMPLEX_MODEL.get();
     c.executable = EXECUTABLE.get();
     c.requestTimeoutSeconds = REQUEST_TIMEOUT.get();
     c.turnTimeoutSeconds = TURN_TIMEOUT.get();

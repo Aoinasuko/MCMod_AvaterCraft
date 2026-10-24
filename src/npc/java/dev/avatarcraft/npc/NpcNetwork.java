@@ -69,6 +69,15 @@ public final class NpcNetwork {
     LIMITS.put(player.getUUID(), new Window(count == 1 ? tick : old.tick, count));
     if (count > 8) return;
     try {
+      if (request.action.equals("recall_list") && holdingRecallMap(player)) {
+        openRecall(player, Integer.parseInt(request.data));
+        return;
+      }
+      if (request.action.equals("recall") && holdingRecallMap(player)) {
+        reply(
+            player, -1, "recall_result", NpcRecall.request(player, UUID.fromString(request.data)));
+        return;
+      }
       CompanionEntity npc =
           player.containerMenu instanceof CompanionMenu menu
                   && menu.npc.getId() == request.entity
@@ -137,6 +146,36 @@ public final class NpcNetwork {
     for (var hand : InteractionHand.values())
       if (player.getItemInHand(hand).is(NpcMod.MEMORY_JOURNAL.get())) return true;
     return false;
+  }
+
+  public static boolean holdingRecallMap(ServerPlayer player) {
+    for (var hand : InteractionHand.values())
+      if (player.getItemInHand(hand).is(NpcMod.RECALL_MAP.get())) return true;
+    return false;
+  }
+
+  public static void openRecall(ServerPlayer player, int page) {
+    if (!holdingRecallMap(player)) return;
+    var owned = NpcRoster.get(player.level().getServer()).owned(player.getUUID());
+    int pages = Math.max(1, (owned.size() + 4) / 5);
+    page = Math.clamp(page, 0, pages - 1);
+    var result = new JsonObject();
+    result.addProperty("page", page);
+    result.addProperty("pages", pages);
+    result.addProperty("total", owned.size());
+    var rows = new JsonArray();
+    for (var entry : owned.subList(page * 5, Math.min(owned.size(), (page + 1) * 5))) {
+      var row = new JsonObject();
+      row.addProperty("id", entry.id().toString());
+      row.addProperty("name", entry.name());
+      row.addProperty("dimension", entry.dimension());
+      row.addProperty("x", entry.x());
+      row.addProperty("y", entry.y());
+      row.addProperty("z", entry.z());
+      rows.add(row);
+    }
+    result.add("actors", rows);
+    reply(player, -1, "recall_list", result.toString());
   }
 
   public static void openJournal(ServerPlayer player) {
@@ -211,7 +250,8 @@ public final class NpcNetwork {
   }
 
   public static void reply(ServerPlayer player, int entity, String action, String data) {
-    PacketDistributor.sendToPlayer(player, new Response(entity, action, data));
+    if (player.connection.hasChannel(Response.TYPE))
+      PacketDistributor.sendToPlayer(player, new Response(entity, action, data));
   }
 
   private NpcNetwork() {}

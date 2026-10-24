@@ -62,3 +62,15 @@ NPCのHTTPプロバイダーはJUnitの模擬APIで検証します（外部API�
 `tools/generate_surface_shader.py` はUnityの `Resources/AvatarCraft/surface.json` を共通定義として、Java用定義とGLSLのアトラス参照関数を同期します。定義を編集した場合は生成後にビルドしてください。
 
 `tools/dev.ps1 -Task test` でCPU側のアトラス・合成とGPU検証用フィクスチャを生成します。Pythonへ `moderngl` と `Pillow` を導入し、`python tools/validate_surface_gpu.py` で実GPUのコンパイル・描画ピクセルを検証できます。Minecraftのウィンドウや操作には触れず、非表示の独立したOpenGLコンテキストを使います。結果は `build/surface-qa/` へ保存します。
+
+## 非公開プレイヤー同期の検証
+
+`PrivateAvatarTest` は複数のプロトコルクライアントを模し、実際のタートブと表情設定を暗号化して受け渡します。暗号・宛先拘束・他人の装着拒否・遅れての参加・改ざん・容量予約・時間切れ・退出時の削除を確認します。GameTestの `private_avatar_wire` は実際のNeoForgeパケットCODECとMinecraftサーバー宛てのサイズ上限を検証します。クライアント実機2台の画面確認とは別の検証です。
+
+## ローカル行動モデル
+
+`python tools/train_npc_policy.py` はversion 3のトレーナーを呼び、開発用のNumPy・PyTorchで48→1000→1000→1、1,051,001パラメータ・4,204,004 bytesの候補ランキングモデルを再学習します。既定は合成96,000例・100epoch、検証6,000例・独立評価4,000例です。推論はJavaのみで、利用者にPython・GPUの導入は不要です。`tools/export_npc_policy_examples.py` でゲームログからレビュー用の候補を抽出できます。学習と検証データは別に用意し、レビュー済みの正解だけを追加します。詳しくは [構成と学習手順](../release/NPC_LocalAI_ja.md)。
+
+`tools/NpcPolicyBenchmark.java` はJava 25のソースファイル実行で、コンパイル済みNPCクラス・NPCリソース・Gsonをクラスパスに指定して動かします。24候補の評価だけを測り、ワールド探索・経路探索・API応答時間は含みません。
+
+`tools/NpcToolCatalog.java` は同じクラスパスで実際の`NpcTools`定義をJSONへ抽出します。出力を`build/npc-tools.json`へ保存し、`python tools/generate_npc_tool_docs.py`で`Docs/NpcTools.md`と配布用`release/NPC_Tools_ja.md`を生成します。全51種の引数名・型と日本語の実行条件を同期し、説明のないツールがあれば失敗します。
