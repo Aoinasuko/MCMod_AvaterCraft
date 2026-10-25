@@ -20,6 +20,7 @@ import net.minecraft.world.phys.Vec3;
 public final class NpcLocalWorld implements LocalTaskRunner.World {
   private final CompanionEntity npc;
   private final NpcSkills skills;
+  private String trackedResource = "";
 
   public NpcLocalWorld(CompanionEntity npc, NpcSkills skills) {
     this.npc = npc;
@@ -35,20 +36,29 @@ public final class NpcLocalWorld implements LocalTaskRunner.World {
             .level()
             .getEntitiesOfClass(
                 net.minecraft.world.entity.item.ItemEntity.class,
-                npc.getBoundingBox().inflate(16),
+                npc.getBoundingBox().inflate(24),
                 e -> e.isAlive())
             .stream()
-            .sorted(Comparator.comparingDouble(npc::distanceToSqr))
-            .limit(32)
+            .sorted(
+                Comparator.comparingInt(
+                        (net.minecraft.world.entity.item.ItemEntity item) ->
+                            trackedDrop(item.getItem()) ? 0 : 1)
+                    .thenComparingDouble(npc::distanceToSqr))
+            .limit(64)
             .toList()) {
       var p = new JsonArray();
       p.add(item.getX());
       p.add(item.getY());
       p.add(item.getZ());
+      if (blocked("pickup", object("x", item.getX(), "y", item.getY(), "z", item.getZ()))) continue;
       drops.add(
           object(
               "item",
               BuiltInRegistries.ITEM.getKey(item.getItem().getItem()).toString(),
+              "tags",
+              NpcSkills.itemTags(item.getItem()),
+              "settling",
+              !item.onGround() && (item.tickCount < 30 || item.getDeltaMovement().y < -.02),
               "position",
               p));
     }
@@ -87,6 +97,12 @@ public final class NpcLocalWorld implements LocalTaskRunner.World {
     return o;
   }
 
+  @Override
+  public JsonObject sharedLocation(String name) {
+    var entry = NpcAnchors.get(npc.level().getServer()).resolve(npc.level().getServer(), name);
+    return entry == null ? null : entry.observation();
+  }
+
   private net.minecraft.world.entity.Entity levelEntity(java.util.UUID id) {
     return ((ServerLevel) npc.level()).getEntity(id);
   }
@@ -109,12 +125,21 @@ public final class NpcLocalWorld implements LocalTaskRunner.World {
 
   public CompletionStage<JsonObject> execute(String tool, JsonObject args) {
     var service = NpcService.get(((ServerLevel) npc.level()).getServer());
-    service.record(npc, "tool_start", tool, null, NpcObservations.bounded(args, 6000));
+    String actionId = UUID.randomUUID().toString();
+    var start = args.deepCopy();
+    start.addProperty("actionId", actionId);
+    start.add("actorPosition", new Gson().toJsonTree(List.of(npc.getX(), npc.getY(), npc.getZ())));
+    service.record(npc, "tool_start", tool, null, NpcObservations.bounded(start, 6000));
     return skills
         .execute(tool, args)
         .thenApply(
             result -> {
-              service.record(npc, "tool_result", tool, null, NpcObservations.bounded(result, 6000));
+              var logged = result.deepCopy();
+              logged.addProperty("actionId", actionId);
+              if (logged.has("error"))
+                logged.addProperty(
+                    "code", NpcExecutionMemory.failureCode(logged.get("error").getAsString()));
+              service.record(npc, "tool_result", tool, null, NpcObservations.bounded(logged, 6000));
               npc.rememberResult(tool, result);
               return result;
             });
@@ -158,14 +183,37 @@ public final class NpcLocalWorld implements LocalTaskRunner.World {
             ? step.target()
             : step.block();
     var key = Identifier.tryParse(id);
+    if (id.startsWith("#")) {
+      key = Identifier.tryParse(id.substring(1));
+      if (key == null) return null;
+      var tag =
+          net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.BLOCK, key);
+      var found = BuiltInRegistries.BLOCK.get(tag);
+      if (found.isPresent())
+        return found.get().stream()
+            .findFirst()
+            .map(h -> h.value().defaultBlockState())
+            .orElse(null);
+    }
     return key != null && BuiltInRegistries.BLOCK.containsKey(key)
         ? BuiltInRegistries.BLOCK.getValue(key).defaultBlockState()
         : null;
   }
 
   public int miningTool(TaskPlan.Step step) {
+    if (step.action().equals("collect")) trackedResource = step.target();
     var state = resourceState(step);
     return state == null ? -2 : bestTool(state);
+  }
+
+  private boolean trackedDrop(ItemStack stack) {
+    if (trackedResource.startsWith("#"))
+      return stack.is(
+          net.minecraft.tags.TagKey.create(
+              net.minecraft.core.registries.Registries.ITEM,
+              Identifier.parse(trackedResource.substring(1))));
+    return !trackedResource.isEmpty()
+        && BuiltInRegistries.ITEM.getKey(stack.getItem()).toString().equals(trackedResource);
   }
 
   public boolean mineAccessible(JsonArray target) {
@@ -176,6 +224,27 @@ public final class NpcLocalWorld implements LocalTaskRunner.World {
     if (p.getY() < npc.blockPosition().getY()) return false;
     return skills.visible(p) && npc.distanceToSqr(Vec3.atCenterOf(p)) <= 16
         || approach(target) != null;
+  }
+
+  @Override
+  public boolean harvestable(TaskPlan.Step step, JsonArray target) {
+    return harvestReady(step, target) && mineAccessible(target);
+  }
+
+  private boolean harvestReady(TaskPlan.Step step, JsonArray target) {
+    if (step.action().equals("collect")) {
+      var p =
+          BlockPos.containing(
+              target.get(0).getAsDouble(),
+              target.get(1).getAsDouble(),
+              target.get(2).getAsDouble());
+      var state = npc.level().getBlockState(p);
+      if (state.getBlock() instanceof CropBlock crop && !crop.isMaxAge(state)) return false;
+      if (state.is(Blocks.NETHER_WART) && state.getValue(NetherWartBlock.AGE) < 3) return false;
+      if ((state.is(Blocks.SUGAR_CANE) || state.is(Blocks.BAMBOO))
+          && !npc.level().getBlockState(p.below()).is(state.getBlock())) return false;
+    }
+    return true;
   }
 
   public JsonObject planningObservation() {
@@ -226,7 +295,43 @@ public final class NpcLocalWorld implements LocalTaskRunner.World {
         "local_exploration",
         "Loaded paths, bounded stairs, ore variants, real recipes, recursive acquire from no tools,"
             + " vanilla furnace smelting, same-owner delegation with actual delivery.");
-    return NpcObservations.bounded(o, 14000);
+    // Reserve a separate budget: generic array trimming must not erase all search findings.
+    var bounded = NpcObservations.planning(o, 10000);
+    bounded.add(
+        "execution_memory",
+        NpcObservations.bounded(
+            npc.executionMemory.observation(
+                npc.level().dimension().identifier().toString(), npc.level().getGameTime()),
+            10000));
+    if (NpcTools.permitted("read_signs", npc.personality().allowedSkills))
+      bounded.add("nearby_signs", NpcObservations.bounded(skills.readSigns(12), 4000));
+    var peerFindings = new JsonArray();
+    for (var peer :
+        npc.level()
+            .getEntitiesOfClass(
+                CompanionEntity.class,
+                npc.getBoundingBox().inflate(48),
+                n -> n != npc && Objects.equals(n.ownerId(), npc.ownerId()))) {
+      if (peerFindings.size() == 3) break;
+      var memory =
+          peer.executionMemory.observation(
+              npc.level().dimension().identifier().toString(), npc.level().getGameTime());
+      peerFindings.add(
+          NpcObservations.bounded(
+              object("actor", peer.getUUID().toString(), "searches", memory.get("searches")),
+              3000));
+    }
+    bounded.add("peer_findings", peerFindings);
+    bounded.add(
+        "shared_anchors",
+        NpcAnchors.get(npc.level().getServer())
+            .relevant(npc.level().getServer(), npc.instruction()));
+    return bounded;
+  }
+
+  @Override
+  public boolean blocked(String tool, JsonObject args) {
+    return skills.blocked(tool, args);
   }
 
   public TaskPlan bindLocations(TaskPlan plan) {
@@ -307,6 +412,8 @@ public final class NpcLocalWorld implements LocalTaskRunner.World {
                   object("chest_source", 1)));
       }
     }
+    out.removeIf(option -> blocked(option.tool(), option.args()));
+    if (!out.isEmpty()) return out; // A usable observed spare takes precedence over new crafting.
     for (String material : List.of("stone", "iron", "diamond", "wooden", "golden")) {
       var id = Identifier.fromNamespaceAndPath("minecraft", material + "_pickaxe");
       var stack = new ItemStack(BuiltInRegistries.ITEM.getValue(id));
@@ -383,23 +490,7 @@ public final class NpcLocalWorld implements LocalTaskRunner.World {
   }
 
   private boolean safeStand(BlockPos p) {
-    var level = (ServerLevel) npc.level();
-    return level.hasChunkAt(p)
-        && level.isInWorldBounds(p)
-        && level.getWorldBorder().isWithinBounds(p)
-        && level.getBlockState(p).getCollisionShape(level, p).isEmpty()
-        && level.getBlockState(p.above()).getCollisionShape(level, p.above()).isEmpty()
-        && level.getBlockState(p.below()).isFaceSturdy(level, p.below(), Direction.UP)
-        && level.noCollision(
-            npc,
-            new net.minecraft.world.phys.AABB(
-                p.getX() + .2,
-                p.getY(),
-                p.getZ() + .2,
-                p.getX() + .8,
-                p.getY() + 1.8,
-                p.getZ() + .8))
-        && !dangerous(p);
+    return NpcWalkSurface.standable(npc, p);
   }
 
   private boolean dangerous(BlockPos p) {
@@ -431,6 +522,7 @@ public final class NpcLocalWorld implements LocalTaskRunner.World {
     var ceilingState = level.getBlockState(ceiling);
     if (!ceilingState.getCollisionShape(level, ceiling).isEmpty()
         && !ceilingState.hasBlockEntity()
+        && !NpcWorkRoute.protectedBlock(npc, ceiling)
         && ceilingState.getDestroySpeed(level, ceiling) >= 0
         && !protectedSupport(ceiling, visited)
         && skills.mayChange(ceiling, 4)
@@ -453,6 +545,57 @@ public final class NpcLocalWorld implements LocalTaskRunner.World {
           BlockPos.containing(
               a.get(0).getAsDouble(), a.get(1).getAsDouble(), a.get(2).getAsDouble());
       preferred = focus.getY();
+    }
+    if (focus != null && focus.equals(origin.below())) {
+      // Automatic drop pickup can leave us standing on the last resource block. Walk off it
+      // onto an observed adjacent floor before mining; never dig our current support.
+      for (var direction : Direction.Plane.HORIZONTAL) {
+        var stand = origin.relative(direction).below();
+        if (!safeStand(stand) || dangerous(stand)) continue;
+        var path = npc.getNavigation().createPath(stand, 0);
+        if (path != null && path.canReach())
+          return List.of(
+              new LocalTaskRunner.Option(
+                  "approach",
+                  "move_precisely",
+                  object("x", stand.getX(), "y", stand.getY(), "z", stand.getZ()),
+                  1,
+                  object("unvisited", 1)));
+      }
+    }
+    if (!targets.isEmpty() && NpcTools.permitted("work_route", npc.personality().allowedSkills)) {
+      for (var value : targets) {
+        var a = value.getAsJsonArray();
+        if (!harvestReady(s, a)) continue;
+        var p =
+            BlockPos.containing(
+                a.get(0).getAsDouble(), a.get(1).getAsDouble(), a.get(2).getAsDouble());
+        if (!s.position().isEmpty()
+            && p.distSqr(
+                    BlockPos.containing(
+                        s.position().get(0), s.position().get(1), s.position().get(2)))
+                > 1) continue;
+        if (p.getY() < origin.getY() || p.distSqr(origin) > 24 * 24) continue;
+        return List.of(
+            new LocalTaskRunner.Option(
+                "prepare",
+                "work_route",
+                object(
+                    "x",
+                    p.getX(),
+                    "y",
+                    p.getY(),
+                    "z",
+                    p.getZ(),
+                    "goal",
+                    "mine",
+                    "mode",
+                    "both",
+                    "max_blocks",
+                    96),
+                0,
+                object("ingredients_ready", 1)));
+      }
     }
     var out = new ArrayList<LocalTaskRunner.Option>();
     var directions = List.of(Direction.EAST, Direction.SOUTH, Direction.WEST, Direction.NORTH);
@@ -667,6 +810,7 @@ public final class NpcLocalWorld implements LocalTaskRunner.World {
   }
 
   private boolean protectedSupport(BlockPos block, Set<String> visited) {
+    if (NpcWorkRoute.protectedBlock(npc, block)) return true;
     String standing = key(block.above());
     if (!visited.contains(standing)) return false;
     if (!visited.isEmpty() && visited.iterator().next().equals(standing)) return true;
@@ -689,7 +833,35 @@ public final class NpcLocalWorld implements LocalTaskRunner.World {
     return best;
   }
 
+  @Override
+  public boolean storageReachable(JsonObject chest) {
+    var p =
+        BlockPos.containing(
+            chest.get("x").getAsDouble(),
+            chest.get("y").getAsDouble(),
+            chest.get("z").getAsDouble());
+    return skills.container(p, 4) != null;
+  }
+
+  @Override
+  public int storageCapacity(JsonObject chest, int slot) {
+    var p =
+        BlockPos.containing(
+            chest.get("x").getAsDouble(),
+            chest.get("y").getAsDouble(),
+            chest.get("z").getAsDouble());
+    if (npc.distanceToSqr(Vec3.atCenterOf(p)) > 16) return -1;
+    if (!skills.visible(p)) return -1;
+    return skills.depositCapacity(p, slot, 4);
+  }
+
   public JsonObject approach(JsonArray target) {
+    var block =
+        BlockPos.containing(
+            target.get(0).getAsDouble(), target.get(1).getAsDouble(), target.get(2).getAsDouble());
+    if (npc.level().hasChunkAt(block)
+        && npc.level().getBlockState(block).getBlock() instanceof ChestBlock)
+      return object("x", block.getX(), "y", block.getY(), "z", block.getZ());
     return approach(target, Set.of());
   }
 
@@ -701,7 +873,7 @@ public final class NpcLocalWorld implements LocalTaskRunner.World {
     var block = BlockPos.containing(item);
     var candidates = new ArrayList<BlockPos>();
     for (var p : BlockPos.betweenClosed(block.offset(-1, -1, -1), block.offset(1, 1, 1))) {
-      var center = Vec3.atBottomCenterOf(p);
+      var center = NpcWalkSurface.point(npc, p);
       if (Math.hypot(center.x - item.x, center.z - item.z) > 1.1
           || center.y - item.y > .65
           || item.y - center.y > 2.2
@@ -717,13 +889,43 @@ public final class NpcLocalWorld implements LocalTaskRunner.World {
                   p.getZ() + .8))) continue;
       candidates.add(p.immutable());
     }
-    candidates.sort(Comparator.comparingDouble(p -> npc.distanceToSqr(Vec3.atBottomCenterOf(p))));
+    candidates.sort(
+        Comparator.comparingDouble(p -> npc.distanceToSqr(NpcWalkSurface.point(npc, p))));
     for (var p : candidates) {
+      if (blocked("move_precisely", object("x", p.getX(), "y", p.getY(), "z", p.getZ()))) continue;
       var path = npc.getNavigation().createPath(p, 0);
       if (path != null && path.canReach())
         return object("x", p.getX(), "y", p.getY(), "z", p.getZ());
     }
     return null;
+  }
+
+  @Override
+  public LocalTaskRunner.Option pickupWork(JsonArray target) {
+    if (!NpcTools.permitted("work_route", npc.personality().allowedSkills)) return null;
+    if (skills.gatheringScaffolding()) return null;
+    var p =
+        BlockPos.containing(
+            target.get(0).getAsDouble(), target.get(1).getAsDouble(), target.get(2).getAsDouble());
+    if (p.distSqr(npc.blockPosition()) > 24 * 24) return null;
+    return new LocalTaskRunner.Option(
+        "prepare",
+        "work_route",
+        object(
+            "x",
+            target.get(0).getAsDouble(),
+            "y",
+            target.get(1).getAsDouble(),
+            "z",
+            target.get(2).getAsDouble(),
+            "goal",
+            "pickup",
+            "mode",
+            "both",
+            "max_blocks",
+            64),
+        0,
+        object("ingredients_ready", 1));
   }
 
   JsonObject approach(JsonArray target, Set<BlockPos> excluded) {
@@ -757,12 +959,19 @@ public final class NpcLocalWorld implements LocalTaskRunner.World {
         }
     candidates.sort(Comparator.comparingDouble(p -> npc.distanceToSqr(Vec3.atBottomCenterOf(p))));
     for (var p : candidates) {
+      if (blocked("move_to", object("x", p.getX(), "y", p.getY(), "z", p.getZ()))) continue;
       if (!skills.visibleFrom(Vec3.atBottomCenterOf(p).add(0, npc.getEyeHeight(), 0), block))
         continue;
       var path = npc.getNavigation().createPath(p, 0);
       if (path != null && path.canReach())
         return object("x", p.getX(), "y", p.getY(), "z", p.getZ());
     }
+    // The short native probe may fail while the actor is settling or outside its search radius.
+    // Defer the actual reachability decision to move_precisely's bounded walking search.
+    for (var p : candidates)
+      if (!blocked("move_to", object("x", p.getX(), "y", p.getY(), "z", p.getZ()))
+          && skills.visibleFrom(Vec3.atBottomCenterOf(p).add(0, npc.getEyeHeight(), 0), block))
+        return object("x", p.getX(), "y", p.getY(), "z", p.getZ());
     return null;
   }
 

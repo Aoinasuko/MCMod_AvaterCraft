@@ -395,8 +395,11 @@ final class NpcInteractions implements AutoCloseable {
       var p = pos(a);
       if (!skills.mayChange(p, 5)) return immediate(error("Block is protected or out of reach"));
       if (name.equals("use_on_block")) {
-        int slot = bag(a);
-        if (!npc.inventory.equip(slot, false)) return immediate(error("Cannot equip item"));
+        int slot = a.get("slot").getAsInt();
+        if (slot < 0 || slot > 41 || slot >= 36 && slot != 41)
+          return immediate(error("Use a bag slot or main hand 41"));
+        if (slot < 36 && !npc.inventory.equip(slot, false))
+          return immediate(error("Cannot equip item"));
       }
       Direction face = Direction.byName(a.get("face").getAsString());
       if (face == null) return immediate(error("Unknown face"));
@@ -418,13 +421,23 @@ final class NpcInteractions implements AutoCloseable {
         return skills.interactContainer(p);
       return immediate(
           withPlayer(
-              fake ->
-                  object(
-                      "ok",
-                      fake.gameMode
-                          .useItemOn(
-                              fake, level(), fake.getMainHandItem(), InteractionHand.MAIN_HAND, hit)
-                          .consumesAction())));
+              fake -> {
+                var result =
+                    fake.gameMode.useItemOn(
+                        fake, level(), fake.getMainHandItem(), InteractionHand.MAIN_HAND, hit);
+                if (!result.consumesAction()
+                    && fake.getMainHandItem().getItem() instanceof BucketItem) {
+                  // Buckets implement use(), not useOn(). Aim at the requested face and invoke
+                  // vanilla's real raycast/use path, preserving permissions and fluid rules.
+                  var d = hit.getLocation().subtract(fake.getEyePosition());
+                  fake.setYRot((float) (Math.toDegrees(Math.atan2(d.z, d.x)) - 90));
+                  fake.setXRot((float) -Math.toDegrees(Math.atan2(d.y, Math.hypot(d.x, d.z))));
+                  result =
+                      fake.gameMode.useItem(
+                          fake, level(), fake.getMainHandItem(), InteractionHand.MAIN_HAND);
+                }
+                return object("ok", result.consumesAction());
+              }));
     }
     if (name.equals("interact_entity")) {
       var e = level().getEntity(a.get("entity_id").getAsInt());
@@ -497,11 +510,19 @@ final class NpcInteractions implements AutoCloseable {
   }
 
   private void look() {
+    if (!npc.getNavigation().isDone()) return;
     var d = aim.subtract(npc.getEyePosition());
-    npc.setYRot((float) (Math.toDegrees(Math.atan2(d.z, d.x)) - 90));
+    // While walking, MoveControl owns body yaw. Forcing a stale aiming yaw here rotates the
+    // movement vector away from the navigation path (notably when returning to a guard post).
+    if (npc.getNavigation().isDone())
+      npc.setYRot((float) (Math.toDegrees(Math.atan2(d.z, d.x)) - 90));
     npc.setXRot((float) -Math.toDegrees(Math.atan2(d.y, Math.hypot(d.x, d.z))));
     npc.setYHeadRot(npc.getYRot());
     npc.getLookControl().setLookAt(aim.x, aim.y, aim.z);
+  }
+
+  void clearAim() {
+    aim = null;
   }
 
   private JsonObject withPlayer(Function<FakePlayer, JsonObject> operation) {

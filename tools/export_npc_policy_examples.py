@@ -19,7 +19,7 @@ def main():
                 if entry.get('kind') != 'local_policy':
                     continue
                 d = entry['details']
-                if d.get('modelVersion') != 3 or not d.get('actions') or len(d['candidates']) < 2:
+                if d.get('modelVersion') != 4 or not d.get('actions') or len(d['candidates']) < 2:
                     continue
                 actions = json.loads(json.dumps(d['actions']))
                 for action in actions:
@@ -28,7 +28,7 @@ def main():
                     for private in ('text', 'plan_json'):
                         if private in action.get('args', {}):
                             action['args'][private] = '<omitted>'
-                examples.append(dict(modelVersion=3, exampleId=hashlib.sha256(entry['id'].encode()).hexdigest()[:16], candidates=d['candidates'], actions=actions, chosen=d['chosen'], reviewed=False))
+                examples.append(dict(modelVersion=4, exampleId=hashlib.sha256(entry['id'].encode()).hexdigest()[:16], candidates=d['candidates'], actions=actions, chosen=d['chosen'], reviewed=False))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(''.join((json.dumps(e, ensure_ascii=False) + '\n' for e in examples)), encoding='utf-8')
     print(json.dumps(dict(examples=len(examples), output=str(args.output), reviewed=False)))

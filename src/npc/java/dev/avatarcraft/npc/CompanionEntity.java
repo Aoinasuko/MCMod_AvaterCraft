@@ -45,10 +45,13 @@ public final class CompanionEntity extends PathfinderMob
   private static final EntityDataAccessor<String> AI_STATUS =
       SynchedEntityData.defineId(CompanionEntity.class, EntityDataSerializers.STRING);
   private NpcMind mind;
+  private final NpcGateController gateController = new NpcGateController(this);
   private final NpcChunkLoading chunkLoading = new NpcChunkLoading();
   private String localTaskState = "";
   private String expeditionState = "{}";
   private com.google.gson.JsonArray recentResults = new com.google.gson.JsonArray();
+  public final dev.avatarcraft.npc.ai.NpcExecutionMemory executionMemory =
+      new dev.avatarcraft.npc.ai.NpcExecutionMemory();
   private boolean recovering;
   private String respawnDimension = "", respawnConfigKey = "";
   private net.minecraft.world.phys.Vec3 respawnPosition = net.minecraft.world.phys.Vec3.ZERO;
@@ -63,6 +66,8 @@ public final class CompanionEntity extends PathfinderMob
   public void rememberResult(String tool, com.google.gson.JsonObject outcome) {
     if (!java.util.Set.of(
             "inspect_entities",
+            "find_blocks",
+            "find_chests",
             "inspect_entity",
             "inspect_block",
             "inspect_structures",
@@ -109,14 +114,24 @@ public final class CompanionEntity extends PathfinderMob
 
   public CompanionEntity(EntityType<? extends CompanionEntity> type, Level level) {
     super(type, level);
+    moveControl = new dev.avatarcraft.npc.ai.NpcStepMoveControl(this);
     setPersistenceRequired();
     for (var slot : EquipmentSlot.values()) setGuaranteedDrop(slot);
   }
 
   protected void registerGoals() {
     goalSelector.addGoal(0, new FloatGoal(this));
+    goalSelector.addGoal(1, new NpcDoorGoal(this));
     goalSelector.addGoal(8, new LookAtPlayerGoal(this, Player.class, 8));
     goalSelector.addGoal(9, new RandomLookAroundGoal(this));
+  }
+
+  @Override
+  protected net.minecraft.world.entity.ai.navigation.PathNavigation createNavigation(Level level) {
+    var navigation = new dev.avatarcraft.npc.ai.NpcGroundNavigation(this, level);
+    navigation.getNodeEvaluator().setCanOpenDoors(true);
+    navigation.getNodeEvaluator().setCanPassDoors(true);
+    return navigation;
   }
 
   protected void defineSynchedData(SynchedEntityData.Builder builder) {
@@ -171,6 +186,14 @@ public final class CompanionEntity extends PathfinderMob
     if (!(level() instanceof ServerLevel server)) throw new IllegalStateException("Server only");
     if (mind == null) mind = new NpcMind(this, NpcService.get(server.getServer()));
     return mind;
+  }
+
+  /** Isolated GameTest provider seam; unavailable in ordinary client/server runs. */
+  public void gameTestMind(NpcMind replacement) {
+    if (!Boolean.getBoolean("avatarcraft.npcGameTest"))
+      throw new IllegalStateException("GameTest only");
+    if (mind != null) mind.close();
+    mind = java.util.Objects.requireNonNull(replacement);
   }
 
   public String instruction() {
@@ -265,6 +288,7 @@ public final class CompanionEntity extends PathfinderMob
   }
 
   public void tick() {
+    if (!level().isClientSide()) gateController.tick();
     super.tick();
     if (!level().isClientSide()) containerAnimation.tick();
     if (!level().isClientSide()) chunkLoading.update(this);
@@ -285,6 +309,11 @@ public final class CompanionEntity extends PathfinderMob
       if (effect.starvation()) hurtServer(server, damageSources().starve(), 1);
       entityData.set(FOOD, vitals.food());
       if (isInWater() && !isPassenger()) vitals.exhaust((float) getDeltaMovement().length() * .01f);
+      if (onGround() && !isInWater()) {
+        var feet = blockPosition();
+        executionMemory.walked(
+            level().dimension().identifier().toString(), feet.getX(), feet.getY(), feet.getZ());
+      }
       mind().tick();
       if (tickCount % 10 == 0)
         for (var item :
@@ -313,6 +342,7 @@ public final class CompanionEntity extends PathfinderMob
     output.putString("LocalTaskState", mind == null ? localTaskState : mind.saveState());
     output.putString("ExpeditionState", expeditionState);
     output.putString("RecentActionResults", recentResults.toString());
+    output.putString("ExecutionMemory", executionMemory.save());
     output.putBoolean("Recovering", recovering);
     output.putString("OwnerRespawnDimension", respawnDimension);
     output.putDouble("OwnerRespawnX", respawnPosition.x);
@@ -367,6 +397,7 @@ public final class CompanionEntity extends PathfinderMob
       locations.load("[]");
     }
     localTaskState = input.getStringOr("LocalTaskState", "");
+    executionMemory.restore(input.getStringOr("ExecutionMemory", ""));
     expeditionState = input.getStringOr("ExpeditionState", "{}");
     if (expeditionState.length() > 65536) expeditionState = "{}";
     try {

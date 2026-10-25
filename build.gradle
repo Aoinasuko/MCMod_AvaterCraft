@@ -2,7 +2,7 @@ plugins {
     id 'java-library'
     id 'net.neoforged.moddev' version '2.0.148'
 }
-version = '0.6.0'
+version = '0.7.0'
 group = 'dev.avatarcraft'
 base { archivesName = 'avatarcraft' }
 java.toolchain.languageVersion = JavaLanguageVersion.of(25)
@@ -28,6 +28,32 @@ neoForge {
             }
         }
         server { server(); programArgument '--nogui' }
+        anchorClient {
+            client()
+            gameDirectory = file('run-anchor-ui-qa')
+            systemProperty 'avatarcraft.qa', 'true'
+            systemProperty 'avatarcraft.anchorUiQa', 'true'
+            programArgument '--quickPlaySingleplayer'
+            programArgument 'Anchor UI QA'
+        }
+        anchorGameTest {
+            type = 'gameTestServer'
+            gameDirectory = file('run-anchor-qa')
+            systemProperty 'avatarcraft.npcGameTest', 'true'
+            systemProperty 'avatarcraft.anchorQa', 'true'
+            systemProperty 'avatarcraft.anchorLive', providers.environmentVariable('AVATARCRAFT_ANCHOR_LIVE').getOrElse('false')
+            systemProperty 'neoforge.enabledGameTestNamespaces', 'avatarcraftnpc'
+        }
+        npcComplexGameTest {
+            type = 'gameTestServer'
+            gameDirectory = file('run-npc-complex-qa')
+            systemProperty 'avatarcraft.npcGameTest', 'true'
+            systemProperty 'avatarcraft.complexQa', 'true'
+            systemProperty 'avatarcraft.complexLive', providers.environmentVariable('AVATARCRAFT_COMPLEX_E2E').getOrElse('false')
+            systemProperty 'avatarcraft.complexQaCases', providers.environmentVariable('AVATARCRAFT_COMPLEX_CASES').getOrElse('')
+            systemProperty 'avatarcraft.complexControl', providers.environmentVariable('AVATARCRAFT_COMPLEX_CONTROL').getOrElse('false')
+            systemProperty 'neoforge.enabledGameTestNamespaces', 'avatarcraftnpc'
+        }
         npcGameTest {
             type = 'gameTestServer'
             gameDirectory = file('run-npc-qa')
@@ -56,6 +82,8 @@ test {
     useJUnitPlatform()
     def fixture = providers.environmentVariable('AVATARCRAFT_TEST_AVATAR').filter { !it.isBlank() }
     inputs.property('hasExportedAvatarFixture', fixture.isPresent())
+    inputs.property('complexLive', providers.environmentVariable('AVATARCRAFT_COMPLEX_LIVE').getOrElse('0'))
+    inputs.property('complexAuditCases', providers.environmentVariable('AVATARCRAFT_COMPLEX_CASES').getOrElse(''))
     inputs.property('codexLive', providers.environmentVariable('AVATARCRAFT_CODEX_LIVE').getOrElse('0'))
     if (fixture.isPresent()) {
         environment 'AVATARCRAFT_TEST_AVATAR', fixture.get()

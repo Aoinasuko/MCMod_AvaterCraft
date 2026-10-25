@@ -21,5 +21,13 @@
   "avatarcraftnpc.configuration.maxConcurrentTurns": "Concurrent turns",
   "avatarcraftnpc.configuration.minimumRequestIntervalSeconds": "Request interval (seconds)",
   "avatarcraftnpc.configuration.maxOutputTokens": "Maximum output tokens",
-  "item.avatarcraftnpc.soulstone": "Soulstone"
+  "item.avatarcraftnpc.soulstone": "Soulstone",
+  "block.avatarcraftnpc.avatar_anchor": "Avatar Anchor",
+  "anchor.id": "Location ID (max 32; blank clears)",
+  "anchor.save": "Save",
+  "anchor.saved": "Saved. Available to all NPCs.",
+  "anchor.invalid_id": "Use up to 32 characters without control characters.",
+  "anchor.duplicate_id": "Another Avatar Anchor already uses that ID.",
+  "anchor.limit": "The world anchor limit has been reached.",
+  "anchor.unavailable": "The anchor is too far away or cannot be edited."
 }

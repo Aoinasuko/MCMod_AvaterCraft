@@ -9,8 +9,14 @@ out/
 .idea/
 *.iml
 __pycache__/
+TrainingData/npc-v4/*.jsonl.gz
+TrainingData/npc-v4/*.bin
 tools/unity-tools.json
 PublishPackage/
 Docs/
 **/avatarcraft-private-cache/
 **/avatarcraft/remote-cache/
+
+run-npc-complex-qa/
+run-anchor-qa/
+run-anchor-ui-qa/

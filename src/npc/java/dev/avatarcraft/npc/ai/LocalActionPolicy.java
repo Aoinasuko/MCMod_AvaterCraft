@@ -7,9 +7,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.util.*;
 
-/** Immutable, trained 48→1000→1000→1 FP32 ranker shared by NPCs. Java-only inference. */
+/** Five trained FP32 experts; one routed 48→1000→1000→1 ranker per candidate. */
 public final class LocalActionPolicy {
-  public static final int WEIGHT_BYTES = 4204004, PARAMETERS = 1051001;
+  public static final int VERSION = 4, EXPERTS = 5, WEIGHT_BYTES = 21020020, PARAMETERS = 5255005;
   public static final List<String> FEATURES =
       List.of(
           "urgent",
@@ -60,7 +60,12 @@ public final class LocalActionPolicy {
           "portal_visible",
           "structure_observed",
           "danger");
-  private final float[] w1, b1, w2, b2, w3, b3;
+  private final float[][] w1 = new float[EXPERTS][],
+      b1 = new float[EXPERTS][],
+      w2 = new float[EXPERTS][],
+      b2 = new float[EXPERTS][],
+      w3 = new float[EXPERTS][],
+      b3 = new float[EXPERTS][];
 
   private static final class Scratch {
     final float[] input = new float[48], a = new float[1000], b = new float[1000];
@@ -111,7 +116,11 @@ public final class LocalActionPolicy {
                     "parameters",
                     "sha256",
                     "probes"))
-        || o.get("version").getAsInt() != 3
+        || o.get("version").getAsInt() != VERSION
+        || !o.has("experts")
+        || o.getAsJsonArray("experts").size() != EXPERTS
+        || !o.has("routing")
+        || !o.get("routing").getAsString().equals("context-v4")
         || o.get("parameters").getAsInt() != PARAMETERS
         || !o.get("activation").getAsString().equals("relu")
         || !o.get("format").getAsString().equals("float32-le")
@@ -133,12 +142,14 @@ public final class LocalActionPolicy {
       throw new IllegalStateException(e);
     }
     var bytes = ByteBuffer.wrap(weights).order(ByteOrder.LITTLE_ENDIAN);
-    w1 = read(bytes, 48 * 1000);
-    b1 = read(bytes, 1000);
-    w2 = read(bytes, 1000 * 1000);
-    b2 = read(bytes, 1000);
-    w3 = read(bytes, 1000);
-    b3 = read(bytes, 1);
+    for (int expert = 0; expert < EXPERTS; expert++) {
+      w1[expert] = read(bytes, 48 * 1000);
+      b1[expert] = read(bytes, 1000);
+      w2[expert] = read(bytes, 1000 * 1000);
+      b2[expert] = read(bytes, 1000);
+      w3[expert] = read(bytes, 1000);
+      b3[expert] = read(bytes, 1);
+    }
     for (var entry : o.getAsJsonArray("probes")) {
       var p = entry.getAsJsonObject();
       var a = p.getAsJsonArray("input");
@@ -168,11 +179,19 @@ public final class LocalActionPolicy {
         throw new IllegalArgumentException("Invalid feature");
       s.input[i] = (float) x[i];
     }
-    layer(s.input, s.a, w1, b1, 48);
-    layer(s.a, s.b, w2, b2, 1000);
-    float result = b3[0];
-    for (int i = 0; i < 1000; i++) result += s.b[i] * w3[i];
+    int expert = expert(x);
+    layer(s.input, s.a, w1[expert], b1[expert], 48);
+    layer(s.a, s.b, w2[expert], b2[expert], 1000);
+    float result = b3[expert][0];
+    for (int i = 0; i < 1000; i++) result += s.b[i] * w3[expert][i];
     return result;
+  }
+
+  public static int expert(double[] x) {
+    if (x[32] > .5 || x[36] > .5) return 2;
+    if (x[40] > .5 || x[17] > .5 || x[3] > .5) return 1;
+    if (x[44] > .5 || x[46] > .5) return 3;
+    return x[27] > .5 ? 4 : 0;
   }
 
   private static void layer(

@@ -1,0 +1,162 @@
+[
+  {
+    "id": "01",
+    "key": "skeleton_spawner_watch",
+    "title": "スポナー待機・スケルトン討伐",
+    "ja": "その場で待機して、スケルトンスポナーからスケルトンがスポーンしたらスケルトンを倒す",
+    "en": "Stay here and kill skeletons when they spawn from the skeleton spawner.",
+    "budget_ticks": 2400
+  },
+  {
+    "id": "02",
+    "key": "trap_stream_sort",
+    "title": "トラップ排出品の継続仕分け",
+    "ja": "トラップタワーから出てきたアイテムを種類ごとに別々のチェストに分別する",
+    "en": "Continuously sort the trap tower drops into separate chests by item type.",
+    "budget_ticks": 3000
+  },
+  {
+    "id": "03",
+    "key": "enclosed_irrigated_farm",
+    "title": "丸石枠内の畑造成",
+    "ja": "丸石で囲まれた土ブロックを、鍬で耕して水を張り畑を作り種を植える",
+    "en": "Till the dirt enclosed by cobblestone, add water, and plant seeds.",
+    "budget_ticks": 3000
+  },
+  {
+    "id": "04",
+    "key": "mine_diamond_armor",
+    "title": "採掘からダイヤ防具一式",
+    "ja": "ダイアモンドを必要数採掘し、ダイアモンドの防具を一式制作する",
+    "en": "Mine enough diamonds and craft a full set of diamond armor.",
+    "budget_ticks": 14000
+  },
+  {
+    "id": "05",
+    "key": "chest_move_all",
+    "title": "指定チェスト間の全量移送",
+    "ja": "指定座標にあるチェストからアイテムをすべて取り出し、もう一個の指定座標のチェストに移す",
+    "en": "Move everything from the chest at the source coordinates to the chest at the destination coordinates.",
+    "budget_ticks": 6000
+  },
+  {
+    "id": "06",
+    "key": "mixed_logs_tools",
+    "title": "樹種横断採集・道具工作・収納",
+    "ja": "周囲のトウヒとシラカバを合わせて原木16個集め、板材と棒と木の斧を作り余りを拠点へしまって",
+    "en": "Gather 16 logs from spruce and birch, craft planks, sticks and a wooden axe, then store leftovers at base.",
+    "budget_ticks": 10000
+  },
+  {
+    "id": "07",
+    "key": "delayed_hostile_patrol",
+    "title": "待機後の敵侵入・討伐",
+    "ja": "しばらく見張り、門の向こうにゾンビが来たら倒して拠点へ戻って",
+    "en": "Watch for a zombie beyond the gate, defeat it, then return to base.",
+    "budget_ticks": 3000
+  },
+  {
+    "id": "08",
+    "key": "mixed_crop_replant",
+    "title": "複数作物の収穫と植え直し",
+    "ja": "熟した小麦・ニンジン・ジャガイモ・ビートルートを収穫して植え直し、若い作物は残して",
+    "en": "Harvest mature wheat, carrots, potatoes and beetroots, replant them and preserve immature crops.",
+    "budget_ticks": 6000
+  },
+  {
+    "id": "09",
+    "key": "iron_gold_fuel",
+    "title": "燃料調達・鉄金の連続精錬",
+    "ja": "木材から燃料を用意し、鉄8個と金4個を精錬して種類別のチェストへしまって",
+    "en": "Prepare fuel from wood, smelt eight iron and four gold ingots, and store them separately.",
+    "budget_ticks": 14000
+  },
+  {
+    "id": "10",
+    "key": "double_chest_bulk",
+    "title": "手持ち容量超過の全量移送",
+    "ja": "手持ちに入りきらないダブルチェストの中身を何往復かして全部移して",
+    "en": "Transfer an entire double chest, making multiple trips when inventory capacity is exceeded.",
+    "budget_ticks": 10000
+  },
+  {
+    "id": "11",
+    "key": "hostile_type_priority",
+    "title": "敵種別の優先討伐",
+    "ja": "スケルトンを先に、次にゾンビとクモを倒し、村人には攻撃しないで",
+    "en": "Defeat the skeleton first, then the zombie and spider, without attacking the villager.",
+    "budget_ticks": 4000
+  },
+  {
+    "id": "12",
+    "key": "gated_slab_delivery",
+    "title": "段差とゲート経由のNPC配達",
+    "ja": "ハーフブロックとゲートの先にいる仲間へパンを8個届けて戻って",
+    "en": "Deliver eight bread to the companion beyond slabs and gates, then return.",
+    "budget_ticks": 4000
+  },
+  {
+    "id": "13",
+    "key": "water_drop_recovery",
+    "title": "水際のドロップ回収と収納",
+    "ja": "水際に落ちた鉄と金を拾って拠点のチェストに戻して",
+    "en": "Recover iron and gold dropped at the water edge and store them at base.",
+    "budget_ticks": 5000
+  },
+  {
+    "id": "14",
+    "key": "broken_pickaxe_replace",
+    "title": "採掘中の道具破損と交換",
+    "ja": "石を掘り、ツルハシが壊れたら近くのチェストの予備を使って続けて",
+    "en": "Mine stone and continue using the spare pickaxe from the nearby chest when yours breaks.",
+    "budget_ticks": 7000
+  },
+  {
+    "id": "15",
+    "key": "full_destination_alternate",
+    "title": "部分収納後の満杯切替",
+    "ja": "資源を回収して指定チェストへしまい、満杯なら隣の予備チェストへ余りを入れて",
+    "en": "Collect resources, store them in the designated chest, then put overflow in the backup chest.",
+    "budget_ticks": 6000
+  },
+  {
+    "id": "16",
+    "key": "remote_roundtrip_cargo",
+    "title": "遠距離の物資回収と帰還",
+    "ja": "遠くの保管庫から鉄64個を取り、拠点へ帰って収納して",
+    "en": "Fetch 64 iron ingots from the distant store and return them to base storage.",
+    "budget_ticks": 10000
+  },
+  {
+    "id": "17",
+    "key": "cooperative_supply_smelting",
+    "title": "二人で資材調達・精錬・工作",
+    "ja": "仲間に鉄を届けてもらい、自分は燃料を用意し、鉄のツルハシを作って",
+    "en": "Have a companion deliver raw iron while you prepare fuel, then smelt it and craft an iron pickaxe.",
+    "budget_ticks": 12000
+  },
+  {
+    "id": "18",
+    "key": "portal_cargo_roundtrip",
+    "title": "ポータル経由の往復と物資保持",
+    "ja": "ポータルでネザーへ行き、持った荷物を失わず拠点へ戻って",
+    "en": "Travel to the Nether through the portal and return to base without losing your cargo.",
+    "budget_ticks": 8000
+  },
+  {
+    "id": "19",
+    "key": "furnace_contention",
+    "title": "他NPC予約済み設備の回避",
+    "ja": "他の仲間が使っているかまどを避け、空いているかまどで鉄を精錬して",
+    "en": "Avoid the furnace reserved by another companion and smelt iron in an available furnace.",
+    "budget_ticks": 7000
+  },
+  {
+    "id": "20",
+    "key": "instruction_change_cancels_old_work",
+    "title": "複合依頼中の指示変更・中断",
+    "ja": "採掘して収納する依頼の途中でも、停止と言われたら古い作業をやめて待機して",
+    "en": "Stop the old mining-and-storage task immediately when the owner changes the instruction to wait.",
+    "budget_ticks": 4000
+  }
+]

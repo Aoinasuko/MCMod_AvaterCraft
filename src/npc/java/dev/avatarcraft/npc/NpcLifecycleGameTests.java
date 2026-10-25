@@ -224,9 +224,9 @@ public final class NpcLifecycleGameTests {
     var owner = owner(h);
     var n = npc(h, owner);
     h.setBlock(4, 1, 3, Blocks.CRAFTING_TABLE);
-    n.inventory.setItem(0, new ItemStack(Items.IRON_INGOT, 9));
+    n.inventory.setItem(0, new ItemStack(Items.IRON_INGOT, 16));
     n.inventory.setItem(1, new ItemStack(Items.MAP));
-    n.inventory.setItem(2, new ItemStack(Items.BOOK, 8));
+    n.inventory.setItem(2, new ItemStack(Items.BOOK));
     var skills = new dev.avatarcraft.npc.ai.NpcSkills(n, (s, id) -> {});
     var result =
         skills
@@ -249,7 +249,7 @@ public final class NpcLifecycleGameTests {
           if (!result.isDone()) return;
           h.assertTrue(
               result.join().get("ok").getAsBoolean(),
-              "Eight books around one iron must craft journal");
+              "Eight iron around one book must craft journal");
           int maps = 0, books = 0, materials = 0;
           for (int i = 0; i < NpcInventory.SIZE; i++) {
             var stack = n.inventory.getItem(i);
@@ -260,7 +260,7 @@ public final class NpcLifecycleGameTests {
           }
           h.assertTrue(
               maps == 1 && books == 1 && materials == 0,
-              "Recipes must consume exactly nine iron, eight books and one empty map");
+              "Recipes must consume exactly sixteen iron, one book and one empty map");
           skills.cancel("done");
           n.discard();
           h.succeed();

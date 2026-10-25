@@ -57,6 +57,275 @@ public final class NpcInteractionGameTests {
         false,
         NpcInteractionGameTests::removed);
     test(event, env, "distant_work_movement_sprints", true, NpcInteractionGameTests::travel);
+    test(event, env, "wooden_door_path_opens_crosses_closes", false, h -> door(h, false, false));
+    test(event, env, "iron_door_is_not_opened_by_hand", false, h -> door(h, true, false));
+    test(event, env, "already_open_door_is_preserved", false, h -> door(h, false, true));
+    test(
+        event,
+        env,
+        "generic_logs_collect_spruce_and_deposit",
+        false,
+        NpcInteractionGameTests::spruce);
+    test(
+        event,
+        env,
+        "mature_crop_collection_and_real_seed_planting",
+        false,
+        NpcInteractionGameTests::farm);
+    test(
+        event,
+        env,
+        "generic_acquire_logs_and_planks_from_spruce",
+        false,
+        NpcInteractionGameTests::woodFamilies);
+  }
+
+  private static void woodFamilies(GameTestHelper h) {
+    var owner = owner(h, 12);
+    var n = npc(h, owner, 3, 3);
+    n.inventory.setItem(0, new ItemStack(Items.IRON_AXE));
+    n.inventory.setItem(1, new ItemStack(Items.BIRCH_LOG));
+    h.setBlock(5, 1, 3, Blocks.SPRUCE_LOG);
+    h.setBlock(5, 2, 3, Blocks.SPRUCE_LOG);
+    var skills = skills(n);
+    @SuppressWarnings("unchecked")
+    CompletableFuture<com.google.gson.JsonObject>[] future =
+        new CompletableFuture[] {
+          skills
+              .execute("acquire", object("item", "#minecraft:logs", "count", 3))
+              .toCompletableFuture()
+        };
+    boolean[] planks = {false};
+    h.onEachTick(
+        () -> {
+          skills.tick();
+          if (!future[0].isDone()) return;
+          h.assertTrue(
+              future[0].join().get("ok").getAsBoolean(),
+              "Tag acquisition must use actual nearby species: " + future[0].join());
+          if (!planks[0]) {
+            planks[0] = true;
+            future[0] =
+                skills
+                    .execute("acquire", object("item", "#minecraft:planks", "count", 8))
+                    .toCompletableFuture();
+          } else {
+            int total = 0;
+            for (int i = 0; i < NpcInventory.SIZE; i++)
+              if (n.inventory.getItem(i).is(net.minecraft.tags.ItemTags.PLANKS))
+                total += n.inventory.getItem(i).getCount();
+            h.assertTrue(
+                total >= 8, "Generic planks must combine birch and spruce without requiring oak");
+            skills.cancel("Test done");
+            n.discard();
+            h.succeed();
+          }
+        });
+  }
+
+  private static void farm(GameTestHelper h) {
+    var owner = owner(h, 12);
+    var n = npc(h, owner, 3, 3);
+    n.inventory.setItem(0, new ItemStack(Items.WHEAT_SEEDS, 2));
+    h.setBlock(
+        new BlockPos(5, 0, 3),
+        Blocks.FARMLAND
+            .defaultBlockState()
+            .setValue(
+                net.minecraft.world.level.block.state.properties.BlockStateProperties.MOISTURE, 7));
+    h.setBlock(
+        new BlockPos(6, 0, 3),
+        Blocks.FARMLAND
+            .defaultBlockState()
+            .setValue(
+                net.minecraft.world.level.block.state.properties.BlockStateProperties.MOISTURE, 7));
+    h.setBlock(new BlockPos(5, 1, 3), Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, 7));
+    h.setBlock(new BlockPos(6, 1, 3), Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, 2));
+    var s =
+        new dev.avatarcraft.npc.ai.TaskPlan.Step(
+            "collect", "minecraft:wheat", "minecraft:wheat", 1, -1, -1, "main", 10, List.of());
+    var skills = skills(n);
+    var world = new dev.avatarcraft.npc.ai.NpcLocalWorld(n, skills);
+    var runner =
+        new dev.avatarcraft.npc.ai.LocalTaskRunner(
+            new dev.avatarcraft.npc.ai.TaskPlan(1, "harvest mature wheat", "", List.of(s)),
+            world,
+            n.personality().allowedSkills);
+    var young =
+        new com.google.gson.Gson()
+            .toJsonTree(
+                List.of(
+                    h.absolutePos(new BlockPos(6, 1, 3)).getX() + .5,
+                    h.absolutePos(new BlockPos(6, 1, 3)).getY() + .5,
+                    h.absolutePos(new BlockPos(6, 1, 3)).getZ() + .5))
+            .getAsJsonArray();
+    h.assertFalse(world.harvestable(s, young), "Immature crops must be excluded before ranking");
+    @SuppressWarnings("unchecked")
+    CompletableFuture<com.google.gson.JsonObject>[] planted = new CompletableFuture[1];
+    h.onEachTick(
+        () -> {
+          skills.tick();
+          if (planted[0] == null) {
+            runner.tick(h.getLevel().getGameTime());
+            h.assertFalse(
+                runner.needsReplan(), "Mature crop must be harvestable: " + runner.problem());
+            if (runner.complete()) {
+              var p = h.absolutePos(new BlockPos(5, 0, 3));
+              planted[0] =
+                  skills
+                      .execute(
+                          "use_on_block",
+                          object(
+                              "x", p.getX(), "y", p.getY(), "z", p.getZ(), "slot", 0, "face", "up"))
+                      .toCompletableFuture();
+            }
+          } else if (planted[0].isDone()) {
+            h.assertTrue(
+                planted[0].join().get("ok").getAsBoolean(),
+                "Replant must use a real carried seed: " + planted[0].join());
+            h.assertTrue(
+                h.getLevel().getBlockState(h.absolutePos(new BlockPos(5, 1, 3))).is(Blocks.WHEAT),
+                "Harvested tile must be replanted");
+            h.assertTrue(
+                h.getLevel().getBlockState(h.absolutePos(new BlockPos(6, 1, 3))).is(Blocks.WHEAT),
+                "Immature neighbor must survive");
+            runner.close();
+            skills.cancel("Test done");
+            h.succeed();
+          }
+        });
+  }
+
+  private static void door(GameTestHelper h, boolean iron, boolean initiallyOpen) {
+    var owner = owner(h, 12);
+    var n = npc(h, owner, 2, 5);
+    // Enclosed corridor: going over/around the door cannot pass this test.
+    for (int x = 0; x < 12; x++)
+      for (int y = 1; y <= 3; y++) {
+        h.setBlock(x, y, 4, Blocks.STONE);
+        h.setBlock(x, y, 6, Blocks.STONE);
+        h.setBlock(x, 3, 5, Blocks.STONE);
+      }
+    for (int y = 1; y <= 2; y++) {
+      h.setBlock(0, y, 5, Blocks.STONE);
+      h.setBlock(11, y, 5, Blocks.STONE);
+    }
+    var p = h.absolutePos(new BlockPos(5, 1, 5));
+    var state =
+        (iron ? Blocks.IRON_DOOR : Blocks.SPRUCE_DOOR)
+            .defaultBlockState()
+            .setValue(DoorBlock.FACING, Direction.EAST)
+            .setValue(DoorBlock.OPEN, initiallyOpen);
+    h.getLevel().setBlockAndUpdate(p, state);
+    h.getLevel()
+        .setBlockAndUpdate(
+            p.above(),
+            state.setValue(
+                DoorBlock.HALF,
+                net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER));
+    if (!iron && !initiallyOpen) {
+      h.getLevel().setBlockAndUpdate(p.east(2), state);
+      h.getLevel()
+          .setBlockAndUpdate(
+              p.east(2).above(),
+              state.setValue(
+                  DoorBlock.HALF,
+                  net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER));
+    }
+    owner.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(9, 1, 8))));
+    var skills = skills(n);
+    var end = h.absolutePos(new BlockPos(9, 1, 5));
+    var future =
+        skills
+            .execute("move_to", object("x", end.getX(), "y", end.getY(), "z", end.getZ()))
+            .toCompletableFuture();
+    boolean[] opened = {initiallyOpen};
+    boolean[] secondOpened = {false};
+    long start = h.getLevel().getGameTime();
+    h.onEachTick(
+        () -> {
+          skills.tick();
+          if (h.getLevel().getBlockState(p).getValue(DoorBlock.OPEN)) opened[0] = true;
+          if (!iron
+              && !initiallyOpen
+              && h.getLevel().getBlockState(p.east(2)).getValue(DoorBlock.OPEN))
+            secondOpened[0] = true;
+          if (iron) {
+            h.assertFalse(opened[0], "Iron door must not be opened by hand");
+            if (h.getLevel().getGameTime() - start > 100) {
+              h.assertTrue(n.getX() < p.getX() + 1, "Iron door cannot be bypassed");
+              skills.cancel("Test done");
+              h.succeed();
+            }
+          } else if (future.isDone() && h.getLevel().getGameTime() - start > 100) {
+            h.assertTrue(
+                future.join().get("ok").getAsBoolean(),
+                "Door route must complete: " + future.join());
+            h.assertTrue(
+                opened[0] && n.getX() > p.getX() + 1, "NPC must actually cross an opened door");
+            h.assertTrue(
+                h.getLevel().getBlockState(p).getValue(DoorBlock.OPEN) == initiallyOpen,
+                "Restore initially closed door; preserve initially open door");
+            if (!initiallyOpen)
+              h.assertTrue(
+                  secondOpened[0]
+                      && !h.getLevel().getBlockState(p.east(2)).getValue(DoorBlock.OPEN),
+                  "The same NPC must open, cross and close a second door on the route");
+            skills.cancel("Test done");
+            h.succeed();
+          }
+        });
+  }
+
+  private static void spruce(GameTestHelper h) {
+    var owner = owner(h, 12);
+    var n = npc(h, owner, 3, 3);
+    n.inventory.setItem(0, new ItemStack(Items.IRON_AXE));
+    n.inventory.setItem(1, new ItemStack(Items.BIRCH_LOG));
+    h.setBlock(5, 1, 3, Blocks.SPRUCE_LOG);
+    h.setBlock(5, 2, 3, Blocks.SPRUCE_LOG);
+    h.setBlock(3, 1, 5, Blocks.CHEST);
+    var p = h.absolutePos(new BlockPos(3, 1, 5));
+    var s =
+        new dev.avatarcraft.npc.ai.TaskPlan.Step(
+            "collect", "#minecraft:logs", "#minecraft:logs", 3, -1, -1, "main", 10, List.of());
+    var d =
+        new dev.avatarcraft.npc.ai.TaskPlan.Step(
+            "deposit",
+            "#minecraft:logs",
+            "",
+            3,
+            -1,
+            -1,
+            "main",
+            10,
+            List.of((double) p.getX(), (double) p.getY(), (double) p.getZ()));
+    var skills = skills(n);
+    var runner =
+        new dev.avatarcraft.npc.ai.LocalTaskRunner(
+            new dev.avatarcraft.npc.ai.TaskPlan(1, "collect logs", "", List.of(s, d)),
+            new dev.avatarcraft.npc.ai.NpcLocalWorld(n, skills),
+            n.personality().allowedSkills);
+    h.onEachTick(
+        () -> {
+          skills.tick();
+          runner.tick(h.getLevel().getGameTime());
+          h.assertFalse(runner.needsReplan(), "Spruce must count as logs: " + runner.problem());
+          if (runner.complete()) {
+            var chest = (ChestBlockEntity) h.getLevel().getBlockEntity(p);
+            int spruce = 0, birch = 0;
+            for (int i = 0; i < chest.getContainerSize(); i++) {
+              var v = chest.getItem(i);
+              if (v.is(Items.SPRUCE_LOG)) spruce += v.getCount();
+              if (v.is(Items.BIRCH_LOG)) birch += v.getCount();
+            }
+            h.assertTrue(
+                spruce == 2 && birch == 1, "Actual mixed-species logs must reach the same chest");
+            runner.close();
+            skills.cancel("Test done");
+            h.succeed();
+          }
+        });
   }
 
   private static void test(

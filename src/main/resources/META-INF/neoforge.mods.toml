@@ -3,7 +3,7 @@ loaderVersion="[1,)"
 license="All Rights Reserved"
 [[mods]]
 modId="avatarcraft"
-version="0.6.0"
+version="0.7.0"
 displayName="AvatarCraft"
 description='''Unity avatar rendering and expression editor.'''
 [[dependencies.avatarcraft]]

@@ -20,6 +20,99 @@ class CodexLiveTest {
   @TempDir Path workspace;
 
   @Test
+  void verifiedCompletionSpeechUsesConfiguredCharacterVoice() throws Exception {
+    var config = new CodexConfig();
+    if (System.getenv("AVATARCRAFT_CODEX_EXECUTABLE") != null)
+      config.executable = System.getenv("AVATARCRAFT_CODEX_EXECUTABLE");
+    var profile = Personality.preset("tortobu");
+    profile.instructions = "元気な案内役。所有者へ短く明るく話す。";
+    profile.speakingStyle = "日本語で、語尾に『ぞ』を使って元気に話す。";
+    try (var bridge = new CodexBridge(config, workspace)) {
+      bridge.initialize().get(40, TimeUnit.SECONDS);
+      String speech =
+          NpcCompletionSpeech.generate(
+                  CompletableFuture.completedFuture(bridge),
+                  profile,
+                  object(
+                      "state",
+                      "SUCCEEDED",
+                      "summary",
+                      "原木64個を指定チェストへ収納",
+                      "verified",
+                      object("moved", 64)))
+              .get(40, TimeUnit.SECONDS);
+      assertTrue(speech.contains("ぞ"), speech);
+      assertTrue(speech.contains("待"), speech);
+      assertFalse(speech.contains("未確認"), speech);
+      java.nio.file.Files.writeString(
+          Path.of("build/npc-completion-live-result.json"),
+          new com.google.gson.GsonBuilder()
+              .setPrettyPrinting()
+              .create()
+              .toJson(
+                  object(
+                      "speakingStyle",
+                      profile.speakingStyle,
+                      "speech",
+                      speech,
+                      "verifiedState",
+                      "SUCCEEDED")));
+    }
+  }
+
+  @Test
+  void repeatedFailureProducesThreeToFiveValidatedRecoverySlots() throws Exception {
+    var config = new CodexConfig();
+    if (System.getenv("AVATARCRAFT_CODEX_EXECUTABLE") != null)
+      config.executable = System.getenv("AVATARCRAFT_CODEX_EXECUTABLE");
+    var profile = Personality.preset("tortobu");
+    String allowed = NpcTools.effective(profile.allowedSkills).toString();
+    profile.allowedSkills.clear();
+    try (var bridge = new CodexBridge(config, workspace)) {
+      bridge.initialize().get(40, TimeUnit.SECONDS);
+      var session =
+          bridge
+              .openAdvanced(
+                  profile,
+                  (name, args) -> {
+                    fail("Recovery planner must never execute game actions");
+                    return CompletableFuture.completedFuture(object("ok", false));
+                  })
+              .get(40, TimeUnit.SECONDS);
+      var plan =
+          session
+              .plan(
+                  NpcRecoveryQueue.prompt(
+                          "手持ちのトウヒ原木64個を指定のチェストへしまって待機してください。",
+                          "Direct movement to the chest cell failed twice; none of the logs have"
+                              + " been deposited.")
+                      + "\nLocal executor allowedSkills: "
+                      + allowed
+                      + "\nObservation: "
+                      + """
+                      {"health":20,"food":20,"position":[8,67,3],"dimension":"minecraft:overworld",
+                      "inventory":[{"slot":0,"item":"minecraft:spruce_log","count":64}],
+                      "locations":[{"name":"chest_1","kind":"chest","dimension":"minecraft:overworld","x":10,"y":67,"z":3}],
+                      "nearby_chests":[{"x":10,"y":67,"z":3,"items":[]}],
+                      "walkable_positions":[[9,67,3],[9,67,4]],
+                      "execution_memory":{"failedTargets":[{"tool":"move_to","arguments":{"x":10,"y":67,"z":3},"code":"UNREACHABLE","attempts":2}]}}
+                      """)
+              .get(180, TimeUnit.SECONDS);
+      assertTrue(plan.blocked().isEmpty(), plan.blocked());
+      var queue = NpcRecoveryQueue.schedule(plan);
+      assertTrue(queue.steps().size() >= 4 && queue.steps().size() <= 6);
+      assertEquals("plan_next", queue.steps().getLast().action());
+      TaskPlan.parse(new com.google.gson.Gson().toJson(queue));
+      java.nio.file.Files.writeString(
+          Path.of("build/npc-recovery-live-plan.json"),
+          new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(queue));
+      session.close();
+      System.out.println(
+          "Live external recovery: validated 3 to 5 reservations, original goal retained");
+    }
+  }
+
+  @Test
   void cooperativeMiningPlansReachLocalExecutorAndRealBlockersRemainExplicit() throws Exception {
     var config = new CodexConfig();
     if (System.getenv("AVATARCRAFT_CODEX_EXECUTABLE") != null)

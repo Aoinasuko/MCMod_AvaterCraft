@@ -46,7 +46,7 @@ class LocalTaskRunnerTest {
     final List<JsonObject> arguments = new ArrayList<>();
     final List<JsonObject> selections = new ArrayList<>();
     CompletableFuture<JsonObject> held;
-    boolean failTransfers, equipped, consumeFood = true;
+    boolean failTransfers, equipped, consumeFood = true, produceMiningDrops = true;
     int moved, mining, foodSlot = -1;
 
     void stack(int slot, String item, int count) {
@@ -84,13 +84,18 @@ class LocalTaskRunnerTest {
       switch (tool) {
         case "find_blocks":
           return CompletableFuture.completedFuture(
-              object("ok", true, "blocks", JsonParser.parseString("[[2.5,1.5,0.5]]")));
+              object(
+                  "ok",
+                  true,
+                  "blocks",
+                  JsonParser.parseString(
+                      !produceMiningDrops && mining > 0 ? "[]" : "[[2.5,1.5,0.5]]")));
         case "equip":
           equipped = true;
           break;
         case "dig":
           mining++;
-          stack(2, "minecraft:cobblestone", mining);
+          if (produceMiningDrops) stack(2, "minecraft:cobblestone", mining);
           break;
         case "find_chests":
           return CompletableFuture.completedFuture(
@@ -261,7 +266,7 @@ class LocalTaskRunnerTest {
   }
 
   @Test
-  void versionTwoHasRealMegabyteWeightsAndRejectsCorruption() throws Exception {
+  void versionFourHasRealTwentyMiBWeightsAndRejectsCorruption() throws Exception {
     byte[] weights =
         getClass().getResourceAsStream("/data/avatarcraftnpc/ai/action-policy.bin").readAllBytes();
     String json =
@@ -270,12 +275,24 @@ class LocalTaskRunnerTest {
                 .getResourceAsStream("/data/avatarcraftnpc/ai/action-policy.json")
                 .readAllBytes(),
             java.nio.charset.StandardCharsets.UTF_8);
-    assertEquals(4204004, weights.length);
-    assertEquals(1051001, LocalActionPolicy.PARAMETERS);
+    assertEquals(21020020, weights.length);
+    assertEquals(5255005, LocalActionPolicy.PARAMETERS);
     assertEquals(48, LocalActionPolicy.FEATURES.size());
     assertDoesNotThrow(() -> new LocalActionPolicy(json, weights));
     weights[100] ^= 1;
     assertThrows(IllegalArgumentException.class, () -> new LocalActionPolicy(json, weights));
+  }
+
+  @Test
+  void breakingEnoughBlocksDoesNotCompleteCollectionWithoutActualDrops() {
+    var w = new World();
+    w.equipped = true;
+    w.produceMiningDrops = false;
+    var r = runner(w, step("collect", "minecraft:cobblestone", 1));
+    finish(r);
+    assertTrue(w.mining >= 1);
+    assertFalse(r.complete());
+    assertTrue(r.needsReplan());
   }
 
   @Test

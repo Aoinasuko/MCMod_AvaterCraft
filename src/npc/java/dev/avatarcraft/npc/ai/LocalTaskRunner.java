@@ -27,8 +27,16 @@ public final class LocalTaskRunner implements AutoCloseable {
 
     JsonObject approach(JsonArray target);
 
+    default JsonObject sharedLocation(String name) {
+      return null;
+    }
+
     default JsonObject pickupApproach(JsonArray target) {
       return approach(target);
+    }
+
+    default Option pickupWork(JsonArray target) {
+      return null;
     }
 
     default int miningTool(TaskPlan.Step step) {
@@ -37,6 +45,10 @@ public final class LocalTaskRunner implements AutoCloseable {
 
     default boolean mineAccessible(JsonArray target) {
       return true;
+    }
+
+    default boolean harvestable(TaskPlan.Step step, JsonArray target) {
+      return mineAccessible(target);
     }
 
     default List<Option> preparation(TaskPlan.Step step, JsonArray chests) {
@@ -49,6 +61,18 @@ public final class LocalTaskRunner implements AutoCloseable {
     }
 
     default void record(JsonObject selection) {}
+
+    default boolean storageReachable(JsonObject chest) {
+      return distance(observe(), vector(chest)) <= 3;
+    }
+
+    default int storageCapacity(JsonObject chest, int bagSlot) {
+      return Integer.MAX_VALUE;
+    }
+
+    default boolean blocked(String tool, JsonObject args) {
+      return false;
+    }
 
     default List<Option> tactics(JsonObject observation) {
       return List.of();
@@ -75,6 +99,7 @@ public final class LocalTaskRunner implements AutoCloseable {
   private boolean scannedTools;
   private boolean phaseComplete;
   private JsonObject homeStorage;
+  private JsonArray visitedStorageAnchor;
   private String activity = "ローカル作業中";
   private Eating eating;
   private long nextTick, eatingSince = -1;
@@ -83,6 +108,8 @@ public final class LocalTaskRunner implements AutoCloseable {
   private JsonArray blocks = new JsonArray(), chests = new JsonArray();
   private String problem = "", lastFailure = "";
   private final Set<String> rejected = new HashSet<>();
+  private final Set<String> fullStorage = new HashSet<>();
+  private final JsonArray verifiedSteps = new JsonArray();
 
   public LocalTaskRunner(TaskPlan plan, World world, Collection<String> allowed) {
     this.plan = plan;
@@ -118,11 +145,17 @@ public final class LocalTaskRunner implements AutoCloseable {
 
   public JsonObject navigation() {
     var saved = object("actions", explorationActions, "visited", new Gson().toJsonTree(visited));
+    saved.add("verifiedSteps", verifiedSteps.deepCopy());
     if (homeStorage != null) saved.add("homeStorage", homeStorage.deepCopy());
     return saved;
   }
 
   public void restoreNavigation(JsonObject o) {
+    if (o.has("verifiedSteps")) {
+      var completed = o.getAsJsonArray("verifiedSteps");
+      if (completed.size() > 24) throw new IllegalArgumentException("Invalid completed steps");
+      for (var step : completed) verifiedSteps.add(step.deepCopy());
+    }
     int count = o.get("actions").getAsInt();
     var places = o.getAsJsonArray("visited");
     if (count < 0 || count > EXPLORATION_BUDGET || places.size() > 256)
@@ -162,13 +195,17 @@ public final class LocalTaskRunner implements AutoCloseable {
         "completedOperations",
         done,
         "failure",
-        problem.isEmpty() ? lastFailure : problem,
+        phaseComplete ? "" : problem.isEmpty() ? lastFailure : problem,
         "remaining",
         remaining(),
         "explorationActions",
         explorationActions,
         "activity",
-        activity);
+        activity,
+        "verifiedSteps",
+        verifiedSteps.deepCopy(),
+        "phaseComplete",
+        phaseComplete);
   }
 
   public JsonArray remaining() {
@@ -240,8 +277,12 @@ public final class LocalTaskRunner implements AutoCloseable {
               : done >= step.count();
       if (finished) candidates.add(new Candidate("verify", "", new JsonObject(), "advance", 0));
       else build(step, observation, candidates);
+      if (phaseComplete) return;
       if (candidates.size() > 8) candidates.subList(8, candidates.size()).clear();
-      for (var option : world.tactics(observation)) option(candidates, option, "defend");
+      // Guard owns combat and its pursuit boundary. Generic self-defense must not bypass it.
+      if (!(step.action().equals("tool")
+          && Set.of("avatarcraftnpc:guard", "avatarcraftnpc:guard_post").contains(step.target())))
+        for (var option : world.tactics(observation)) option(candidates, option, "defend");
       int food = observation.get("food").getAsInt(), foodSlot = world.foodSlot();
       if (food <= 12
           && foodSlot >= 0
@@ -252,6 +293,7 @@ public final class LocalTaskRunner implements AutoCloseable {
       var features = new ArrayList<double[]>();
       Candidate selected = null;
       double best = Double.NEGATIVE_INFINITY;
+      long actionable = candidates.stream().filter(c -> !c.tag.equals("idle")).count();
       for (var c : candidates) {
         var x =
             LocalActionPolicy.features(
@@ -264,7 +306,7 @@ public final class LocalTaskRunner implements AutoCloseable {
                 step.count(),
                 context(step, observation, c));
         features.add(x);
-        double score = policy.score(x);
+        double score = actionable == 1 ? (c.tag.equals("idle") ? -1 : 1) : policy.score(x);
         if (score > best) {
           selected = c;
           best = score;
@@ -273,7 +315,9 @@ public final class LocalTaskRunner implements AutoCloseable {
       var log =
           object(
               "modelVersion",
-              3,
+              LocalActionPolicy.VERSION,
+              "selector",
+              actionable == 1 ? "single-legal-action" : "learned-ranker",
               "goalAction",
               step.action(),
               "goalTarget",
@@ -291,13 +335,23 @@ public final class LocalTaskRunner implements AutoCloseable {
               "step",
               index,
               "verifiedCount",
-              done);
+              Set.of("collect", "pickup").contains(step.action())
+                  ? count(observation, step.target())
+                  : done);
       if (selected.tag.equals("idle")) {
         problem = "No executable local action candidate";
         return;
       }
       world.record(log);
       if (selected.tag.equals("advance")) {
+        verifiedSteps.add(
+            object(
+                "step",
+                new Gson().toJsonTree(step),
+                "verifiedCount",
+                Set.of("collect", "pickup").contains(step.action())
+                    ? count(observation, step.target())
+                    : done));
         index++;
         done = failures = 0;
         dryMines = pickupWaits = 0;
@@ -308,6 +362,8 @@ public final class LocalTaskRunner implements AutoCloseable {
         blocks = new JsonArray();
         chests = new JsonArray();
         scannedBlocks = scannedChests = false;
+        visitedStorageAnchor = null;
+        fullStorage.clear();
         rejected.clear();
         lastFailure = "";
       } else if (selected.tag.equals("pause")) {
@@ -332,7 +388,8 @@ public final class LocalTaskRunner implements AutoCloseable {
       lastFailure = "Skill is not allowed: " + tool;
       return;
     }
-    if (!rejected.contains(tool + args)) list.add(new Candidate(kind, tool, args, tag, distance));
+    if (!rejected.contains(tool + args) && !world.blocked(tool, args))
+      list.add(new Candidate(kind, tool, args, tag, distance));
   }
 
   private void build(TaskPlan.Step s, JsonObject o, List<Candidate> out) {
@@ -395,14 +452,22 @@ public final class LocalTaskRunner implements AutoCloseable {
         if (s.action().equals("collect") && o.has("drops")) {
           for (var e : o.getAsJsonArray("drops")) {
             var drop = e.getAsJsonObject();
-            if (!drop.get("item").getAsString().equals(s.target())) continue;
+            if (!NpcResources.matches(drop, s.target())) continue;
             var p = drop.getAsJsonArray("position");
+            if (drop.has("settling") && drop.get("settling").getAsBoolean()) {
+              out.add(new Candidate("execute", "", new JsonObject(), "pause", 0));
+              continue;
+            }
             if (distance(o, p) < 1.3)
               out.add(new Candidate("execute", "", new JsonObject(), "pause", 0));
             else {
               var approach = world.pickupApproach(p);
               if (approach != null)
                 add(out, "approach", "move_precisely", approach, "setup", distance(o, p));
+              else {
+                var access = world.pickupWork(p);
+                if (access != null) option(out, access, "exploration");
+              }
             }
           }
           if (!out.isEmpty()) break;
@@ -420,7 +485,7 @@ public final class LocalTaskRunner implements AutoCloseable {
           for (var p : blocks) {
             var position = p.getAsJsonArray();
             if (!s.position().isEmpty() && distance(position, vector(s.position())) > 1) continue;
-            if (!world.mineAccessible(position)) continue;
+            if (!world.harvestable(s, position)) continue;
             int tool = world.bestTool(position);
             if (tool == -2) {
               lastFailure = "No suitable tool for the requested block";
@@ -438,10 +503,67 @@ public final class LocalTaskRunner implements AutoCloseable {
           }
         if (out.isEmpty() && scannedBlocks) explore(s, o, out, blocks);
       }
-      case "deposit", "withdraw" -> {
+      case "deposit" -> {
         var destination = position(s, o);
         if (!s.location().isEmpty() && destination == null) break;
-        if (destination != null && distance(o, destination) > 3) {
+        boolean anchor = anchor(s);
+        if (anchor && !storageAnchorReady(o, destination)) {
+          approach(o, destination, out);
+          break;
+        }
+        int slot = bagSlot(o, s.target());
+        if (slot < 0) {
+          putAway(o, s.target(), out);
+          break;
+        }
+        if (!scannedChests) {
+          add(out, "scan", "find_chests", object("radius", 16), "chests", 0);
+          break;
+        }
+        var candidates = new ArrayList<JsonObject>();
+        for (var e : chests) {
+          var chest = e.getAsJsonObject();
+          if (!anchor
+              || distance(vector(chest), destination)
+                  <= dev.avatarcraft.npc.AnchorIndex.CHEST_RADIUS) candidates.add(chest);
+        }
+        candidates.sort(
+            Comparator.comparingDouble(
+                c ->
+                    (destination != null && distance(vector(c), destination) <= 1 ? -10000 : 0)
+                        + distance(o, vector(c))));
+        boolean preferredSeen =
+            candidates.stream()
+                .anyMatch(c -> destination != null && distance(vector(c), destination) <= 1);
+        if (!anchor && destination != null && !preferredSeen && distance(o, destination) > 3) {
+          approach(o, destination, out);
+          break;
+        }
+        for (var chest : candidates) {
+          var p = vector(chest);
+          if (fullStorage.contains(p.toString())) continue;
+          int capacity = world.storageCapacity(chest, slot);
+          if (capacity == 0) {
+            fullStorage.add(p.toString());
+            continue;
+          }
+          if (capacity < 0 || !world.storageReachable(chest)) approach(o, p, out);
+          else {
+            var args = xyz(p);
+            args.addProperty("slot", slot);
+            args.addProperty("count", Math.min(capacity, Math.min(64, s.count() - done)));
+            add(out, "execute", "deposit", args, "transfer", distance(o, p));
+          }
+          if (!out.isEmpty()) break;
+        }
+        if (out.isEmpty()) lastFailure = "CONTAINER_FULL: no accessible compatible storage space";
+      }
+      case "withdraw" -> {
+        var destination = position(s, o);
+        if (!s.location().isEmpty() && destination == null) break;
+        boolean anchor = anchor(s);
+        if (destination != null
+            && (anchor ? !storageAnchorReady(o, destination) : distance(o, destination) > 4)) {
           approach(o, destination, out);
           break;
         }
@@ -450,7 +572,9 @@ public final class LocalTaskRunner implements AutoCloseable {
           for (var element : chests) {
             var chest = element.getAsJsonObject();
             var p = vector(chest);
-            if (destination != null && distance(p, destination) > 1) continue;
+            if (destination != null
+                && distance(p, destination)
+                    > (anchor ? dev.avatarcraft.npc.AnchorIndex.CHEST_RADIUS : 1)) continue;
             int slot =
                 s.action().equals("deposit")
                     ? bagSlot(o, s.target())
@@ -459,7 +583,7 @@ public final class LocalTaskRunner implements AutoCloseable {
               if (s.action().equals("deposit")) putAway(o, s.target(), out);
               continue;
             }
-            if (distance(o, p) > 3) approach(o, p, out);
+            if (!world.storageReachable(chest)) approach(o, p, out);
             else {
               var args = xyz(p);
               args.addProperty("slot", slot);
@@ -537,14 +661,22 @@ public final class LocalTaskRunner implements AutoCloseable {
         if (o.has("drops"))
           for (var entry : o.getAsJsonArray("drops")) {
             var drop = entry.getAsJsonObject();
-            if (!drop.get("item").getAsString().equals(s.target())) continue;
+            if (!NpcResources.matches(drop, s.target())) continue;
             var at = drop.getAsJsonArray("position");
+            if (drop.has("settling") && drop.get("settling").getAsBoolean()) {
+              out.add(new Candidate("execute", "", new JsonObject(), "pause", 0));
+              continue;
+            }
             if (distance(o, at) < 1.3)
               out.add(new Candidate("execute", "", new JsonObject(), "pause", 0));
             else {
               var approach = world.pickupApproach(at);
               if (approach != null)
                 add(out, "approach", "move_precisely", approach, "setup", distance(o, at));
+              else {
+                var access = world.pickupWork(at);
+                if (access != null) option(out, access, "exploration");
+              }
             }
           }
         if (out.isEmpty()) explore(s, o, out, new JsonArray());
@@ -580,7 +712,7 @@ public final class LocalTaskRunner implements AutoCloseable {
       case "wait" -> add(out, "execute", "wait", object("seconds", s.seconds()), "task", 0);
       default -> throw new IllegalArgumentException("Unknown local task");
     }
-    if (out.isEmpty() && done >= s.count())
+    if (out.isEmpty() && done >= s.count() && !Set.of("collect", "pickup").contains(s.action()))
       out.add(new Candidate("verify", "", new JsonObject(), "advance", 0));
     if (out.isEmpty()) out.add(new Candidate("replan", "", new JsonObject(), "replan", 0));
   }
@@ -592,15 +724,20 @@ public final class LocalTaskRunner implements AutoCloseable {
       add(out, "equip", "equip", object("slot", slot, "hand", "main"), "setup", 0);
       return false;
     }
-    for (var option : world.preparation(s, chests)) option(out, option, "prepare");
-    if (out.isEmpty() && !scannedTools)
+    // Observe spare tools before a crafting/acquisition fallback can hide the chest candidates.
+    if (!scannedTools && NpcTools.permitted("find_chests", allowed)) {
       add(out, "scan", "find_chests", object("radius", 16), "tool_chests", 0);
+      if (!out.isEmpty()) return false;
+    }
+    for (var option : world.preparation(s, chests)) option(out, option, "prepare");
     if (out.isEmpty()) lastFailure = "収穫できる道具を準備できません。資材・工作・精錬と採集経路を確認してください";
     return false;
   }
 
   private void option(List<Candidate> out, Option option, String tag) {
-    if (NpcTools.permitted(option.tool, allowed) && !rejected.contains(option.tool + option.args))
+    if (NpcTools.permitted(option.tool, allowed)
+        && !rejected.contains(option.tool + option.args)
+        && !world.blocked(option.tool, option.args))
       out.add(
           new Candidate(
               option.kind,
@@ -634,6 +771,16 @@ public final class LocalTaskRunner implements AutoCloseable {
         + (int) Math.floor(p.get("z").getAsDouble());
   }
 
+  private boolean anchor(TaskPlan.Step s) {
+    return !s.location().isEmpty() && world.sharedLocation(s.location()) != null;
+  }
+
+  private boolean storageAnchorReady(JsonObject observation, JsonArray destination) {
+    if (distance(observation, destination) <= 6) visitedStorageAnchor = destination.deepCopy();
+    // Once surveyed, let the NPC approach a chest at the edge without returning to the anchor.
+    return destination.equals(visitedStorageAnchor);
+  }
+
   private JsonArray position(TaskPlan.Step s, JsonObject o) {
     if (s.action().equals("deposit")
         && s.location().isEmpty()
@@ -646,6 +793,14 @@ public final class LocalTaskRunner implements AutoCloseable {
       return vector(homeStorage);
     }
     if (s.location().isEmpty()) return s.position().isEmpty() ? null : vector(s.position());
+    var shared = world.sharedLocation(s.location());
+    if (shared != null) {
+      if (!shared.get("dimension").getAsString().equals(o.get("dimension").getAsString())) {
+        lastFailure = "アバターアンカーは別の次元です。実際のポータル移動が必要です";
+        return null;
+      }
+      return vector(shared);
+    }
     if (o.has("locations"))
       for (var entry : o.getAsJsonArray("locations")) {
         var p = entry.getAsJsonObject();
@@ -792,12 +947,17 @@ public final class LocalTaskRunner implements AutoCloseable {
                 } else if (c.tag.equals("exploration")) {
                   explorationActions++;
                   failures = 0;
-                  if (c.tool.equals("move_to")) {
-                    if (visited.size() < 256) visited.add(key(c.args));
+                  if (Set.of("move_to", "move_precisely", "work_route").contains(c.tool)) {
+                    if (!c.tool.equals("work_route") && visited.size() < 256)
+                      visited.add(key(c.args));
                     scannedBlocks = false;
                     blocks = new JsonArray();
                   }
-                  if (c.tool.equals("dig")) rejected.removeIf(k -> k.startsWith("dig"));
+                  if (Set.of("dig", "work_route").contains(c.tool))
+                    rejected.removeIf(k -> k.startsWith("dig") || k.startsWith("move_"));
+                } else if (c.tag.equals("setup")
+                    && Set.of("move_to", "move_precisely").contains(c.tool)) {
+                  scannedChests = false;
                 } else if (c.tag.equals("prepare")) {
                   scannedTools = false;
                 } else if (c.tag.equals("transfer")) {
@@ -848,7 +1008,7 @@ public final class LocalTaskRunner implements AutoCloseable {
     for (var e : o.getAsJsonArray("inventory")) {
       var s = e.getAsJsonObject();
       int slot = s.get("slot").getAsInt();
-      if (slot < 36 && s.get("item").getAsString().equals(item)) return slot;
+      if (slot < 36 && NpcResources.matches(s, item)) return slot;
     }
     return -1;
   }
@@ -859,8 +1019,7 @@ public final class LocalTaskRunner implements AutoCloseable {
       var stack = e.getAsJsonObject();
       if (stack.get("slot").getAsInt() >= 36) continue;
       occupied++;
-      if (stack.get("item").getAsString().equals(item) && stack.get("count").getAsInt() < 64)
-        return true;
+      if (NpcResources.matches(stack, item) && stack.get("count").getAsInt() < 64) return true;
     }
     return occupied < 36;
   }
@@ -876,7 +1035,7 @@ public final class LocalTaskRunner implements AutoCloseable {
   private static int chestSlot(JsonObject chest, String item) {
     for (var e : chest.getAsJsonArray("items")) {
       var s = e.getAsJsonObject();
-      if (s.get("item").getAsString().equals(item)) return s.get("slot").getAsInt();
+      if (NpcResources.matches(s, item)) return s.get("slot").getAsInt();
     }
     return -1;
   }
@@ -885,7 +1044,7 @@ public final class LocalTaskRunner implements AutoCloseable {
     int count = 0;
     for (var e : o.getAsJsonArray("inventory")) {
       var s = e.getAsJsonObject();
-      if (s.get("item").getAsString().equals(item)
+      if (NpcResources.matches(s, item)
           && (s.get("slot").getAsInt() < 36 || s.get("slot").getAsInt() >= 40))
         count += s.get("count").getAsInt();
     }

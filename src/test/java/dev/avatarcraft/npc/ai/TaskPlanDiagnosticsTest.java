@@ -9,6 +9,45 @@ import org.junit.jupiter.api.Test;
 
 class TaskPlanDiagnosticsTest {
   @Test
+  void continuationCannotHideNaturalLanguageInResourceFields() {
+    var invalid =
+        assertThrows(
+            IllegalArgumentException.class,
+            () ->
+                new TaskPlan.Step(
+                    "plan_next", "次は残りをチェストに入れる", "", 1, -1, -1, "main", 10, List.of()));
+    assertTrue(invalid.getMessage().contains("target"));
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            new TaskPlan.Step(
+                "plan_next", "minecraft:diamond", "", 1, -1, -1, "main", 10, List.of()));
+    var valid =
+        new TaskPlan(
+            1,
+            "残りの仕事を継続",
+            "",
+            List.of(new TaskPlan.Step("plan_next", "", "", 1, -1, -1, "main", 10, List.of())));
+    assertEquals(valid, TaskPlan.parse(new Gson().toJson(valid)));
+    var alternatives =
+        TaskPlan.schema()
+            .getAsJsonObject("properties")
+            .getAsJsonObject("steps")
+            .getAsJsonObject("items")
+            .getAsJsonArray("anyOf");
+    assertEquals(
+        "",
+        alternatives
+            .get(1)
+            .getAsJsonObject()
+            .getAsJsonObject("properties")
+            .getAsJsonObject("target")
+            .getAsJsonArray("enum")
+            .get(0)
+            .getAsString());
+  }
+
+  @Test
   void acceptedPlansStayWithinJournalLimitEvenWhenPlanItselfIsLarger() {
     var normal = LocalTaskRunnerTest.plan(LocalTaskRunnerTest.step("wait", "", 1));
     assertEquals(normal, TaskPlan.parse(normal.journalDetails().get("plan").toString()));

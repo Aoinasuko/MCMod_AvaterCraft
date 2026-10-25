@@ -1,0 +1,45 @@
+{
+  "seed": 61279,
+  "source": "synthetic templates and candidate demonstrations; no gameplay completion labels",
+  "scenarios": 138,
+  "categories": [
+    "clarification",
+    "combat",
+    "cooperation",
+    "crafting",
+    "farming",
+    "farming_observe",
+    "hunting",
+    "logging",
+    "mining",
+    "navigation",
+    "progression",
+    "transport"
+  ],
+  "splits": {
+    "train": {
+      "examples": 192000,
+      "bilingualUtterances": 384000,
+      "uniqueUtterances": 114401,
+      "ambiguous": 135720,
+      "sha256": "54185bb42cab0a110db4f0678674e6c2af12a88b6dedd5f7b2fcc87d15f2c0e5",
+      "bytes": 126177627
+    },
+    "validation": {
+      "examples": 12000,
+      "bilingualUtterances": 24000,
+      "uniqueUtterances": 9577,
+      "ambiguous": 8496,
+      "sha256": "2b2a2ab52dce7cfd99c018f704a3c1ccea06e389f78de80d7cd5b99314d8cd21",
+      "bytes": 7860040
+    },
+    "test": {
+      "examples": 12000,
+      "bilingualUtterances": 24000,
+      "uniqueUtterances": 9681,
+      "ambiguous": 8447,
+      "sha256": "cdd19d75263cd6b496c87603ab6204901cae94912f024f3c1fe40d2ec880128e",
+      "bytes": 7900673
+    }
+  }
+}

@@ -13,6 +13,13 @@ public final class NpcClient {
   private AvatarActorRenderer<CompanionEntity> renderer;
 
   public NpcClient(IEventBus bus, net.neoforged.fml.ModContainer container) {
+    if (Boolean.getBoolean("avatarcraft.anchorUiQa"))
+      NeoForge.EVENT_BUS.addListener(
+          net.neoforged.neoforge.client.event.ClientTickEvent.Post.class,
+          event ->
+              net.minecraft.client.Minecraft.getInstance()
+                  .getWindow()
+                  .setTitle("AvatarCraft 0.7.0 Anchor QA"));
     java.util.concurrent.CompletableFuture.runAsync(
         () -> {
           try {
@@ -33,6 +40,19 @@ public final class NpcClient {
                 NpcNetwork.Response.TYPE,
                 (response, context) -> {
                   var minecraft = net.minecraft.client.Minecraft.getInstance();
+                  if (response.action().equals("anchor_open")) {
+                    if (minecraft.gui.screen() != null
+                        && !(minecraft.gui.screen() instanceof AnchorScreen)) return;
+                    minecraft.gui.setScreen(
+                        new AnchorScreen(
+                            com.google.gson.JsonParser.parseString(response.data())
+                                .getAsJsonObject()));
+                    return;
+                  }
+                  if (minecraft.gui.screen() instanceof AnchorScreen anchor) {
+                    anchor.receive(response);
+                    return;
+                  }
                   if (response.action().equals("recall_list")) {
                     if (minecraft.gui.screen() != null
                         && !(minecraft.gui.screen() instanceof RecallScreen)) return;

@@ -4,6 +4,24 @@ import java.util.*;
 
 /** Registry-based resource families. Language understanding remains with the instruction AI. */
 public final class NpcResources {
+  public static String normalize(String id) {
+    return switch (id) {
+      case "minecraft:log", "minecraft:logs", "minecraft:wood" -> "#minecraft:logs";
+      case "minecraft:plank", "minecraft:planks" -> "#minecraft:planks";
+      default -> id;
+    };
+  }
+
+  /** Pure observation matching; the game supplies real registry tags, never guessed suffixes. */
+  public static boolean matches(com.google.gson.JsonObject stack, String resource) {
+    resource = normalize(resource);
+    if (!resource.startsWith("#")) return stack.get("item").getAsString().equals(resource);
+    if (stack.has("tags"))
+      for (var tag : stack.getAsJsonArray("tags"))
+        if (tag.getAsString().equals(resource.substring(1))) return true;
+    return false;
+  }
+
   private static final Map<String, String> ORES =
       Map.of(
           "diamond",
@@ -24,6 +42,7 @@ public final class NpcResources {
           "emerald_ores");
 
   public static String search(TaskPlan.Step s) {
+    if (s.action().equals("collect") && s.target().startsWith("#")) return s.target();
     if (s.action().equals("collect") && s.target().startsWith("minecraft:")) {
       var tag = ORES.get(s.target().substring(10));
       if (tag != null) return "#minecraft:" + tag;

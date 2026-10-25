@@ -25,9 +25,25 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 /** Opt-in development GameTest; uses an isolated world and the actual server game operations. */
 public final class NpcGameTests {
   public static void register(RegisterGameTestsEvent event) {
+    if (Boolean.getBoolean("avatarcraft.anchorQa")) {
+      NpcAnchorGameTests.register(event);
+      return;
+    }
+    if (Boolean.getBoolean("avatarcraft.complexQa")) {
+      NpcComplexGameTests.register(event);
+      return;
+    }
     NpcSurvivalGameTests.register(event);
     NpcLifecycleGameTests.register(event);
     NpcInteractionGameTests.register(event);
+    NpcWorkRouteGameTests.register(event);
+    NpcNavigationGameTests.register(event);
+    NpcRecoveryGameTests.register(event);
+    NpcRuntimeFixGameTests.register(event);
+    NpcLongTravelGameTests.register(event);
+    NpcExpeditionScenarioGameTests.register(event);
+    NpcSurfaceGameTests.register(event);
+    NpcAnchorGameTests.register(event);
     var environment =
         event.registerEnvironment(NpcMod.id("qa"), new TestEnvironmentDefinition.AllOf());
     event.registerTest(
@@ -721,6 +737,9 @@ public final class NpcGameTests {
 
                   public CompletableFuture<NpcBrain.Reply> turn(String prompt, boolean voice) {
                     h.assertTrue(voice, "Only the planner handles new work; turn is speech-only");
+                    if (prompt.contains("VERIFIED_GOAL_COMPLETION"))
+                      return CompletableFuture.completedFuture(
+                          new NpcBrain.Reply("石炭を渡せたよ！ここで待ってるね。", true));
                     speech[0]++;
                     pending = true;
                     return outstandingSpeech;
@@ -1247,8 +1266,8 @@ public final class NpcGameTests {
       add(
           "craft journal",
           () -> {
-            npc.inventory.setItem(4, new ItemStack(Items.IRON_INGOT));
-            npc.inventory.setItem(5, new ItemStack(Items.BOOK,8));
+            npc.inventory.setItem(4, new ItemStack(Items.IRON_INGOT, 8));
+            npc.inventory.setItem(5, new ItemStack(Items.BOOK));
             return skills.execute("craft", object("recipe", "avatarcraftnpc:memory_journal"));
           },
           r -> {

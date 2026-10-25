@@ -23,6 +23,31 @@ public final class NpcMod {
   public static final DeferredRegister<EntityType<?>> ENTITIES =
       DeferredRegister.create(Registries.ENTITY_TYPE, ID);
   public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(ID);
+  public static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(ID);
+  public static final DeferredRegister<net.minecraft.world.level.block.entity.BlockEntityType<?>>
+      BLOCK_ENTITIES = DeferredRegister.create(Registries.BLOCK_ENTITY_TYPE, ID);
+  public static final DeferredBlock<AvatarAnchorBlock> AVATAR_ANCHOR =
+      BLOCKS.registerBlock(
+          "avatar_anchor",
+          AvatarAnchorBlock::new,
+          () ->
+              net.minecraft.world.level.block.state.BlockBehaviour.Properties.of()
+                  .mapColor(net.minecraft.world.level.material.MapColor.METAL)
+                  .strength(3, 6)
+                  .sound(net.minecraft.world.level.block.SoundType.METAL)
+                  .requiresCorrectToolForDrops()
+                  .pushReaction(net.minecraft.world.level.material.PushReaction.IMMOVEABLE));
+  public static final DeferredItem<net.minecraft.world.item.BlockItem> ANCHOR_ITEM =
+      ITEMS.registerSimpleBlockItem(AVATAR_ANCHOR);
+  public static final DeferredHolder<
+          net.minecraft.world.level.block.entity.BlockEntityType<?>,
+          net.minecraft.world.level.block.entity.BlockEntityType<AvatarAnchorBlockEntity>>
+      ANCHOR_ENTITY =
+          BLOCK_ENTITIES.register(
+              "avatar_anchor",
+              () ->
+                  new net.minecraft.world.level.block.entity.BlockEntityType<>(
+                      AvatarAnchorBlockEntity::new, java.util.Set.of(AVATAR_ANCHOR.get())));
   public static final DeferredRegister<MenuType<?>> MENUS =
       DeferredRegister.create(Registries.MENU, ID);
   public static final DeferredHolder<EntityType<?>, EntityType<CompanionEntity>> COMPANION =
@@ -67,7 +92,11 @@ public final class NpcMod {
         });
     NeoForge.EVENT_BUS.addListener(
         net.neoforged.neoforge.event.tick.ServerTickEvent.Post.class,
-        event -> NpcRecall.tick(event.getServer()));
+        event -> {
+          NpcRecall.tick(event.getServer());
+          if (event.getServer().getTickCount() % 20 == 0)
+            AnchorEditing.expire(event.getServer().getTickCount());
+        });
     NeoForge.EVENT_BUS.addListener(
         net.neoforged.neoforge.event.entity.ProjectileImpactEvent.class,
         dev.avatarcraft.npc.ai.NpcCombat::projectile);
@@ -99,6 +128,8 @@ public final class NpcMod {
         net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent.class,
         NpcNetwork::register);
     ENTITIES.register(bus);
+    BLOCKS.register(bus);
+    BLOCK_ENTITIES.register(bus);
     ITEMS.register(bus);
     MENUS.register(bus);
     bus.addListener(
@@ -117,6 +148,7 @@ public final class NpcMod {
             event.accept(SOULSTONE);
             event.accept(MEMORY_JOURNAL);
             event.accept(RECALL_MAP);
+            event.accept(ANCHOR_ITEM);
           }
         });
   }

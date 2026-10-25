@@ -27,6 +27,21 @@ class CodexBridgeTest {
     volatile String turnId;
     volatile boolean planning;
     volatile int dynamicTools;
+    volatile int invalidPlanningReplies;
+
+    String planningText() {
+      var plan =
+          new Gson()
+              .toJsonTree(LocalTaskRunnerTest.plan(LocalTaskRunnerTest.step("wait", "", 1)))
+              .getAsJsonObject();
+      if (invalidPlanningReplies > 0) {
+        invalidPlanningReplies--;
+        var step = plan.getAsJsonArray("steps").get(0).getAsJsonObject();
+        step.addProperty("action", "plan_next");
+        step.addProperty("target", "残りの作業を続ける");
+      }
+      return plan.toString();
+    }
 
     Peer(boolean oauth) throws IOException {
       var config = new CodexConfig();
@@ -62,10 +77,7 @@ class CodexBridgeTest {
                                       "agentMessage",
                                       "text",
                                       planning
-                                          ? new Gson()
-                                              .toJson(
-                                                  LocalTaskRunnerTest.plan(
-                                                      LocalTaskRunnerTest.step("wait", "", 1)))
+                                          ? planningText()
                                           : "{\"speech\":\"確認できたよ！\",\"taskComplete\":true}"))));
                       send(
                           object(
@@ -170,6 +182,31 @@ class CodexBridgeTest {
       bridge.close();
       peerOutput.close();
       peerInput.close();
+    }
+  }
+
+  @Test
+  void malformedContinuationGetsExactlyOneFormatRepairWithoutWorldActions() throws Exception {
+    try (var peer = new Peer(true)) {
+      peer.bridge.initialize().get();
+      peer.invalidPlanningReplies = 1;
+      var profile = Personality.preset("tortobu");
+      profile.allowedSkills.clear();
+      try (var session =
+          peer.bridge
+              .open(
+                  profile,
+                  (name, args) -> {
+                    throw new AssertionError("A format repair may not execute game tools");
+                  })
+              .get()) {
+        assertEquals("wait", session.plan("継続して").get().steps().getFirst().action());
+        assertEquals(2, peer.turns.get());
+        peer.invalidPlanningReplies = 10;
+        assertThrows(ExecutionException.class, () -> session.plan("もう一度").get());
+        assertEquals(4, peer.turns.get(), "One initial request and at most one repair each");
+        assertTrue(peer.rejectedTool);
+      }
     }
   }
 

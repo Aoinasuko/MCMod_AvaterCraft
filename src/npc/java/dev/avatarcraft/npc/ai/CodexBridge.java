@@ -312,7 +312,27 @@ public final class CodexBridge implements NpcBrain {
     }
 
     public CompletableFuture<TaskPlan> plan(String prompt) {
-      return turn(prompt, true, true).thenApply(Reply::plan);
+      return turn(prompt, true, true)
+          .handle(
+              (reply, error) -> {
+                if (error == null) return CompletableFuture.completedFuture(reply.plan());
+                Throwable cause = error;
+                while (cause.getCause() != null) cause = cause.getCause();
+                if (!(cause instanceof IllegalArgumentException
+                    || cause instanceof JsonParseException))
+                  return CompletableFuture.<TaskPlan>failedFuture(error);
+                String correction =
+                    "\nFORMAT REPAIR (one retry only): previous output was rejected: "
+                        + cause.getMessage()
+                        + ". Return a valid TaskPlan. For plan_next target/block/location/arguments"
+                        + " are empty, position=[], hand=main, entityId=-1, slot=-1. Preserve the"
+                        + " original mission and verified progress; do not execute tools or invent"
+                        + " success.";
+                if (prompt.length() + correction.length() > 32768)
+                  return CompletableFuture.<TaskPlan>failedFuture(error);
+                return turn(prompt + correction, true, true).thenApply(Reply::plan);
+              })
+          .thenCompose(future -> future);
     }
 
     private CompletableFuture<Reply> turn(String prompt, boolean speechOnly, boolean planning) {
@@ -336,18 +356,20 @@ public final class CodexBridge implements NpcBrain {
         if (workTurn) workPermits.release();
         return CompletableFuture.failedFuture(new IllegalStateException("NPC is already thinking"));
       }
-      turn.reply
-          .orTimeout(config.turnTimeoutSeconds, TimeUnit.SECONDS)
-          .whenComplete(
-              (reply, error) -> {
-                if (active.compareAndSet(turn, null)) {
-                  if (turn.turnId != null) retire(turn.turnId);
-                  permits.release();
-                  if (workTurn) workPermits.release();
-                  if (error != null && turn.turnId != null)
-                    rpc.request("turn/interrupt", object("threadId", id, "turnId", turn.turnId));
-                }
-              });
+      var completed =
+          turn.reply
+              .orTimeout(config.turnTimeoutSeconds, TimeUnit.SECONDS)
+              .whenComplete(
+                  (reply, error) -> {
+                    if (active.compareAndSet(turn, null)) {
+                      if (turn.turnId != null) retire(turn.turnId);
+                      permits.release();
+                      if (workTurn) workPermits.release();
+                      if (error != null && turn.turnId != null)
+                        rpc.request(
+                            "turn/interrupt", object("threadId", id, "turnId", turn.turnId));
+                    }
+                  });
       var input = new JsonArray();
       input.add(
           object(
@@ -405,7 +427,7 @@ public final class CodexBridge implements NpcBrain {
                   rpc.request("turn/interrupt", object("threadId", id, "turnId", turn.turnId));
                 }
               });
-      return turn.reply;
+      return completed;
     }
 
     private CompletionStage<JsonObject> tool(JsonObject params) {

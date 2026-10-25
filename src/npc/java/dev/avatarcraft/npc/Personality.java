@@ -14,6 +14,7 @@ public final class Personality {
       avatar = "",
       instructions = "",
       speakingStyle = "",
+      completionMessage = "",
       goal = "所有者を手伝う";
   public List<String> allowedSkills =
       new ArrayList<>(
@@ -48,6 +49,8 @@ public final class Personality {
         || name.length() > 64
         || instructions.length() > 4000
         || speakingStyle.length() > 1000
+        || completionMessage == null
+        || completionMessage.length() > 512
         || goal.length() > 1000)
       throw new IllegalArgumentException("Personality text exceeds its bounds");
     if (workSpeechSeconds < 30
@@ -101,6 +104,7 @@ public final class Personality {
         || value.avatar == null
         || value.instructions == null
         || value.speakingStyle == null
+        || value.completionMessage == null
         || value.goal == null)
       throw new IllegalArgumentException("Personality fields cannot be null");
     value.validate();

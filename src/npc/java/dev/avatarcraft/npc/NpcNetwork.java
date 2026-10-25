@@ -59,6 +59,7 @@ public final class NpcNetwork {
 
   public static void clear() {
     LIMITS.clear();
+    AnchorEditing.clear();
   }
 
   private static void handle(Request request, IPayloadContext context) {
@@ -69,6 +70,15 @@ public final class NpcNetwork {
     LIMITS.put(player.getUUID(), new Window(count == 1 ? tick : old.tick, count));
     if (count > 8) return;
     try {
+      if (request.action.equals("anchor_save")) {
+        reply(
+            player,
+            -1,
+            "anchor_result",
+            AnchorEditing.save(player, JsonParser.parseString(request.data).getAsJsonObject())
+                .toString());
+        return;
+      }
       if (request.action.equals("recall_list") && holdingRecallMap(player)) {
         openRecall(player, Integer.parseInt(request.data));
         return;
@@ -146,6 +156,15 @@ public final class NpcNetwork {
     for (var hand : InteractionHand.values())
       if (player.getItemInHand(hand).is(NpcMod.MEMORY_JOURNAL.get())) return true;
     return false;
+  }
+
+  public static void openAnchor(ServerPlayer player, net.minecraft.core.BlockPos pos) {
+    try {
+      reply(player, -1, "anchor_open", AnchorEditing.open(player, pos).toString());
+    } catch (IllegalArgumentException e) {
+      player.sendOverlayMessage(
+          net.minecraft.network.chat.Component.translatable("anchor.unavailable"));
+    }
   }
 
   public static boolean holdingRecallMap(ServerPlayer player) {

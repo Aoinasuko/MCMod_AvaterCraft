@@ -33,17 +33,25 @@ final class NpcSurvival implements AutoCloseable {
   private static final Map<String, String> SOURCES =
       Map.ofEntries(
           Map.entry("minecraft:diamond", "minecraft:diamond_ore"),
-              Map.entry("minecraft:coal", "minecraft:coal_ore"),
+          Map.entry("minecraft:coal", "minecraft:coal_ore"),
           Map.entry("minecraft:raw_iron", "minecraft:iron_ore"),
-              Map.entry("minecraft:raw_copper", "minecraft:copper_ore"),
+          Map.entry("minecraft:raw_copper", "minecraft:copper_ore"),
           Map.entry("minecraft:raw_gold", "minecraft:gold_ore"),
-              Map.entry("minecraft:redstone", "minecraft:redstone_ore"),
+          Map.entry("minecraft:redstone", "minecraft:redstone_ore"),
           Map.entry("minecraft:lapis_lazuli", "minecraft:lapis_ore"),
-              Map.entry("minecraft:emerald", "minecraft:emerald_ore"),
+          Map.entry("minecraft:emerald", "minecraft:emerald_ore"),
           Map.entry("minecraft:cobblestone", "minecraft:stone"),
-              Map.entry("minecraft:flint", "minecraft:gravel"),
+          Map.entry("minecraft:flint", "minecraft:gravel"),
           Map.entry("minecraft:quartz", "minecraft:nether_quartz_ore"),
-              Map.entry("minecraft:gold_nugget", "minecraft:nether_gold_ore"));
+          Map.entry("minecraft:gold_nugget", "minecraft:nether_gold_ore"),
+          Map.entry("minecraft:wheat", "minecraft:wheat"),
+          Map.entry("minecraft:wheat_seeds", "minecraft:wheat"),
+          Map.entry("minecraft:carrot", "minecraft:carrots"),
+          Map.entry("minecraft:potato", "minecraft:potatoes"),
+          Map.entry("minecraft:beetroot", "minecraft:beetroots"),
+          Map.entry("minecraft:beetroot_seeds", "minecraft:beetroots"),
+          Map.entry("minecraft:nether_wart", "minecraft:nether_wart"),
+          Map.entry("minecraft:sugar_cane", "minecraft:sugar_cane"));
   private static final Map<String, String> LOOT =
       Map.ofEntries(
           Map.entry("minecraft:ender_pearl", "minecraft:enderman"),
@@ -58,14 +66,22 @@ final class NpcSurvival implements AutoCloseable {
               Map.entry("minecraft:porkchop", "minecraft:pig"));
 
   NpcSurvival(CompanionEntity npc, String target, int count, int depth) {
+    this(npc, target, count, depth, Set.of());
+  }
+
+  NpcSurvival(CompanionEntity npc, String target, int count, int depth, Set<String> resourceChain) {
     this.npc = npc;
-    this.target = target;
+    this.target = NpcResources.normalize(target);
     this.count = count;
     level = (ServerLevel) npc.level();
     if (count < 1 || count > 256 || depth > 4)
       throw new IllegalArgumentException("Acquisition bounds exceeded");
-    NpcRecipes.item(target);
-    skills = new NpcSkills(npc, (text, id) -> {}, depth);
+    if (this.target.startsWith("#")) family();
+    else NpcRecipes.item(target);
+    var chain = new LinkedHashSet<>(resourceChain);
+    if (!chain.add(this.target))
+      throw new IllegalArgumentException("RESOURCE_CYCLE: " + this.target);
+    skills = new NpcSkills(npc, (text, id) -> {}, depth, chain);
     deadline = level.getGameTime() + 20L * 60 * 30;
   }
 
@@ -84,6 +100,7 @@ final class NpcSurvival implements AutoCloseable {
           && groundAmount(NpcRecipes.item(activeStep.target())) == 0) {
         // Drops can disappear or be taken by another actor. Recompute the real dependency;
         // a short opportunistic pickup must never turn into an endless search for more drops.
+        skills.cancel("Pickup target disappeared; recomputing resource dependency");
         local.close();
         local = null;
         operations++;
@@ -92,16 +109,50 @@ final class NpcSurvival implements AutoCloseable {
       }
       local.tick(now);
       if (local.needsReplan()) {
+        if (activeStep != null && activeStep.action().equals("pickup")) {
+          // A child restart must not forget which physical drops could not be reached.
+          for (var drop :
+              level.getEntitiesOfClass(
+                  net.minecraft.world.entity.item.ItemEntity.class,
+                  npc.getBoundingBox().inflate(16),
+                  e -> e.isAlive() && e.getItem().is(NpcRecipes.item(activeStep.target())))) {
+            npc.executionMemory.failed(
+                level.dimension().identifier().toString(),
+                "pickup",
+                object("x", drop.getX(), "y", drop.getY(), "z", drop.getZ()),
+                local.problem(),
+                now);
+          }
+          local.close();
+          local = null;
+          operations++;
+          nextTick = now + 4;
+          return;
+        }
         if (activeStep != null
             && (activeStep.action().equals("move_to")
                 || activeStep.action().equals("tool")
                     && activeStep.target().equals("avatarcraftnpc:move_precisely"))
             && rejectedApproaches.size() < 12) {
           rejectedApproaches.add(
-              BlockPos.containing(
-                  activeStep.position().get(0),
-                  activeStep.position().get(1),
-                  activeStep.position().get(2)));
+              activeStep.action().equals("tool")
+                  ? BlockPos.containing(
+                      JsonParser.parseString(activeStep.arguments())
+                          .getAsJsonObject()
+                          .get("x")
+                          .getAsDouble(),
+                      JsonParser.parseString(activeStep.arguments())
+                          .getAsJsonObject()
+                          .get("y")
+                          .getAsDouble(),
+                      JsonParser.parseString(activeStep.arguments())
+                          .getAsJsonObject()
+                          .get("z")
+                          .getAsDouble())
+                  : BlockPos.containing(
+                      activeStep.position().get(0),
+                      activeStep.position().get(1),
+                      activeStep.position().get(2)));
           local.close();
           local = null;
           operations++;
@@ -134,12 +185,22 @@ final class NpcSurvival implements AutoCloseable {
     if (now < nextTick) return;
     nextTick = now + 4;
     try {
-      if (amount(NpcRecipes.item(target)) >= count) {
-        result.complete(
-            object("ok", true, "item", target, "count", amount(NpcRecipes.item(target))));
+      if (targetAmount() >= count) {
+        result.complete(object("ok", true, "item", target, "count", targetAmount()));
         return;
       }
-      var step = need(NpcRecipes.item(target), count, new LinkedHashSet<>(), 0);
+      TaskPlan.Step step;
+      if (target.equals("#minecraft:logs")) {
+        step = step("collect", target, target, count);
+      } else if (target.startsWith("#")) {
+        var item =
+            family().stream()
+                .map(h -> h.value())
+                .filter(this::availableWoodSource)
+                .findFirst()
+                .orElseGet(() -> choose(Ingredient.of(family()), new LinkedHashSet<>()));
+        step = need(item, amount(item) + count - targetAmount(), new LinkedHashSet<>(), 0);
+      } else step = need(NpcRecipes.item(target), count, new LinkedHashSet<>(), 0);
       if (step == null) {
         fail("資源準備の次の操作を解決できません");
         return;
@@ -166,6 +227,28 @@ final class NpcSurvival implements AutoCloseable {
     for (int i = 0; i < NpcInventory.SIZE; i++)
       if (npc.inventory.getItem(i).is(item)) n += npc.inventory.getItem(i).getCount();
     return n;
+  }
+
+  private net.minecraft.core.HolderSet.Named<Item> family() {
+    var key =
+        net.minecraft.tags.TagKey.create(
+            net.minecraft.core.registries.Registries.ITEM,
+            net.minecraft.resources.Identifier.parse(target.substring(1)));
+    var items =
+        BuiltInRegistries.ITEM
+            .get(key)
+            .orElseThrow(() -> new IllegalArgumentException("Unknown item tag: " + target));
+    if (items.size() == 0) throw new IllegalArgumentException("Empty item tag: " + target);
+    return items;
+  }
+
+  private int targetAmount() {
+    if (!target.startsWith("#")) return amount(NpcRecipes.item(target));
+    var tag = family();
+    int total = 0;
+    for (int i = 0; i < NpcInventory.SIZE; i++)
+      if (npc.inventory.getItem(i).is(tag)) total += npc.inventory.getItem(i).getCount();
+    return total;
   }
 
   private TaskPlan.Step need(Item item, int wanted, Set<Item> visiting, int depth) {
@@ -234,15 +317,29 @@ final class NpcSurvival implements AutoCloseable {
       String key = NpcSmelting.key(level, station);
       boolean ours = npc.getUUID().equals(NpcWorkData.get(level).furnaces.get(key));
       if (!ours && amount(input) < needed) return need(input, needed, visiting, depth + 1);
-      boolean fuel = ours || hasFuel();
-      if (!fuel) {
+      int inputSlot = -1;
+      if (!ours)
+        for (int i = 0; i < 36; i++)
+          if (npc.inventory.getItem(i).is(input) && npc.inventory.getItem(i).getCount() >= needed) {
+            inputSlot = i;
+            break;
+          }
+      long missing =
+          NpcSmelting.fuelDeficit(
+              npc,
+              furnace,
+              ours ? furnace.getItem(0) : new ItemStack(input, needed),
+              inputSlot,
+              ours ? 0 : needed);
+      if (missing > 0
+          && (!ours || !furnace.getItem(2).is(item) || furnace.getItem(2).getCount() < needed)) {
         var planks =
             choose(Ingredient.of(BuiltInRegistries.ITEM.getOrThrow(ItemTags.PLANKS)), visiting);
+        int burn = NpcSmelting.burn(level, furnace, new ItemStack(planks));
+        if (burn <= 0)
+          throw new IllegalArgumentException("FUEL_INSUFFICIENT: no usable plank fuel");
         return need(
-            planks,
-            Math.max(2, (needed * recipe.cookingTime() + 299) / 300 + 1),
-            visiting,
-            depth + 1);
+            planks, amount(planks) + (int) ((missing + burn - 1) / burn), visiting, depth + 1);
       }
       if (npc.distanceToSqr(Vec3.atCenterOf(station)) > 9 || !skills.visible(station))
         return move(station);
@@ -332,7 +429,23 @@ final class NpcSurvival implements AutoCloseable {
         .getEntitiesOfClass(
             net.minecraft.world.entity.item.ItemEntity.class,
             npc.getBoundingBox().inflate(16),
-            e -> e.isAlive() && !e.hasPickUpDelay() && e.getItem().is(item))
+            e ->
+                e.isAlive()
+                    && !e.hasPickUpDelay()
+                    && e.getItem().is(item)
+                    && !npc.executionMemory.blocked(
+                        level.dimension().identifier().toString(),
+                        "pickup",
+                        object("x", e.getX(), "y", e.getY(), "z", e.getZ()),
+                        level.getGameTime())
+                    && (!skills.gatheringScaffolding()
+                        || npc.distanceToSqr(e) < 1.69
+                        || new NpcLocalWorld(npc, skills)
+                                .pickupApproach(
+                                    new Gson()
+                                        .toJsonTree(List.of(e.getX(), e.getY(), e.getZ()))
+                                        .getAsJsonArray())
+                            != null))
         .stream()
         .mapToInt(e -> e.getItem().getCount())
         .sum();
@@ -355,6 +468,7 @@ final class NpcSurvival implements AutoCloseable {
     var items = ingredient.items().map(h -> h.value()).filter(i -> !visited.contains(i)).toList();
     if (items.isEmpty()) throw new IllegalArgumentException("材料候補が循環しています");
     for (var i : items) if (amount(i) > 0) return i;
+    for (var i : items) if (availableWoodSource(i)) return i;
     // Prefer nearby actual wood over a fixed biome-specific log/plank choice.
     for (var i : items) if (i instanceof BlockItem b && station(b.getBlock()) != null) return i;
     return items.stream()
@@ -369,16 +483,28 @@ final class NpcSurvival implements AutoCloseable {
         .orElseThrow();
   }
 
-  private boolean hasFuel() {
-    for (int i = 0; i < 36; i++) {
-      var s = npc.inventory.getItem(i);
-      if (s.is(Items.COAL) || s.is(Items.CHARCOAL) || s.is(ItemTags.PLANKS) && s.getCount() >= 2)
-        return true;
+  private boolean availableWoodSource(Item item) {
+    if (!new ItemStack(item).is(ItemTags.PLANKS)) return false;
+    for (var holder : NpcRecipes.crafting(level, item)) {
+      var ingredients = ((CraftingRecipe) holder.value()).placementInfo().ingredients();
+      if (!ingredients.isEmpty()
+          && ingredients.stream()
+              .allMatch(
+                  ingredient ->
+                      ingredient
+                          .items()
+                          .anyMatch(
+                              h ->
+                                  amount(h.value()) > 0
+                                      || h.value() instanceof BlockItem b
+                                          && station(b.getBlock()) != null))) return true;
     }
     return false;
   }
 
   private BlockPos station(Block block) {
+    BlockPos best = null;
+    double bestScore = Double.POSITIVE_INFINITY;
     for (var p :
         BlockPos.betweenClosed(
             npc.blockPosition().offset(-16, -5, -16), npc.blockPosition().offset(16, 5, 16)))
@@ -391,9 +517,16 @@ final class NpcSurvival implements AutoCloseable {
           if (lease == null && (!furnace.getItem(0).isEmpty() || !furnace.getItem(2).isEmpty()))
             continue;
         }
-        return p.immutable();
+        double score = npc.distanceToSqr(Vec3.atCenterOf(p));
+        if (block == Blocks.FURNACE
+            && npc.getUUID().equals(NpcWorkData.get(level).furnaces.get(NpcSmelting.key(level, p))))
+          score -= 100000;
+        if (score < bestScore) {
+          best = p.immutable();
+          bestScore = score;
+        }
       }
-    return null;
+    return best;
   }
 
   private TaskPlan.Step placeStation(Item item) {

@@ -37,6 +37,17 @@ def verify_jar(data, npc=False):
         if npc:
             assert 'modId="avatarcraftnpc"' in toml
             assert "dev/avatarcraft/api/AvatarActor.class" not in jar.namelist()
+            for component in ("AvatarAnchorBlock", "AvatarAnchorBlockEntity", "NpcAnchors", "AnchorEditing"):
+                assert f"dev/avatarcraft/npc/{component}.class" in jar.namelist()
+            assert "dev/avatarcraft/npc/client/AnchorScreen.class" in jar.namelist()
+            anchor_texture = "assets/avatarcraftnpc/textures/block/avatar_anchor.png"
+            assert jar.read(anchor_texture) == (ROOT / "src/npc/resources" / anchor_texture).read_bytes()
+            for recipe, center in (("avatar_anchor", "#minecraft:planks"), ("memory_journal", "minecraft:book")):
+                data = json.loads(jar.read(f"data/avatarcraftnpc/recipe/{recipe}.json"))
+                assert data["type"] == "minecraft:crafting_shaped"
+                assert data["pattern"] == ["III", "ICI", "III"]
+                assert data["key"] == {"I": "minecraft:iron_ingot", "C": center}
+                assert data["result"] == {"id": f"avatarcraftnpc:{recipe}", "count": 1}
         else:
             assert "dev/avatarcraft/api/AvatarActor.class" in jar.namelist()
             assert "dev/avatarcraft/avatar/SurfaceAtlas.class" in jar.namelist()
