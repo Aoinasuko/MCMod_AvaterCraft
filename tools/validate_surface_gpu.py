@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
 QA = ROOT / 'build/surface-qa'
-SCHEMA = json.loads((ROOT / 'src/main/resources/assets/avatarcraft/surface.json').read_text())
+SCHEMA = json.loads((ROOT / 'src/main/resources/assets/bep_3davater_loader/surface.json').read_text())
 FIXTURES = json.loads((QA / 'fixtures.json').read_text())
 MC = ROOT / 'build/moddev/artifacts/minecraft-patched-26.3.0.95-sources.jar'
 
@@ -29,7 +29,7 @@ def source(stage, definitions):
                 code = (ROOT / 'src/main/resources/assets' / namespace / 'shaders/include' / name).read_text()
             return expand(code)
         return re.sub(r'#include\s+<([^>]+)>', include, text)
-    code = expand((ROOT / f'src/main/resources/assets/avatarcraft/shaders/core/avatar.{stage}').read_text(encoding='utf-8-sig'))
+    code = expand((ROOT / f'src/main/resources/assets/bep_3davater_loader/shaders/core/avatar.{stage}').read_text(encoding='utf-8-sig'))
     return code.replace('#version 330', '#version 330\n' + '\n'.join(f'#define {k} {v}' for k, v in definitions.items()), 1)
 
 

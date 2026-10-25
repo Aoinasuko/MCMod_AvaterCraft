@@ -117,7 +117,7 @@ final class NpcWorkRoute implements AutoCloseable {
     try {
       advance();
     } catch (RuntimeException e) {
-      System.getLogger("AvatarCraft NPC").log(System.Logger.Level.WARNING, "Work route stopped", e);
+      System.getLogger("bep_3davater_loader NPC").log(System.Logger.Level.WARNING, "Work route stopped", e);
       fail("Work route state changed or a game action was rejected");
     }
   }

@@ -11,6 +11,7 @@ public final class AvatarAnimation {
   public final AvatarArchive archive;
   public final AvatarPose pose;
   private final ExpressionPlayer expressions;
+  public final ExpressionKeys expressionKeys = new ExpressionKeys();
   private ExpressionConfig config;
   private Map<String, Float> weights;
 
@@ -32,7 +33,7 @@ public final class AvatarAnimation {
     weights =
         Map.copyOf(
             expressions.evaluate(
-                config, archive.avatar().defaults, time, eating, signals.hurt, null));
+                config, archive.avatar().defaults, time, expressionKeys.keys(), null));
     if (archive.avatar().motions != null) pose.animateMotion(signals, time, position, bodyYaw);
     else
       pose.animate(

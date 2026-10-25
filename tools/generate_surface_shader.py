@@ -4,7 +4,7 @@ import json
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'unity/Packages/dev.avatarcraft.exporter/Editor/Resources/AvatarCraft/surface.json'
-TARGET = ROOT / 'src/main/resources/assets/avatarcraft'
+TARGET = ROOT / 'src/main/resources/assets/bep_3davater_loader'
 
 def generate():
     schema = json.loads(SOURCE.read_text(encoding='utf-8'))

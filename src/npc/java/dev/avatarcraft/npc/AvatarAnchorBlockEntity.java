@@ -10,7 +10,7 @@ public final class AvatarAnchorBlockEntity extends BlockEntity {
   private String anchorId = "";
 
   public AvatarAnchorBlockEntity(BlockPos pos, BlockState state) {
-    super(NpcMod.ANCHOR_ENTITY.get(), pos, state);
+    super(bep_3davater_companion.ANCHOR_ENTITY.get(), pos, state);
   }
 
   public String anchorId() {

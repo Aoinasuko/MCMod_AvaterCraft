@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parent.parent
 CONTROL = '--controls' in sys.argv
 LIVE = '--live' in sys.argv
 RESULTS = ROOT / ('build/npc-complex-live-results' if LIVE else 'build/npc-complex-controls' if CONTROL else 'build/npc-complex-results')
-JOURNALS = ROOT / 'run-npc-complex-qa/gametestserver/gametestworld/avatarcraftnpc/journal'
+JOURNALS = ROOT / 'run-npc-complex-qa/gametestserver/gametestworld/bep_3davater_companion/journal'
 EVIDENCE = ROOT / ('build/npc-complex-live-evidence' if LIVE else 'build/npc-complex-control-evidence' if CONTROL else 'build/npc-complex-evidence')
 EVIDENCE.mkdir(parents=True, exist_ok=True)
 catalog = json.loads((ROOT / 'src/test/resources/npc-complex-scenarios.json').read_text(encoding='utf-8'))
@@ -52,7 +52,7 @@ for spec in catalog:
                'evidence': (EVIDENCE / f'{spec["id"]}.jsonl').relative_to(ROOT).as_posix(),
                'portalCooldown': result.get('portalCooldown'), 'currentDimension': result.get('currentDimension'), 'blockAtFeet': result.get('blockAtFeet'), 'finalState': result['mindState']}
     summaries.append(summary)
-policy_path = ROOT / 'src/npc/resources/data/avatarcraftnpc/ai/action-policy.bin'
+policy_path = ROOT / 'src/npc/resources/data/bep_3davater_companion/ai/action-policy.bin'
 output = {'scope': 'Live OAuth-generated plans executed in isolated Minecraft fixtures' if LIVE else 'Isolated physical control/diagnostic variants' if CONTROL else '20 isolated reference-plan physical scenarios, not live AI end-to-end',
           'results': dict(collections.Counter(s['status'] for s in summaries)),
           'selectors': dict(selectors), 'localModelBytes': policy_path.stat().st_size,

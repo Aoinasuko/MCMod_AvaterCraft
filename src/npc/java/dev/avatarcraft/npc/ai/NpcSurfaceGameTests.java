@@ -20,7 +20,7 @@ final class NpcSurfaceGameTests {
   static void register(RegisterGameTestsEvent event) {
     var env =
         event.registerEnvironment(
-            NpcMod.id("surface_and_gate_qa"), new TestEnvironmentDefinition.AllOf());
+            bep_3davater_companion.id("surface_and_gate_qa"), new TestEnvironmentDefinition.AllOf());
     test(
         event,
         env,
@@ -49,10 +49,10 @@ final class NpcSurfaceGameTests {
       String name,
       Consumer<GameTestHelper> run) {
     event.registerTest(
-        NpcMod.id(name),
+        bep_3davater_companion.id(name),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(env, NpcMod.id("qa_navigation"), 2400, 1, true)) {
+            new TestData<>(env, bep_3davater_companion.id("qa_navigation"), 2400, 1, true)) {
           public void run(GameTestHelper h) {
             run.accept(h);
           }
@@ -67,7 +67,7 @@ final class NpcSurfaceGameTests {
     for (int x = 0; x < 24; x++) h.setBlock(x, 6, 6, Blocks.BEDROCK);
     var owner = h.makeMockServerPlayerInLevel();
     owner.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(1, 1, 4))));
-    var n = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+    var n = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
     n.initialize(owner, "tortobu");
     n.setFollowsOwner(false);
     n.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(3, 1, 6))));

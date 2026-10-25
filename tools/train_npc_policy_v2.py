@@ -88,7 +88,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--data', type=Path)
     p.add_argument('--validation', type=Path)
-    p.add_argument('--output', type=Path, default=Path('src/npc/resources/data/avatarcraftnpc/ai/action-policy.json'))
+    p.add_argument('--output', type=Path, default=Path('src/npc/resources/data/bep_3davater_companion/ai/action-policy.json'))
     p.add_argument('--epochs', type=int, default=40)
     p.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu')
     args = p.parse_args()

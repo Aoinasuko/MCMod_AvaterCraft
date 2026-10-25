@@ -21,7 +21,7 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 final class NpcRecoveryGameTests {
   static void register(RegisterGameTestsEvent event) {
     var env =
-        event.registerEnvironment(NpcMod.id("recovery_qa"), new TestEnvironmentDefinition.AllOf());
+        event.registerEnvironment(bep_3davater_companion.id("recovery_qa"), new TestEnvironmentDefinition.AllOf());
     test(
         event,
         env,
@@ -55,7 +55,7 @@ final class NpcRecoveryGameTests {
     test(event, env, "read_both_faces_of_visible_sign_types", false, NpcRecoveryGameTests::signs);
     var deepEnv =
         event.registerEnvironment(
-            NpcMod.id("recovery_return_qa"), new TestEnvironmentDefinition.AllOf());
+            bep_3davater_companion.id("recovery_return_qa"), new TestEnvironmentDefinition.AllOf());
     test(
         event,
         deepEnv,
@@ -77,10 +77,10 @@ final class NpcRecoveryGameTests {
       boolean large,
       Consumer<GameTestHelper> body) {
     event.registerTest(
-        NpcMod.id(name),
+        bep_3davater_companion.id(name),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(env, NpcMod.id(large ? "qa_return" : "qa_empty"), 6000, 1, true)) {
+            new TestData<>(env, bep_3davater_companion.id(large ? "qa_return" : "qa_empty"), 6000, 1, true)) {
           public void run(GameTestHelper h) {
             body.accept(h);
           }
@@ -91,7 +91,7 @@ final class NpcRecoveryGameTests {
     for (int x = 0; x < 12; x++) for (int z = 0; z < 12; z++) h.setBlock(x, 0, z, Blocks.BEDROCK);
     var owner = h.makeMockServerPlayerInLevel();
     owner.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(1, 1, 1))));
-    var n = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+    var n = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
     n.initialize(owner, "tortobu");
     n.setFollowsOwner(false);
     n.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(3, 1, 4))));
@@ -245,7 +245,7 @@ final class NpcRecoveryGameTests {
     var found =
         s.execute("find_blocks", object("block", "minecraft:spruce_log", "radius", 16))
             .toCompletableFuture();
-    var peer = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+    var peer = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
     var owner = h.getLevel().getServer().getPlayerList().getPlayer(n.ownerId());
     peer.initialize(owner, "tortobu");
     peer.setFollowsOwner(false);
@@ -375,7 +375,7 @@ final class NpcRecoveryGameTests {
 
   private static TaskPlan.Step tool(String name, JsonObject args) {
     return new TaskPlan.Step(
-        "tool", "avatarcraftnpc:" + name, "", 1, -1, -1, "main", 1, List.of(), "", args.toString());
+        "tool", "bep_3davater_companion:" + name, "", 1, -1, -1, "main", 1, List.of(), "", args.toString());
   }
 
   private static void repair(GameTestHelper h) {

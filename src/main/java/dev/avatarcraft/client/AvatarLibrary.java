@@ -10,7 +10,7 @@ import net.neoforged.fml.loading.FMLPaths;
 
 /** Archive IO occurs on a worker. GPU resources are created lazily when drawing. */
 public final class AvatarLibrary {
-  public static final Path ROOT = FMLPaths.CONFIGDIR.get().resolve("avatarcraft");
+  public static final Path ROOT = FMLPaths.CONFIGDIR.get().resolve("bep_3davater_loader");
 
   public record Entry(Path path, AvatarArchive archive, String error) {
     public String name() {
@@ -60,10 +60,24 @@ public final class AvatarLibrary {
               try {
                 Files.createDirectories(ROOT.resolve("avatars"));
                 Files.createDirectories(ROOT.resolve("expressions"));
+                dev.avatarcraft.api.BundledAvatar.install(ROOT.resolve("avatars"));
                 var catalog = new AvatarCatalog(ROOT.resolve("avatars"));
                 catalog.reload();
-                for (var entry : catalog.entries())
-                  list.add(new Entry(entry.path(), entry.archive(), null));
+                for (var entry : catalog.entries()) {
+                  try {
+                    var archive = entry.archive();
+                    var path = expressionPath(archive.avatar().id);
+                    if (Files.exists(path)) {
+                      if (Files.size(path) > 1 << 20) throw new IOException("Expression config exceeds 1 MiB");
+                      var config = AvatarArchive.GSON.fromJson(Files.readString(path), ExpressionConfig.class);
+                      config.validate(archive.avatar());
+                      archive = new AvatarArchive(archive.avatar(), archive.images(), config);
+                    }
+                    list.add(new Entry(entry.path(), archive, null));
+                  } catch (Exception e) {
+                    list.add(new Entry(entry.path(), null, e.getMessage()));
+                  }
+                }
                 for (var problem : catalog.problems())
                   list.add(
                       new Entry(

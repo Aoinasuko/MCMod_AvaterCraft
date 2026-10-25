@@ -73,9 +73,10 @@ public final class NpcAiSettings {
     SPEC = b.build();
   }
 
-  public static CodexConfig snapshot() {
+  /** Read incomplete connection settings too, so the editor can repair them. Contains host secrets. */
+  public static synchronized CodexConfig editableSnapshot() {
     var c = new CodexConfig();
-    c.enabled = ENABLED.get() && !Boolean.getBoolean("avatarcraft.npcGameTest");
+    c.enabled = ENABLED.get();
     c.provider = PROVIDER.get();
     c.baseUrl = URL.get();
     c.apiKey = KEY.get();
@@ -89,8 +90,30 @@ public final class NpcAiSettings {
     c.maxConcurrentTurns = CONCURRENT.get();
     c.minimumRequestIntervalSeconds = INTERVAL.get();
     c.maxOutputTokens = TOKENS.get();
+    return c;
+  }
+
+  public static CodexConfig snapshot() {
+    var c = editableSnapshot();
+    c.enabled &= !Boolean.getBoolean("avatarcraft.npcGameTest");
     if (c.enabled) c.validate();
     return c;
+  }
+
+  /** Save only connection fields. Advanced runtime limits and other mods' settings are preserved. */
+  public static synchronized void saveConnection(CodexConfig value) {
+    var checked = value.copy();
+    if (!checked.enabled && checked.model.isBlank()) checked.model = "configuration-pending";
+    checked.validate();
+    var previous = editableSnapshot();
+    try { setConnection(value); SPEC.save(); }
+    catch (RuntimeException e) { setConnection(previous); throw new IllegalStateException("AI設定を保存できません。設定ファイルを確認してください"); }
+  }
+
+  private static void setConnection(CodexConfig value) {
+    ENABLED.set(value.enabled); PROVIDER.set(value.provider); URL.set(value.baseUrl);
+    KEY.set(value.apiKey); KEY_ENV.set(value.apiKeyEnvironment); MODEL.set(value.model);
+    COMPLEX_MODEL.set(value.complexModel); EXECUTABLE.set(value.executable);
   }
 
   private NpcAiSettings() {}

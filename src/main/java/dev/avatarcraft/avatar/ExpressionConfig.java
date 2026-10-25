@@ -33,8 +33,8 @@ public final class ExpressionConfig {
     if (events == null) throw new IOException("Missing expression events");
     var shapes = shapes(a);
     for (var e : events.entrySet()) {
-      if (!EVENTS.contains(e.getKey()) || e.getValue() == null)
-        throw new IOException("Unknown expression event");
+      if (!dev.avatarcraft.api.ExpressionKeys.valid(e.getKey()) || e.getValue() == null)
+        throw new IOException("Invalid expression key");
       for (var v : e.getValue().entrySet())
         if (!shapes.contains(v.getKey())
             || v.getValue() == null

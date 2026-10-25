@@ -1,7 +1,0 @@
-{
-  "type":"minecraft:crafting_shaped",
-  "category":"misc",
-  "pattern":["III","IMI","III"],
-  "key":{"I":"minecraft:iron_ingot","M":"minecraft:map"},
-  "result":{"id":"avatarcraftnpc:recall_map","count":1}
-}

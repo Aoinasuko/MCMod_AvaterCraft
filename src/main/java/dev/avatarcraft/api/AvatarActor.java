@@ -6,6 +6,11 @@ package dev.avatarcraft.api;
 public interface AvatarActor {
   String avatarId();
 
+  /** Named expression keys, in increasing priority order. */
+  default java.util.List<String> avatarExpressionKeys() {
+    return java.util.List.of();
+  }
+
   default boolean avatarMining() {
     return false;
   }

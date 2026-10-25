@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/cube_all",
+  "textures": {
+    "all": "bep_3davater_companion:block/avatar_anchor"
+  }
+}

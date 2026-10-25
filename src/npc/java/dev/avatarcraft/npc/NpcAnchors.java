@@ -19,7 +19,7 @@ public final class NpcAnchors extends SavedData {
 
   public static final SavedDataType<NpcAnchors> TYPE =
       new SavedDataType<>(
-          NpcMod.id("anchors"),
+          bep_3davater_companion.id("anchors"),
           () -> new NpcAnchors(new AnchorIndex()),
           Codec.STRING.xmap(s -> new NpcAnchors(AnchorIndex.parse(s)), d -> d.index.json()));
 

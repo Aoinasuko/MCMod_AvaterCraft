@@ -63,7 +63,7 @@ def evaluate(model,data):
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--data',type=Path,default=Path('TrainingData/npc-v4'))
-    p.add_argument('--output',type=Path,default=Path('src/npc/resources/data/avatarcraftnpc/ai/action-policy.json'))
+    p.add_argument('--output',type=Path,default=Path('src/npc/resources/data/bep_3davater_companion/ai/action-policy.json'))
     p.add_argument('--epochs',type=int,default=40)
     p.add_argument('--device',default='cuda' if torch.cuda.is_available() else 'cpu')
     a=p.parse_args();torch.set_num_threads(4);torch.manual_seed(SEED);torch.use_deterministic_algorithms(True)

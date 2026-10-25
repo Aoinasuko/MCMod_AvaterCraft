@@ -1,0 +1,9 @@
+{
+  "key.bep_3davater_loader.open": "アバター一覧を開く（@）",
+  "key.category.bep_3davater_loader.bep_3davater_loader": "B.E.P 3DAvater Loader",
+  "screen.bep_3davater_loader.library": "B.E.P 3DAvater Loader / アバター選択",
+  "key.bep_3davater_loader.expression.idle": "表情: 通常",
+  "key.bep_3davater_loader.expression.blink": "表情: まばたき",
+  "key.bep_3davater_loader.expression.eat": "表情: 食事",
+  "key.bep_3davater_loader.expression.hurt": "表情: 被ダメージ"
+}

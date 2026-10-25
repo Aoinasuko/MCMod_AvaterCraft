@@ -11,7 +11,7 @@ import net.neoforged.neoforge.common.world.chunk.TicketController;
 public final class NpcRecall {
   public static final TicketController CONTROLLER =
       new TicketController(
-          NpcMod.id("recall"),
+          bep_3davater_companion.id("recall"),
           (level, tickets) -> {
             // Requests are transient; a crash/restart must not leave their temporary chunks forced.
             tickets.getEntityTickets().keySet().forEach(tickets::removeAllTickets);

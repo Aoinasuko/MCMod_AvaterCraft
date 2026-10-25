@@ -17,14 +17,14 @@ final class NpcLongTravelGameTests {
   static void register(RegisterGameTestsEvent event) {
     var env =
         event.registerEnvironment(
-            NpcMod.id("long_travel_qa"), new TestEnvironmentDefinition.AllOf());
+            bep_3davater_companion.id("long_travel_qa"), new TestEnvironmentDefinition.AllOf());
     for (boolean stairs : new boolean[] {false, true})
       event.registerTest(
-          NpcMod.id(
+          bep_3davater_companion.id(
               stairs ? "reserved_return_161_blocks_up_walked_stairs" : "reserved_walk_512_blocks"),
           new FunctionGameTestInstance(
               BuiltinTestFunctions.ALWAYS_PASS,
-              new TestData<>(env, NpcMod.id("qa_longtravel"), 6000, 1, true)) {
+              new TestData<>(env, bep_3davater_companion.id("qa_longtravel"), 6000, 1, true)) {
             public void run(GameTestHelper h) {
               travel(h, stairs);
             }
@@ -44,7 +44,7 @@ final class NpcLongTravelGameTests {
         for (int z = 3; z <= 7; z++) h.setBlock(4 + i, 72 - i, z, Blocks.STONE);
     var owner = h.makeMockServerPlayerInLevel();
     owner.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(1, 1, 1))));
-    var n = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+    var n = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
     n.initialize(owner, "tortobu");
     n.setFollowsOwner(false);
     n.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(4, y, 5))));

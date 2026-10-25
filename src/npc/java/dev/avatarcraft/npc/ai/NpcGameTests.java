@@ -25,6 +25,7 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 /** Opt-in development GameTest; uses an isolated world and the actual server game operations. */
 public final class NpcGameTests {
   public static void register(RegisterGameTestsEvent event) {
+    if (Boolean.getBoolean("avatarcraft.aiSettingsQa")) { NpcAiSettingsGameTests.register(event); return; }
     if (Boolean.getBoolean("avatarcraft.areaQa")) {
       NpcAreaWorkGameTests.register(event);
       if (!Boolean.getBoolean("avatarcraft.areaLive")) NpcConstructionGameTests.register(event);
@@ -53,147 +54,94 @@ public final class NpcGameTests {
     NpcAreaWorkGameTests.register(event);
     NpcConstructionGameTests.register(event);
     var environment =
-        event.registerEnvironment(NpcMod.id("qa"), new TestEnvironmentDefinition.AllOf());
+        event.registerEnvironment(bep_3davater_companion.id("qa"), new TestEnvironmentDefinition.AllOf());
     event.registerTest(
-        NpcMod.id("blocked_plan_reports_reason"),
+        bep_3davater_companion.id("blocked_plan_reports_reason"),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(environment, NpcMod.id("qa_empty"), 300, 1, true)) {
+            new TestData<>(environment, bep_3davater_companion.id("qa_empty"), 300, 1, true)) {
           public void run(GameTestHelper h) {
             blockedPlanScenario(h);
           }
         });
     event.registerTest(
-        NpcMod.id("location_memory_tools"),
+        bep_3davater_companion.id("location_memory_tools"),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(environment, NpcMod.id("qa_empty"), 300, 1, true)) {
+            new TestData<>(environment, bep_3davater_companion.id("qa_empty"), 300, 1, true)) {
           public void run(GameTestHelper h) {
             locationToolScenario(h);
           }
         });
     event.registerTest(
-        NpcMod.id("diamond_stairs_and_tool_preparation"),
+        bep_3davater_companion.id("diamond_stairs_and_tool_preparation"),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(environment, NpcMod.id("qa_large"), 3600, 1, true)) {
+            new TestData<>(environment, bep_3davater_companion.id("qa_large"), 3600, 1, true)) {
           public void run(GameTestHelper h) {
             diamondStairsScenario(h);
           }
         });
     event.registerTest(
-        NpcMod.id("remembered_chest_round_trip"),
+        bep_3davater_companion.id("remembered_chest_round_trip"),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(environment, NpcMod.id("qa_large"), 1800, 1, true)) {
+            new TestData<>(environment, bep_3davater_companion.id("qa_large"), 1800, 1, true)) {
           public void run(GameTestHelper h) {
             rememberedTripScenario(h);
           }
         });
     event.registerTest(
-        NpcMod.id("stairs_reject_liquid_and_unbreakable"),
+        bep_3davater_companion.id("stairs_reject_liquid_and_unbreakable"),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(environment, NpcMod.id("qa_large"), 80, 1, true)) {
+            new TestData<>(environment, bep_3davater_companion.id("qa_large"), 80, 1, true)) {
           public void run(GameTestHelper h) {
             hazardousStairsScenario(h);
           }
         });
     event.registerTest(
-        NpcMod.id("local_policy_collect_and_store"),
+        bep_3davater_companion.id("local_policy_collect_and_store"),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(environment, NpcMod.id("qa_empty"), 600, 1, true)) {
+            new TestData<>(environment, bep_3davater_companion.id("qa_empty"), 600, 1, true)) {
           public void run(GameTestHelper h) {
             localPolicyScenario(h);
           }
         });
     event.registerTest(
-        NpcMod.id("independent_planning_action_speech"),
+        bep_3davater_companion.id("independent_planning_action_speech"),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(environment, NpcMod.id("qa_empty"), 1200, 1, true)) {
+            new TestData<>(environment, bep_3davater_companion.id("qa_empty"), 1200, 1, true)) {
           public void run(GameTestHelper h) {
             independentSpeechScenario(h);
           }
         });
     event.registerTest(
-        NpcMod.id("local_policy_saved_remaining_count"),
+        bep_3davater_companion.id("local_policy_saved_remaining_count"),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(environment, NpcMod.id("qa_empty"), 400, 1, true)) {
+            new TestData<>(environment, bep_3davater_companion.id("qa_empty"), 400, 1, true)) {
           public void run(GameTestHelper h) {
             savedPolicyScenario(h);
           }
         });
     event.registerTest(
-        NpcMod.id("private_avatar_wire"),
+        bep_3davater_companion.id("companion_lifecycle"),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(environment, NpcMod.id("qa_empty"), 40, 1, true)) {
-          public void run(GameTestHelper h) {
-            var buffer =
-                new net.minecraft.network.RegistryFriendlyByteBuf(
-                    io.netty.buffer.Unpooled.buffer(), h.getLevel().registryAccess());
-            try {
-              var message =
-                  new dev.avatarcraft.multiplayer.ShareMessage(
-                      dev.avatarcraft.multiplayer.ShareMessage.CHUNK,
-                      UUID.randomUUID(),
-                      UUID.randomUUID(),
-                      7,
-                      0,
-                      "",
-                      new byte[dev.avatarcraft.multiplayer.ShareMessage.CHUNK_BYTES]);
-              var packet = new dev.avatarcraft.multiplayer.ShareNetwork.Up(message);
-              dev.avatarcraft.multiplayer.ShareNetwork.Up.CODEC.encode(buffer, packet);
-              h.assertTrue(
-                  buffer.readableBytes() < 32767,
-                  "Upload must fit Minecraft serverbound packet limit");
-              var decoded =
-                  dev.avatarcraft.multiplayer.ShareNetwork.Up.CODEC.decode(buffer).message();
-              h.assertTrue(
-                  decoded.peer().equals(message.peer())
-                      && decoded.transfer().equals(message.transfer())
-                      && decoded.sequence() == 7
-                      && decoded.data().length == 16384,
-                  "Wire packet round trip");
-              buffer.clear();
-              buffer.writeVarInt(dev.avatarcraft.multiplayer.ShareMessage.CHUNK);
-              buffer.writeUUID(UUID.randomUUID());
-              buffer.writeUUID(UUID.randomUUID());
-              buffer.writeVarInt(0);
-              buffer.writeVarInt(0);
-              buffer.writeUtf("");
-              buffer.writeByteArray(new byte[16385]);
-              boolean rejected = false;
-              try {
-                dev.avatarcraft.multiplayer.ShareNetwork.Up.CODEC.decode(buffer);
-              } catch (RuntimeException expected) {
-                rejected = true;
-              }
-              h.assertTrue(rejected, "Decoder must reject oversized chunks before allocation");
-              h.succeed();
-            } finally {
-              buffer.release();
-            }
-          }
-        });
-    event.registerTest(
-        NpcMod.id("companion_lifecycle"),
-        new FunctionGameTestInstance(
-            BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(environment, NpcMod.id("qa_empty"), 600, 1, true)) {
+            new TestData<>(environment, bep_3davater_companion.id("qa_empty"), 600, 1, true)) {
           @Override
           public void run(GameTestHelper helper) {
             new Scenario(helper).start();
           }
         });
     event.registerTest(
-        NpcMod.id("follow_catch_up"),
+        bep_3davater_companion.id("follow_catch_up"),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(environment, NpcMod.id("qa_empty"), 300, 1, true)) {
+            new TestData<>(environment, bep_3davater_companion.id("qa_empty"), 300, 1, true)) {
           public void run(GameTestHelper h) {
             for (int x = 0; x < 12; x++)
               for (int z = 0; z < 12; z++) h.setBlock(x, 0, z, Blocks.STONE);
@@ -201,7 +149,7 @@ public final class NpcGameTests {
               for (int z = 0; z <= 5; z++) h.setBlock(5, y, z, Blocks.STONE);
             var owner = h.makeMockServerPlayerInLevel();
             owner.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(10, 1, 2))));
-            var npc = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+            var npc = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
             npc.initialize(owner, "tortobu");
             npc.setFollowsOwner(false);
             npc.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(1, 1, 2))));
@@ -295,7 +243,7 @@ public final class NpcGameTests {
 
   private static CompanionEntity testNpc(
       GameTestHelper h, ServerPlayer owner, int x, int y, int z) {
-    var npc = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+    var npc = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
     npc.initialize(owner, "tortobu");
     npc.setFollowsOwner(false);
     npc.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(x, y, z))));
@@ -406,7 +354,7 @@ public final class NpcGameTests {
     var output =
         TagValueOutput.createWithContext(ProblemReporter.DISCARDING, h.getLevel().registryAccess());
     npc.saveWithoutId(output);
-    var restored = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.LOAD);
+    var restored = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.LOAD);
     restored.load(
         TagValueInput.create(
             ProblemReporter.DISCARDING, h.getLevel().registryAccess(), output.buildResult()));
@@ -490,7 +438,7 @@ public final class NpcGameTests {
     var owner = h.makeMockServerPlayerInLevel();
     owner.gameMode.changeGameModeForPlayer(GameType.SURVIVAL);
     owner.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(3, 1, 2))));
-    var npc = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+    var npc = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
     npc.initialize(owner, "tortobu");
     npc.setFollowsOwner(false);
     npc.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(3, 1, 3))));
@@ -569,7 +517,7 @@ public final class NpcGameTests {
     for (int x = 0; x < 12; x++) for (int z = 0; z < 12; z++) h.setBlock(x, 0, z, Blocks.STONE);
     var owner = h.makeMockServerPlayerInLevel();
     owner.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(3, 1, 2))));
-    var npc = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+    var npc = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
     npc.initialize(owner, "tortobu");
     npc.setFollowsOwner(false);
     npc.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(3, 1, 3))));
@@ -674,7 +622,7 @@ public final class NpcGameTests {
     for (int x = 0; x < 12; x++) for (int z = 0; z < 12; z++) h.setBlock(x, 0, z, Blocks.STONE);
     var owner = h.makeMockServerPlayerInLevel();
     owner.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(3, 1, 2))));
-    var npc = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+    var npc = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
     npc.initialize(owner, "tortobu");
     npc.setFollowsOwner(false);
     var profile = npc.personality();
@@ -796,7 +744,7 @@ public final class NpcGameTests {
         (net.minecraft.world.level.block.entity.ChestBlockEntity)
             h.getLevel().getBlockEntity(h.absolutePos(new BlockPos(4, 1, 3)));
     chest.setItem(0, new ItemStack(Items.COAL, 2));
-    var source = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+    var source = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
     source.initialize(owner, "tortobu");
     source.setFollowsOwner(false);
     source.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(3, 1, 3))));
@@ -829,7 +777,7 @@ public final class NpcGameTests {
     var output =
         TagValueOutput.createWithContext(ProblemReporter.DISCARDING, h.getLevel().registryAccess());
     source.saveWithoutId(output);
-    var restored = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.LOAD);
+    var restored = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.LOAD);
     restored.load(
         TagValueInput.create(
             ProblemReporter.DISCARDING, h.getLevel().registryAccess(), output.buildResult()));
@@ -930,7 +878,7 @@ public final class NpcGameTests {
       owner = h.makeMockServerPlayerInLevel();
       owner.gameMode.changeGameModeForPlayer(GameType.SURVIVAL);
       owner.setPos(Vec3.atBottomCenterOf(pos(3, 1, 3)));
-      npc = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+      npc = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
       check(npc != null, "NPC must be registered");
       npc.initialize(owner, "tortobu");
       npc.setPos(Vec3.atBottomCenterOf(pos(3, 1, 3)));
@@ -981,7 +929,7 @@ public final class NpcGameTests {
       npc.saveWithoutId(output);
       var tag = output.buildResult();
       tag.putInt("foodLevel", 10);
-      var restored = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.LOAD);
+      var restored = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.LOAD);
       restored.load(
           TagValueInput.create(ProblemReporter.DISCARDING, h.getLevel().registryAccess(), tag));
       check(
@@ -1180,7 +1128,7 @@ public final class NpcGameTests {
       add(
           "give partial stack to NPC",
           () -> {
-            recipient[0] = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+            recipient[0] = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
             recipient[0].initialize(owner, "tortobu");
             recipient[0].setFollowsOwner(false);
             recipient[0].setPos(npc.position().add(1, 0, 0));
@@ -1261,11 +1209,11 @@ public final class NpcGameTests {
             npc.inventory.setItem(5, new ItemStack(Items.GOLD_INGOT, 5));
             soulstoneMaterials[0] = count(Items.IRON_INGOT);
             soulstoneMaterials[1] = count(Items.GOLD_INGOT);
-            return skills.execute("craft", object("recipe", "avatarcraftnpc:soulstone"));
+            return skills.execute("craft", object("recipe", "bep_3davater_companion:soulstone"));
           },
           r -> {
             success(r);
-            check(count(NpcMod.SOULSTONE.get()) == 1, "Soulstone recipe produces one item");
+            check(count(bep_3davater_companion.SOULSTONE.get()) == 1, "Soulstone recipe produces one item");
             check(
                 count(Items.IRON_INGOT) == soulstoneMaterials[0] - 4
                     && count(Items.GOLD_INGOT) == soulstoneMaterials[1] - 5,
@@ -1276,11 +1224,11 @@ public final class NpcGameTests {
           () -> {
             npc.inventory.setItem(4, new ItemStack(Items.IRON_INGOT, 8));
             npc.inventory.setItem(5, new ItemStack(Items.BOOK));
-            return skills.execute("craft", object("recipe", "avatarcraftnpc:memory_journal"));
+            return skills.execute("craft", object("recipe", "bep_3davater_companion:memory_journal"));
           },
           r -> {
             success(r);
-            check(count(NpcMod.MEMORY_JOURNAL.get()) == 1, "Journal recipe must be craftable");
+            check(count(bep_3davater_companion.MEMORY_JOURNAL.get()) == 1, "Journal recipe must be craftable");
           });
       add(
           "eat actual food",
@@ -1311,7 +1259,7 @@ public final class NpcGameTests {
               now(
                   () -> {
                     owner.setItemInHand(
-                        InteractionHand.MAIN_HAND, new ItemStack(NpcMod.SOULSTONE.get()));
+                        InteractionHand.MAIN_HAND, new ItemStack(bep_3davater_companion.SOULSTONE.get()));
                     var support = pos(8, 0, 8);
                     var hit =
                         new BlockHitResult(
@@ -1384,7 +1332,7 @@ public final class NpcGameTests {
               now(
                   () -> {
                     var victim =
-                        NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+                        bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
                     victim.initialize(owner, "tortobu");
                     victim.setPos(Vec3.atBottomCenterOf(pos(9, 1, 1)));
                     var pick = new ItemStack(Items.WOODEN_PICKAXE);
@@ -1432,7 +1380,7 @@ public final class NpcGameTests {
           if (!pending.isDone()) return;
           var value = pending.join();
           current.verify.accept(value);
-          System.getLogger("AvatarCraft NPC QA")
+          System.getLogger("bep_3davater_loader NPC QA")
               .log(System.Logger.Level.INFO, "PASS: " + current.name);
           pending = null;
         }

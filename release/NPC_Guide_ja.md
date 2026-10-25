@@ -1,17 +1,25 @@
-# AIアバターNPCの導入と開発
+# B.E.P 3DAvater Companionの導入と開発
 
 Minecraft 26.3、NeoForge 26.3.0.95、Java 25向けです。NPCのゲーム処理はサーバーで動作します。
 
 ## 導入
 
-- NPCを使うクライアントとサーバーの両方へ `avatarcraft-0.6.0.jar` と `avatarcraft-npc-0.6.0.jar` を配置します。プレイヤーのアバター表示だけを使う場合はFrameworkのJARだけで利用できます。
-- 標準アバター「タートブ」（作者：aoi_nasuko）と性格プリセットをNPC用JARに同梱します。クライアント起動時に `config/avatarcraft/avatars/tortobu.avc` がない場合だけ展開します。同名の既存ファイルは上書きしません。
-- 追加モデルは、表示する各クライアントの `config/avatarcraft/avatars/` に使用権のある `.avc` を配置します。NPC用の追加モデルのネットワーク自動配布は行いません。0.6.0の表示専用プレイヤーキャッシュをNPCの外見に流用することもできません。
+- NPCを使うクライアントとサーバーへ `bep_3davater_loader-26.3-0.10.0.jar` と `bep_3davater_companion-26.3-0.10.0.jar` を配置します。Player Modelは不要です。
+- 標準アバター「tortobu」（作者：aoi_nasuko）はLoaderに同梱します。Loaderがクライアント起動時に `config/bep_3davater_loader/avatars/tortobu.avc` を展開します。同名の既存ファイルは上書きしません。
+- Companionは一人称「ぼく」で、おっとりした性格のtortobuプリセットを同梱します。編集用サンプルは配布物の `Examples/Personalities/tortobu.json` です。独自プリセットにする場合は `id` とファイル名を変更し、`config/bep_3davater_companion/personalities/` に配置します。
+- 食事・飲み物・被ダメージの表情はCompanionがLoaderの `eat`・`hurt` キーを指定して表示します。表情設定はLoaderの一覧から保存します。
+- 追加モデルは、表示する各クライアントの `config/bep_3davater_loader/avatars/` に使用権のある `.avc` を配置します。NPC用の追加モデルのネットワーク自動配布は行いません。0.6.0の表示専用プレイヤーキャッシュをNPCの外見に流用することもできません。
 - 手元の追加モデルは外部 `.avc` として追加し、性格JSONの `avatar` にアバターIDまたは拡張子を除いたファイル名を指定します。IDの一致を優先します。
+
+## @キーのCompanionタブ
+
+@キーでシリーズ設定を開き、Companionタブを選びます。サーバーに記録された自分の召喚済みNPCを一覧表示します。NPCをクリックすると、モデル一覧・性格プリセット・性格JSONを編集できます。「モデル・性格を保存」で対象NPCへ反映します。別次元や遠方でも、読み込み中の自分のNPCなら変更できます。未読込のNPCは一覧に表示されますが、読込状態を確認してから再試行してください。
+
+一覧と編集はサーバーが認証済みプレイヤーのUUIDから所有者を確認します。クライアントから所有者IDを指定して他人のNPCを変更することはできません。この画面は外見と性格だけを編集し、持ち物・装備・作業指示はNPCの右クリック画面で扱います。
 
 ## AIの接続設定
 
-Mods → AvatarCraft AI Companions → 設定 → Local の `ai` を開きます。設定ファイルは `config/avatarcraftnpc-ai.toml` です。変更後はワールド／サーバーを開き直してください。マルチプレイではサーバーを実行する環境の設定を使います。クライアント側のキーはサーバーへ送信しません。旧 `config/avatarcraftnpc/codex.json` は使用しません。
+@キーでシリーズ設定を開き、「AIモデル」タブを選びます。接続方式・APIキー・モデルを設定できます。モデル一覧からの選択とモデルIDの直接入力に対応し、保存後にワールドを開き直すと反映します。詳しくは `AI_Settings_ja.md`。高度な実行上限等はMods → B.E.P 3DAvater Companion → 設定 → Local の `ai` からも編集できます。設定ファイルは `config/bep_3davater_companion-ai.toml` です。変更後はワールド／サーバーを開き直してください。マルチプレイではサーバーを実行する環境の設定を使います。クライアント側のキーはサーバーへ送信しません。旧 `config/bep_3davater_companion/codex.json` は使用しません。
 
 | 接続方式 | provider | baseUrl | model | apiKeyEnvironment |
 | --- | --- | --- | --- | --- |
@@ -66,7 +74,7 @@ G G G
 I G I
 ```
 
-Iは鉄インゴット（計4個）、Gは金インゴット（計5個）です。ソウルストーンを1個作成します。共通アイテム「ソウルストーン」を持って地面へ使用すると1つ消費し、標準のタートブを召喚します。モデルと性格は召喚後のGUIで変更できます。衝突する場所へは召喚しません。所有者は召喚したプレイヤーです。
+Iは鉄インゴット（計4個）、Gは金インゴット（計5個）です。ソウルストーンを1個作成します。共通アイテム「ソウルストーン」を持って地面へ使用すると1つ消費し、標準のtortobuを召喚します。モデルと性格は召喚後のGUIで変更できます。衝突する場所へは召喚しません。所有者は召喚したプレイヤーです。
 
 作業台で中央に本1冊、周囲8マスに鉄インゴット8個を配置すると「アバターの記録帳」になります。持って使用し、記録のあるNPCを切り替えて閲覧できます。所有者の記録だけを表示します。NPCが復帰中・未ロードの場合も保存済みの記録は閲覧できます。専用テクスチャは`memory_journal.png`です。
 
@@ -92,7 +100,7 @@ NPCが倒れると現在の作業・委任・追従を中断し、通常はバ�
 
 「呼び戻しの地図」は、作業台の中央に空の地図1枚、周囲8マスに鉄インゴット8個で作成します。専用テクスチャは`recall_map.png`です。手に持って使用すると、自分が召喚中のNPC一覧を表示します。呼びたいNPCのボタンを押すと、別ディメンジョンからでもプレイヤーの近くへ移し、作業と追従を解除して待機させます。地図は消費しません。未ロードのNPCは一時的にチャンクを読み込み、最大200Tick待ちます。処理中は地図を手に持っていてください。安全な着地点がない場合や対象を読み込めない場合は理由を表示します。他人のNPCは一覧にも表示せず、呼び戻しもできません。
 
-設定はサーバー／ホスト側の`config/avatarcraftnpc-server.toml`です。NeoForgeのSynced設定として接続中のクライアントへ同期します。ワールド別に上書きする場合は、そのワールドの`syncedconfig/avatarcraftnpc-server.toml`を使います。
+設定はサーバー／ホスト側の`config/bep_3davater_companion-server.toml`です。NeoForgeのSynced設定として接続中のクライアントへ同期します。ワールド別に上書きする場合は、そのワールドの`syncedconfig/bep_3davater_companion-server.toml`を使います。
 
 ```toml
 [companions]
@@ -115,7 +123,7 @@ dropItemsOnDeath = true
 
 性格には `id`、`name`、`avatar`、`instructions`、`speakingStyle`、`goal`、`allowedSkills`、`workSpeechSeconds`、`nearbyConversationSeconds` を設定します。定期発言の `workSpeechSeconds` は30〜60秒、既定の性格は45秒です。`nearbyConversationSeconds` はNPC同士で会話相手を選ぶ間隔で15〜3600秒です。JSONの許可スキルに未知の名前は指定できません。
 
-追加の性格プリセットは、ホスト環境の `config/avatarcraftnpc/personalities/<id>.json` に配置します。GUIを開き直すと既定のタートブと有効な外部プリセットを最大12件読み込みます。ファイル名とJSONの `id` を一致させ、1ファイル16KiB以下にしてください。現在の性格JSONをコピーして `id`・`name`・`avatar`・話し方などを変更できます。追加モデルは各クライアントに別途必要です。
+追加の性格プリセットは、ホスト環境の `config/bep_3davater_companion/personalities/<id>.json` に配置します。GUIを開き直すと既定のtortobuと有効な外部プリセットを最大12件読み込みます。ファイル名とJSONの `id` を一致させ、1ファイル16KiB以下にしてください。現在の性格JSONをコピーして `id`・`name`・`avatar`・話し方などを変更できます。追加モデルは各クライアントに別途必要です。
 
 ## 近くのプレイヤーとの会話
 
@@ -157,9 +165,9 @@ dropItemsOnDeath = true
 
 近くのNPC同士は視線と距離を確認して会話します。待機中も含めて30〜60秒（既定45秒）ごとに、観察・検証済みの作業進捗・最近の会話から発言を生成します。プレイヤーから話しかけられたときの応答は別に扱います。発言の生成待ちやAPI接続の失敗で、取得済みの計画に沿ったローカル作業を止めません。発言はAIの応答時間や利用制限の影響を受けるため、表示までの時間を保証するものではありません。ワールドが一時停止している間はゲーム時間も進みません。
 
-所持品・装備・性格・所有者・アバター・指示・空腹状態・ローカル作業の残り手順をエンティティとともに保存します。切断時は作業を止め、再接続時は残りの作業を再開します。収納等で既に移動した個数は残数から差し引きます。会話と行動ログは各ワールドの `avatarcraftnpc/journal/<owner-uuid>/<npc-uuid>/` にJSONLで保存します。8MiB単位に分割し、過去ログを自動削除しません。バックアップにはこのフォルダも含めてください。
+所持品・装備・性格・所有者・アバター・指示・空腹状態・ローカル作業の残り手順をエンティティとともに保存します。切断時は作業を止め、再接続時は残りの作業を再開します。収納等で既に移動した個数は残数から差し引きます。会話と行動ログは各ワールドの `bep_3davater_companion/journal/<owner-uuid>/<npc-uuid>/` にJSONLで保存します。8MiB単位に分割し、過去ログを自動削除しません。バックアップにはこのフォルダも含めてください。
 
-## Framework API
+## Loader API
 
 共通MODの `dev.avatarcraft.api` は、クライアントに依存しない `AvatarActor`、`AvatarCatalog`、`AvatarAnimation` を提供します。Mobへ `AvatarActor` を実装し、CLIENT限定の登録処理で `AvatarActorRenderer` を登録すると、独立した表情・モーション・物理状態で描画できます。`avatarMining()` は採掘モーションの指定用です。クライアントの描画APIを専用サーバーの初期化コードから呼び出さないでください。
 

@@ -15,7 +15,7 @@ public final class NpcRoster extends SavedData {
   private final Map<UUID, Entry> entries = new LinkedHashMap<>();
   public static final SavedDataType<NpcRoster> TYPE =
       new SavedDataType<>(
-          NpcMod.id("roster"),
+          bep_3davater_companion.id("roster"),
           NpcRoster::new,
           Codec.STRING.xmap(NpcRoster::parse, NpcRoster::json));
 

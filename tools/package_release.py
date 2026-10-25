@@ -16,7 +16,12 @@ METADATA = json.loads((PACKAGE / "package.json").read_text(encoding="utf-8"))
 VERSION = METADATA["version"]
 if not re.fullmatch(r"\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?", VERSION):
     raise ValueError("Invalid package version")
-NAME = f"AvatarCraft-{VERSION}"
+MINECRAFT_VERSION = "26.3"
+MOD_VERSION = f"{MINECRAFT_VERSION}-{VERSION}"
+if not re.search(rf"^version = '{re.escape(MOD_VERSION)}'$",
+                 (ROOT / "build.gradle").read_text(encoding="utf-8"), re.MULTILINE):
+    raise ValueError("Gradle mod version must match Minecraft version + exporter version")
+NAME = f"BEP-3DAvater-{MOD_VERSION}"
 OUTPUT = ROOT / "PublishPackage"
 DEST = OUTPUT / NAME
 ARCHIVE = OUTPUT / f"{NAME}.zip"
@@ -26,40 +31,93 @@ def sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def verify_jar(data, npc=False):
+def verify_jar(data, role):
     with zipfile.ZipFile(io.BytesIO(data)) as jar:
         assert jar.testzip() is None
         toml = jar.read("META-INF/neoforge.mods.toml").decode("utf-8")
-        assert f'version="{VERSION}"' in toml
+        assert f'version="{MOD_VERSION}"' in toml
+        assert f'versionRange="[{MINECRAFT_VERSION}]"' in toml
+        if role != "loader":
+            assert f'versionRange="[{MOD_VERSION},' in toml
         assert 'license="All Rights Reserved"' in toml
-        required = "dev/avatarcraft/npc/ai/CodexBridge.class" if npc else "dev/avatarcraft/client/AvatarFirstPerson.class"
+        names = set(jar.namelist())
+        mod_id = f"bep_3davater_{role}"
+        declared_ids = re.findall(r'^modId="([^"]+)"', toml, re.MULTILINE)
+        assert declared_ids[0] == mod_id
+        entrypoint = {"loader": "dev/avatarcraft/bep_3davater_loader.class",
+                      "player": "dev/avatarcraft/player/bep_3davater_player.class",
+                      "companion": "dev/avatarcraft/npc/bep_3davater_companion.class"}[role]
+        assert entrypoint in names
+        dependencies = set(declared_ids[1:])
+        assert dependencies == ({"minecraft", "neoforge"} if role == "loader"
+                                else {"minecraft", "neoforge", "bep_3davater_loader"})
+        required = {"loader": "dev/avatarcraft/api/AvatarActor.class",
+                    "player": "dev/avatarcraft/player/client/AvatarFirstPerson.class",
+                    "companion": "dev/avatarcraft/npc/ai/CodexBridge.class"}[role]
         assert required in jar.namelist()
-        if npc:
-            assert 'modId="avatarcraftnpc"' in toml
+        if role == "companion":
+            assert 'modId="bep_3davater_companion"' in toml
             assert "dev/avatarcraft/api/AvatarActor.class" not in jar.namelist()
             for component in ("AvatarAnchorBlock", "AvatarAnchorBlockEntity", "NpcAnchors", "AnchorEditing"):
                 assert f"dev/avatarcraft/npc/{component}.class" in jar.namelist()
             assert "dev/avatarcraft/npc/client/AnchorScreen.class" in jar.namelist()
+            assert "dev/avatarcraft/npc/CompanionManagement.class" in names
+            assert "dev/avatarcraft/npc/client/CompanionSettingsScreen.class" in names
+            for component in ("AiModelScreen", "AiModelPickerScreen"):
+                assert f"dev/avatarcraft/npc/client/{component}.class" in names
+            for component in ("AiModelCatalog", "AiConnectionMethod"):
+                assert f"dev/avatarcraft/npc/ai/{component}.class" in names
+            assert b"dev/avatarcraft/npc/NpcNetwork" not in jar.read("dev/avatarcraft/npc/client/AiModelScreen.class")
             for component in ("ToolProgram", "ToolSchedule", "NpcToolQueue", "BlueprintSpec", "NpcConstruction", "NpcBlueprints"):
                 assert f"dev/avatarcraft/npc/ai/{component}.class" in jar.namelist()
             assert "dev/avatarcraft/npc/client/BlueprintPreview.class" in jar.namelist()
-            anchor_texture = "assets/avatarcraftnpc/textures/block/avatar_anchor.png"
+            anchor_texture = "assets/bep_3davater_companion/textures/block/avatar_anchor.png"
             assert jar.read(anchor_texture) == (ROOT / "src/npc/resources" / anchor_texture).read_bytes()
             for recipe, center in (("avatar_anchor", "#minecraft:planks"), ("memory_journal", "minecraft:book")):
-                data = json.loads(jar.read(f"data/avatarcraftnpc/recipe/{recipe}.json"))
+                data = json.loads(jar.read(f"data/bep_3davater_companion/recipe/{recipe}.json"))
                 assert data["type"] == "minecraft:crafting_shaped"
                 assert data["pattern"] == ["III", "ICI", "III"]
                 assert data["key"] == {"I": "minecraft:iron_ingot", "C": center}
-                assert data["result"] == {"id": f"avatarcraftnpc:{recipe}", "count": 1}
-        else:
+                assert data["result"] == {"id": f"bep_3davater_companion:{recipe}", "count": 1}
+            personality = json.loads(jar.read("data/bep_3davater_companion/personalities/tortobu.json"))
+            assert personality["name"] == "tortobu"
+            assert personality["avatar"] == "tortobu"
+            assert "ぼく" in personality["speakingStyle"] and "おっとり" in personality["instructions"]
+            assert "dev/avatarcraft/player/client/AvatarRenderer.class" not in names
+            assert not any(n.startswith("dev/avatarcraft/player/multiplayer/") for n in names)
+        elif role == "loader":
             assert "dev/avatarcraft/api/AvatarActor.class" in jar.namelist()
             assert "dev/avatarcraft/avatar/SurfaceAtlas.class" in jar.namelist()
-            assert "dev/avatarcraft/multiplayer/PrivateAvatarHub.class" in jar.namelist()
-            assert "dev/avatarcraft/client/ShareClient.class" in jar.namelist()
-            assert jar.read("assets/avatarcraft/surface.json") == (PACKAGE / "Editor/Resources/AvatarCraft/surface.json").read_bytes()
+            assert "dev/avatarcraft/api/ExpressionKeys.class" in names
+            for component in ("SeriesTabs", "SeriesScreen", "ExpressionJsonScreen", "ControlList", "ModelList"):
+                assert f"dev/avatarcraft/client/{component}.class" in names
+            assert "dev/avatarcraft/avatar/ExpressionShapes.class" in names
+            assert jar.read("assets/bep_3davater_loader/surface.json") == (PACKAGE / "Editor/Resources/AvatarCraft/surface.json").read_bytes()
             for include in ("surface_textures", "surface_common", "surface_effects"):
-                assert f"assets/avatarcraft/shaders/include/{include}.glsl" in jar.namelist()
+                assert f"assets/bep_3davater_loader/shaders/include/{include}.glsl" in jar.namelist()
             assert not any(n.startswith("dev/avatarcraft/npc/") for n in jar.namelist())
+            assert not any(n.startswith(("dev/avatarcraft/player/", "dev/avatarcraft/player/multiplayer/")) for n in names)
+            assert "dev/avatarcraft/player/client/AvatarFirstPerson.class" not in names
+            assert "dev/avatarcraft/player/client/AvatarRenderer.class" not in names
+            assert "dev/avatarcraft/player/client/ShareClient.class" not in names
+        else:
+            assert "dev/avatarcraft/player/client/PlayerModelScreen.class" in names
+            assert "dev/avatarcraft/player/multiplayer/PrivateAvatarHub.class" in names
+            assert "dev/avatarcraft/player/client/ShareClient.class" in names
+            assert "dev/avatarcraft/api/AvatarActor.class" not in names
+            assert not any(n.startswith("dev/avatarcraft/npc/") for n in names)
+        bundled = [n for n in names if n.endswith(".avc")]
+        assert bundled == (["assets/bep_3davater_loader/avatars/tortobu.avc"] if role == "loader" else [])
+        for name in names:
+            if name.endswith(".class"):
+                bytecode = jar.read(name)
+                if role == "loader":
+                    assert b"dev/avatarcraft/npc/" not in bytecode and b"dev/avatarcraft/player/" not in bytecode, name
+                    assert b"dev/avatarcraft/player/multiplayer/" not in bytecode, name
+                elif role == "companion":
+                    assert b"dev/avatarcraft/player/" not in bytecode, name
+                else:
+                    assert b"dev/avatarcraft/npc/" not in bytecode, name
         assert all(not n.startswith(("net/minecraft/", "net/neoforged/")) for n in jar.namelist())
 
 
@@ -79,6 +137,7 @@ def make_upm(destination):
                     info.size, info.mode, info.mtime = len(data), 0o644, 0
                     tar.addfile(info, io.BytesIO(data))
                 for name, source in (("README.md", ROOT / "release/README_ja.md"),
+                                     ("README_EN.md", ROOT / "release/Export_en.md"),
                                      ("LICENSE.txt", ROOT / "release/LICENSE.txt")):
                     data = source.read_bytes()
                     info = tarfile.TarInfo(f"package/{name}")
@@ -97,15 +156,27 @@ def make_upm(destination):
         library = json.loads(packed["package/Editor/Resources/AvatarCraft/motions.json"])
         assert library
         assert METADATA["dependencies"]["com.unity.nuget.newtonsoft-json"] == "3.2.1"
+        assert METADATA["displayName"] == "B.E.P 3DAvater Exporter"
+        assert packed["package/README_EN.md"] == (ROOT / "release/Export_en.md").read_bytes()
 
 
 def main():
     if DEST.exists() or ARCHIVE.exists():
         raise FileExistsError(f"Release already exists: {NAME}; preserve it or use a new version")
-    jar_source = ROOT / f"build/libs/avatarcraft-{VERSION}.jar"
-    npc_source = ROOT / f"build/libs/avatarcraft-npc-{VERSION}.jar"
-    verify_jar(jar_source.read_bytes())
-    verify_jar(npc_source.read_bytes(), npc=True)
+    jar_source = ROOT / f"build/libs/bep_3davater_loader-{MOD_VERSION}.jar"
+    player_source = ROOT / f"build/libs/bep_3davater_player-{MOD_VERSION}.jar"
+    npc_source = ROOT / f"build/libs/bep_3davater_companion-{MOD_VERSION}.jar"
+    seen_classes = set()
+    seen_packages = set()
+    for role, source in (("loader", jar_source), ("player", player_source), ("companion", npc_source)):
+        verify_jar(source.read_bytes(), role)
+        with zipfile.ZipFile(source) as jar:
+            classes = {n for n in jar.namelist() if n.endswith(".class")}
+            assert not (classes & seen_classes), "Duplicate classes across mods"
+            seen_classes.update(classes)
+            packages = {n.rsplit("/", 1)[0] for n in classes}
+            assert not (packages & seen_packages), "Split Java packages across mods"
+            seen_packages.update(packages)
     OUTPUT.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".avatarcraft-", dir=OUTPUT) as temporary:
         stage = Path(temporary) / NAME
@@ -114,10 +185,17 @@ def main():
         (stage / "Docs").mkdir()
         shutil.copy2(jar_source, stage / "Minecraft/mods" / jar_source.name)
         shutil.copy2(npc_source, stage / "Minecraft/mods" / npc_source.name)
+        shutil.copy2(player_source, stage / "Minecraft/mods" / player_source.name)
+        (stage / "Examples/Personalities").mkdir(parents=True)
+        shutil.copy2(ROOT / "src/npc/resources/data/bep_3davater_companion/personalities/tortobu.json",
+                     stage / "Examples/Personalities/tortobu.json")
         for name in ("README_ja.md", "CHANGELOG_ja.md", "LICENSE.txt", "Tortobu_Notice_ja.md"):
             shutil.copy2(ROOT / "release" / name, stage / name)
         shutil.copy2(ROOT / "release/Guide_ja.md", stage / "Docs/Guide_ja.md")
+        shutil.copy2(ROOT / "release/Expression_API_ja.md", stage / "Docs/Expression_API_ja.md")
+        shutil.copy2(ROOT / "release/Export_en.md", stage / "Docs/Export_en.md")
         shutil.copy2(ROOT / "release/NPC_Guide_ja.md", stage / "Docs/NPC_Guide_ja.md")
+        shutil.copy2(ROOT / "release/AI_Settings_ja.md", stage / "Docs/AI_Settings_ja.md")
         shutil.copy2(ROOT / "release/NPC_LocalAI_ja.md", stage / "Docs/NPC_LocalAI_ja.md")
         shutil.copy2(ROOT / "release/NPC_Tools_ja.md", stage / "Docs/NPC_Tools_ja.md")
         shutil.copy2(ROOT / "release/LilToon_ja.md", stage / "Docs/LilToon_ja.md")
@@ -128,20 +206,24 @@ def main():
                 assert not re.search(r"clonka|yilnel", document.read_text(encoding="utf-8"), re.IGNORECASE), document
         files = [{"path": p.relative_to(stage).as_posix(), "size": p.stat().st_size,
                   "sha256": sha(p.read_bytes())} for p in sorted(stage.rglob("*")) if p.is_file()]
-        manifest = {"name": "AvatarCraft", "version": VERSION,
-                    "minecraft": "26.3", "neoforgeTested": "26.3.0.95", "java": 25,
+        manifest = {"name": "B.E.P 3DAvater", "version": MOD_VERSION,
+                    "exporterVersion": VERSION,
+                    "minecraft": MINECRAFT_VERSION, "neoforgeTested": "26.3.0.95", "java": 25,
                     "unityTested": "2022.3.22f1", "license": "All Rights Reserved",
                     "includesAvatarAssets": True, "files": files}
-        manifest["mods"] = [{"id": "avatarcraft", "role": "framework"}, {"id": "avatarcraftnpc", "role": "optional NPC submod"}]
-        with zipfile.ZipFile(npc_source) as npc_jar:
-            bundled = [n for n in npc_jar.namelist() if n.lower().endswith(".avc")]
-            assert bundled == ["assets/avatarcraftnpc/avatars/tortobu.avc"], bundled
-            avatar_data = npc_jar.read(bundled[0])
+        manifest["mods"] = [{"id": f"bep_3davater_{role}", "role": role,
+                              "requires": [] if role == "loader" else ["bep_3davater_loader"]}
+                             for role in ("loader", "player", "companion")]
+        with zipfile.ZipFile(jar_source) as loader_jar:
+            bundled = [n for n in loader_jar.namelist() if n.lower().endswith(".avc")]
+            assert bundled == ["assets/bep_3davater_loader/avatars/tortobu.avc"], bundled
+            avatar_data = loader_jar.read(bundled[0])
             with zipfile.ZipFile(io.BytesIO(avatar_data)) as model:
                 model_info = json.loads(model.read("avatar.json"))
                 assert model_info["name"] == "tortobu"
-            assert not any("clonka" in n or "yilnel" in n for n in npc_jar.namelist())
-            manifest["bundledAvatars"] = [{"id": "tortobu", "name": "タートブ", "author": "aoi_nasuko", "entry": bundled[0], "sha256": sha(avatar_data)}]
+            assert avatar_data == (ROOT / "src/main/resources" / bundled[0]).read_bytes()
+            assert not any("clonka" in n or "yilnel" in n for n in loader_jar.namelist())
+            manifest["bundledAvatars"] = [{"id": "tortobu", "name": "tortobu", "author": "aoi_nasuko", "mod": "bep_3davater_loader", "entry": bundled[0], "sha256": sha(avatar_data)}]
         manifest["privatePlayerAvatarSync"] = {"protocol": "private-1", "ownerOnly": True, "cipher": "AES-256-GCM", "keyEnvelope": "RSA-OAEP-SHA256", "maxEncryptedBytes": 67108864}
         manifest["codexTested"] = "0.163.0"
         manifest["npcAuthentication"] = "Host-only Codex OAuth, OpenAI-compatible API, or Anthropic-compatible API"

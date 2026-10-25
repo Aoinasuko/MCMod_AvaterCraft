@@ -84,10 +84,10 @@ public final class LocalActionPolicy {
   private static LocalActionPolicy load() {
     try (var meta =
             LocalActionPolicy.class.getResourceAsStream(
-                "/data/avatarcraftnpc/ai/action-policy.json");
+                "/data/bep_3davater_companion/ai/action-policy.json");
         var weights =
             LocalActionPolicy.class.getResourceAsStream(
-                "/data/avatarcraftnpc/ai/action-policy.bin")) {
+                "/data/bep_3davater_companion/ai/action-policy.bin")) {
       if (meta == null || weights == null) throw new IOException("Missing local policy");
       return new LocalActionPolicy(
           new String(meta.readNBytes(65537), StandardCharsets.UTF_8),

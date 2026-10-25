@@ -5,7 +5,7 @@ run/
 run-npc-qa/
 out/
 *.avc
-!src/npc/resources/assets/avatarcraftnpc/avatars/tortobu.avc
+!src/main/resources/assets/bep_3davater_loader/avatars/tortobu.avc
 .idea/
 *.iml
 __pycache__/
@@ -15,9 +15,17 @@ tools/unity-tools.json
 PublishPackage/
 Docs/
 **/avatarcraft-private-cache/
-**/avatarcraft/remote-cache/
+**/bep_3davater_loader/remote-cache/
 
 run-npc-complex-qa/
 run-anchor-qa/
 run-anchor-ui-qa/
 run-area-qa/
+run-player-qa/
+run-loader-qa/
+run-player-client-qa/
+run-companion-client-qa/
+run-loader-server-qa/
+run-series-client-qa/
+run-ai-settings-qa/
+run-ai-settings-client-qa/

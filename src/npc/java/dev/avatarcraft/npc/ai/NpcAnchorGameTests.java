@@ -34,14 +34,14 @@ final class NpcAnchorGameTests {
   }
 
   private static void test(RegisterGameTestsEvent e, String name, Consumer<GameTestHelper> run) {
-    var env = e.registerEnvironment(NpcMod.id(name), new TestEnvironmentDefinition.AllOf());
+    var env = e.registerEnvironment(bep_3davater_companion.id(name), new TestEnvironmentDefinition.AllOf());
     e.registerTest(
-        NpcMod.id(name),
+        bep_3davater_companion.id(name),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
             new TestData<>(
                 env,
-                NpcMod.id("qa_complex"),
+                bep_3davater_companion.id("qa_complex"),
                 Boolean.getBoolean("avatarcraft.anchorLive") ? 200000 : 7200,
                 1,
                 true)) {
@@ -64,7 +64,7 @@ final class NpcAnchorGameTests {
   }
 
   private static CompanionEntity npc(GameTestHelper h, ServerPlayer owner) {
-    var n = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+    var n = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
     n.initialize(owner, "tortobu");
     n.setFollowsOwner(false);
     n.setPos(Vec3.atBottomCenterOf(p(h, 3, 5)));
@@ -73,7 +73,7 @@ final class NpcAnchorGameTests {
   }
 
   private static AvatarAnchorBlockEntity anchor(GameTestHelper h, int x, int z, String id) {
-    h.setBlock(x, 1, z, NpcMod.AVATAR_ANCHOR.get());
+    h.setBlock(x, 1, z, bep_3davater_companion.AVATAR_ANCHOR.get());
     var b = (AvatarAnchorBlockEntity) h.getLevel().getBlockEntity(p(h, x, z));
     b.setAnchorId(id);
     return b;
@@ -166,7 +166,7 @@ final class NpcAnchorGameTests {
     n.inventory.setItem(2, new ItemStack(Items.BOOK));
     var s = new NpcSkills(n, (t, id) -> {});
     h.assertTrue(
-        s.execute("craft", object("recipe", "avatarcraftnpc:avatar_anchor"))
+        s.execute("craft", object("recipe", "bep_3davater_companion:avatar_anchor"))
             .toCompletableFuture()
             .join()
             .get("ok")
@@ -174,10 +174,10 @@ final class NpcAnchorGameTests {
         "Anchor crafts from any planks plus 8 iron");
     h.assertTrue(
         count(n.inventory, Items.IRON_INGOT) == 8
-            && count(n.inventory, NpcMod.ANCHOR_ITEM.get()) == 1,
+            && count(n.inventory, bep_3davater_companion.ANCHOR_ITEM.get()) == 1,
         "Anchor consumed exactly 8 iron");
     h.assertTrue(
-        s.execute("craft", object("recipe", "avatarcraftnpc:memory_journal"))
+        s.execute("craft", object("recipe", "bep_3davater_companion:memory_journal"))
             .toCompletableFuture()
             .join()
             .get("ok")
@@ -186,7 +186,7 @@ final class NpcAnchorGameTests {
     h.assertTrue(
         count(n.inventory, Items.IRON_INGOT) == 0
             && count(n.inventory, Items.BOOK) == 0
-            && count(n.inventory, NpcMod.MEMORY_JOURNAL.get()) == 1,
+            && count(n.inventory, bep_3davater_companion.MEMORY_JOURNAL.get()) == 1,
         "Journal consumed 8 iron and one book");
     n.discard();
     h.succeed();
@@ -367,13 +367,13 @@ final class NpcAnchorGameTests {
           s.tick();
           if (result.isDone()) {
             boolean dropped =
-                count(n.inventory, NpcMod.ANCHOR_ITEM.get()) == 1
+                count(n.inventory, bep_3davater_companion.ANCHOR_ITEM.get()) == 1
                     || h
                             .getLevel()
                             .getEntitiesOfClass(
                                 net.minecraft.world.entity.item.ItemEntity.class,
                                 new net.minecraft.world.phys.AABB(p).inflate(2),
-                                e -> e.getItem().is(NpcMod.ANCHOR_ITEM.get()))
+                                e -> e.getItem().is(bep_3davater_companion.ANCHOR_ITEM.get()))
                             .stream()
                             .mapToInt(e -> e.getItem().getCount())
                             .sum()

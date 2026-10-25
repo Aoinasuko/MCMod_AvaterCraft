@@ -78,4 +78,9 @@ public final class CodexConfig implements Cloneable {
   public String planningModel() {
     return complexModel.isBlank() ? model : complexModel;
   }
+
+  public CodexConfig copy() {
+    try { return (CodexConfig) super.clone(); }
+    catch (CloneNotSupportedException e) { throw new AssertionError(e); }
+  }
 }

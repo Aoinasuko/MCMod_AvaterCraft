@@ -132,7 +132,7 @@ final class NpcSurvival implements AutoCloseable {
         if (activeStep != null
             && (activeStep.action().equals("move_to")
                 || activeStep.action().equals("tool")
-                    && activeStep.target().equals("avatarcraftnpc:move_precisely"))
+                    && activeStep.target().equals("bep_3davater_companion:move_precisely"))
             && rejectedApproaches.size() < 12) {
           rejectedApproaches.add(
               activeStep.action().equals("tool")
@@ -581,7 +581,7 @@ final class NpcSurvival implements AutoCloseable {
     if (npc.distanceToSqr(at) < 64) {
       return new TaskPlan.Step(
           "tool",
-          "avatarcraftnpc:move_precisely",
+          "bep_3davater_companion:move_precisely",
           "",
           1,
           -1,

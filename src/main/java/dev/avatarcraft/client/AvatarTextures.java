@@ -38,14 +38,14 @@ public final class AvatarTextures implements AutoCloseable {
             } else image = NativeImage.read(new ByteArrayInputStream(archive.images().get(entry)));
             var id =
                 Identifier.fromNamespaceAndPath(
-                    "avatarcraft",
+                    "bep_3davater_loader",
                     prefix
                         + "/"
                         + UUID.nameUUIDFromBytes(
                             key.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
             Minecraft.getInstance()
                 .getTextureManager()
-                .register(id, new DynamicTexture(() -> "AvatarCraft " + key, image));
+                .register(id, new DynamicTexture(() -> "bep_3davater_loader " + key, image));
             return id;
           } catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -70,15 +70,15 @@ public final class AvatarTextures implements AutoCloseable {
               for (int x = 0; x < pixels.getWidth(); x++) image.setPixel(x, y, pixels.getRGB(x, y));
             var id =
                 Identifier.fromNamespaceAndPath(
-                    "avatarcraft", prefix + "/surface_" + surfaces.size());
+                    "bep_3davater_loader", prefix + "/surface_" + surfaces.size());
             Minecraft.getInstance()
                 .getTextureManager()
-                .register(id, new DynamicTexture(() -> "AvatarCraft material atlas", image));
+                .register(id, new DynamicTexture(() -> "bep_3davater_loader material atlas", image));
             ids.put("surface:" + surfaces.size(), id);
             var uniforms = SurfaceAtlas.uniforms(mat, atlas);
             pixels.flush();
             if (atlas.reduced())
-              System.getLogger("AvatarCraft")
+              System.getLogger("bep_3davater_loader")
                   .log(
                       System.Logger.Level.WARNING,
                       "Reduced auxiliary textures to fit 4096px atlas: " + mat.name);

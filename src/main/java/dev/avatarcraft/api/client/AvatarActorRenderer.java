@@ -29,6 +29,7 @@ public class AvatarActorRenderer<T extends Mob & AvatarActor>
     public boolean inventoryPreview;
     AvatarActorVisual visual;
     MotionSignals signals;
+    java.util.List<String> expressionKeys = java.util.List.of();
   }
 
   private record Cached(AvatarActorVisual visual, int entityId) {}
@@ -94,7 +95,7 @@ public class AvatarActorRenderer<T extends Mob & AvatarActor>
     var entry = AvatarLibrary.resolve(entity.avatarId());
     if (Boolean.getBoolean("avatarcraft.qa")
         && diagnosed.add(entity.getUUID() + ":" + entity.avatarId()))
-      System.getLogger("AvatarCraft QA")
+      System.getLogger("bep_3davater_loader QA")
           .log(
               System.Logger.Level.INFO,
               "Actor avatar "
@@ -162,6 +163,7 @@ public class AvatarActorRenderer<T extends Mob & AvatarActor>
             default -> "use";
           };
     frame.signals = signals;
+    frame.expressionKeys = java.util.List.copyOf(entity.avatarExpressionKeys());
   }
 
   @Override
@@ -185,9 +187,12 @@ public class AvatarActorRenderer<T extends Mob & AvatarActor>
       frame.signals.headYaw = state.yRot;
       frame.signals.headPitch = state.xRot;
     }
-    if (frame.visual != null) frame.visual.submit(state, frame.signals, stack, collector);
+    if (frame.visual != null) {
+      frame.visual.animation.expressionKeys.set(state.inventoryPreview ? java.util.List.of() : frame.expressionKeys);
+      frame.visual.submit(state, frame.signals, stack, collector);
+    }
     if (Boolean.getBoolean("avatarcraft.qa") && diagnosed.add("submit:" + state.id))
-      System.getLogger("AvatarCraft QA")
+      System.getLogger("bep_3davater_loader QA")
           .log(
               System.Logger.Level.INFO,
               "Actor submit visual="
@@ -203,7 +208,7 @@ public class AvatarActorRenderer<T extends Mob & AvatarActor>
   protected RenderType getRenderType(
       ActorRenderState state, boolean visible, boolean transparent, boolean glowing) {
     if (Boolean.getBoolean("avatarcraft.qa") && diagnosed.add("body:" + state.id))
-      System.getLogger("AvatarCraft QA")
+      System.getLogger("bep_3davater_loader QA")
           .log(
               System.Logger.Level.INFO,
               "Actor body visual="

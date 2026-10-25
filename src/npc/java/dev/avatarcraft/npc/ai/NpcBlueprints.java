@@ -29,7 +29,7 @@ public final class NpcBlueprints extends SavedData {
   private static final Map<String, String> SENT = new HashMap<>();
   public static final SavedDataType<NpcBlueprints> TYPE =
       new SavedDataType<>(
-          NpcMod.id("blueprints"),
+          bep_3davater_companion.id("blueprints"),
           NpcBlueprints::new,
           Codec.STRING.xmap(NpcBlueprints::parse, d -> GSON.toJson(d.plans)));
 

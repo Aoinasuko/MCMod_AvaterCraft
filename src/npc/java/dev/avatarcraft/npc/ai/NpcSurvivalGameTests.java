@@ -13,102 +13,102 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 final class NpcSurvivalGameTests {
   static void register(RegisterGameTestsEvent event) {
     var env =
-        event.registerEnvironment(NpcMod.id("survival_qa"), new TestEnvironmentDefinition.AllOf());
+        event.registerEnvironment(bep_3davater_companion.id("survival_qa"), new TestEnvironmentDefinition.AllOf());
     event.registerTest(
-        NpcMod.id("partial_ground_materials_continue_acquisition"),
+        bep_3davater_companion.id("partial_ground_materials_continue_acquisition"),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(env, NpcMod.id("qa_empty"), 2000, 1, true)) {
+            new TestData<>(env, bep_3davater_companion.id("qa_empty"), 2000, 1, true)) {
           public void run(GameTestHelper h) {
             partialMaterials(h);
           }
         });
     event.registerTest(
-        NpcMod.id("empty_hands_to_iron_pickaxe"),
+        bep_3davater_companion.id("empty_hands_to_iron_pickaxe"),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(env, NpcMod.id("qa_large"), 16000, 1, true)) {
+            new TestData<>(env, bep_3davater_companion.id("qa_large"), 16000, 1, true)) {
           public void run(GameTestHelper h) {
             emptyHands(h);
           }
         });
     event.registerTest(
-        NpcMod.id("vanilla_furnace_batch"),
+        bep_3davater_companion.id("vanilla_furnace_batch"),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(env, NpcMod.id("qa_empty"), 1500, 1, true)) {
+            new TestData<>(env, bep_3davater_companion.id("qa_empty"), 1500, 1, true)) {
           public void run(GameTestHelper h) {
             smelting(h);
           }
         });
     event.registerTest(
-        NpcMod.id("cooperative_empty_hands_diamond_storage"),
+        bep_3davater_companion.id("cooperative_empty_hands_diamond_storage"),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(env, NpcMod.id("qa_large"), 22000, 1, true)) {
+            new TestData<>(env, bep_3davater_companion.id("qa_large"), 22000, 1, true)) {
           public void run(GameTestHelper h) {
             teamDiamond(h);
           }
         });
     event.registerTest(
-        NpcMod.id("bow_charge_and_inventory"),
+        bep_3davater_companion.id("bow_charge_and_inventory"),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(env, NpcMod.id("qa_empty"), 300, 1, true)) {
+            new TestData<>(env, bep_3davater_companion.id("qa_empty"), 300, 1, true)) {
           public void run(GameTestHelper h) {
             bow(h);
           }
         });
     event.registerTest(
-        NpcMod.id("insert_real_eye_in_frame"),
+        bep_3davater_companion.id("insert_real_eye_in_frame"),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(env, NpcMod.id("qa_empty"), 100, 1, true)) {
+            new TestData<>(env, bep_3davater_companion.id("qa_empty"), 100, 1, true)) {
           public void run(GameTestHelper h) {
             eye(h);
           }
         });
     event.registerTest(
-        NpcMod.id("real_nether_portal_travel"),
+        bep_3davater_companion.id("real_nether_portal_travel"),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(env, NpcMod.id("qa_empty"), 1800, 1, true)) {
+            new TestData<>(env, bep_3davater_companion.id("qa_empty"), 1800, 1, true)) {
           public void run(GameTestHelper h) {
             portal(h);
           }
         });
     event.registerTest(
-        NpcMod.id("persistent_chunk_square_and_overlap"),
+        bep_3davater_companion.id("persistent_chunk_square_and_overlap"),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(env, NpcMod.id("qa_large"), 150, 1, true)) {
+            new TestData<>(env, bep_3davater_companion.id("qa_large"), 150, 1, true)) {
           public void run(GameTestHelper h) {
             chunks(h);
           }
         });
     event.registerTest(
-        NpcMod.id("companion_damage_can_hurt_dragon"),
+        bep_3davater_companion.id("companion_damage_can_hurt_dragon"),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(env, NpcMod.id("qa_empty"), 100, 1, true)) {
+            new TestData<>(env, bep_3davater_companion.id("qa_empty"), 100, 1, true)) {
           public void run(GameTestHelper h) {
             boss(h);
           }
         });
     event.registerTest(
-        NpcMod.id("new_chest_binds_return_storage"),
+        bep_3davater_companion.id("new_chest_binds_return_storage"),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(env, NpcMod.id("qa_empty"), 500, 1, true)) {
+            new TestData<>(env, bep_3davater_companion.id("qa_empty"), 500, 1, true)) {
           public void run(GameTestHelper h) {
             newStorage(h);
           }
         });
     event.registerTest(
-        NpcMod.id("team_claim_and_saved_work_roundtrip"),
+        bep_3davater_companion.id("team_claim_and_saved_work_roundtrip"),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(env, NpcMod.id("qa_empty"), 100, 1, true)) {
+            new TestData<>(env, bep_3davater_companion.id("qa_empty"), 100, 1, true)) {
           public void run(GameTestHelper h) {
             teamState(h);
           }
@@ -118,7 +118,7 @@ final class NpcSurvivalGameTests {
   private static CompanionEntity npc(GameTestHelper h, int x, int y, int z) {
     var owner = h.makeMockServerPlayerInLevel();
     owner.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(x + 1, y, z))));
-    var n = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+    var n = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
     n.initialize(owner, "tortobu");
     n.setFollowsOwner(false);
     n.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(x, y, z))));
@@ -142,7 +142,7 @@ final class NpcSurvivalGameTests {
     var place =
         new TaskPlan.Step(
             "tool",
-            "avatarcraftnpc:place_workstation",
+            "bep_3davater_companion:place_workstation",
             "",
             1,
             -1,
@@ -186,7 +186,7 @@ final class NpcSurvivalGameTests {
     for (int x = 0; x < 12; x++) for (int z = 0; z < 12; z++) h.setBlock(x, 0, z, Blocks.STONE);
     var leader = npc(h, 4, 1, 4);
     var owner = h.getLevel().getServer().getPlayerList().getPlayer(leader.ownerId());
-    var worker = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+    var worker = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
     worker.initialize(owner, "tortobu");
     worker.setPos(leader.position().add(2, 0, 0));
     worker.setFollowsOwner(false);
@@ -330,7 +330,7 @@ final class NpcSurvivalGameTests {
     h.setBlock(6, 8, 8, Blocks.CHEST);
     var leader = npc(h, 7, 8, 9);
     var owner = h.getLevel().getServer().getPlayerList().getPlayer(leader.ownerId());
-    var worker = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+    var worker = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
     worker.initialize(owner, "tortobu");
     worker.setFollowsOwner(false);
     worker.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(9, 8, 9))));
@@ -469,7 +469,7 @@ final class NpcSurvivalGameTests {
     var step =
         new TaskPlan.Step(
             "tool",
-            "avatarcraftnpc:travel_dimension",
+            "bep_3davater_companion:travel_dimension",
             "",
             1,
             -1,
@@ -483,7 +483,7 @@ final class NpcSurvivalGameTests {
     var light =
         new TaskPlan.Step(
             "tool",
-            "avatarcraftnpc:use_on_block",
+            "bep_3davater_companion:use_on_block",
             "",
             1,
             -1,
@@ -575,7 +575,7 @@ final class NpcSurvivalGameTests {
                 .equals(NpcChunkLoading.square(n.chunkPosition().x(), n.chunkPosition().z())))
               return;
             var owner = h.getLevel().getServer().getPlayerList().getPlayer(n.ownerId());
-            second[0] = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+            second[0] = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
             second[0].initialize(owner, "tortobu");
             second[0].setFollowsOwner(false);
             second[0].setPos(n.position().add(1, 0, 0));

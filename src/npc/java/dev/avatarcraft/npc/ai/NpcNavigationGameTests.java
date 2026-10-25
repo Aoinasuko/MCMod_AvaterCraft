@@ -17,7 +17,7 @@ final class NpcNavigationGameTests {
   static void register(RegisterGameTestsEvent event) {
     var env =
         event.registerEnvironment(
-            NpcMod.id("navigation_128_qa"), new TestEnvironmentDefinition.AllOf());
+            bep_3davater_companion.id("navigation_128_qa"), new TestEnvironmentDefinition.AllOf());
     test(event, env, "walk_140_blocks_with_two_reserved_legs", NpcNavigationGameTests::reserved);
     test(event, env, "walk_128_blocks_without_edits", h -> travel(h, false, false));
     test(event, env, "wide_detour_precedes_work_route_edits", h -> travel(h, true, false));
@@ -33,10 +33,10 @@ final class NpcNavigationGameTests {
       String name,
       Consumer<GameTestHelper> body) {
     event.registerTest(
-        NpcMod.id(name),
+        bep_3davater_companion.id(name),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(env, NpcMod.id("qa_navigation"), 6000, 1, true)) {
+            new TestData<>(env, bep_3davater_companion.id("qa_navigation"), 6000, 1, true)) {
           public void run(GameTestHelper h) {
             body.accept(h);
           }
@@ -47,7 +47,7 @@ final class NpcNavigationGameTests {
     for (int x = 0; x < 152; x++) for (int z = 0; z < 80; z++) h.setBlock(x, 0, z, Blocks.BEDROCK);
     var owner = h.makeMockServerPlayerInLevel();
     owner.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(3, 1, 3))));
-    var n = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+    var n = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
     n.initialize(owner, "tortobu");
     n.setFollowsOwner(false);
     n.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(8, 1, 40))));

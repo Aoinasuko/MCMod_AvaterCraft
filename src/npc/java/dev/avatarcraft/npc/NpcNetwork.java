@@ -13,10 +13,10 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
-/** All edits require the owner's currently open, valid menu; journal reads require its item. */
+/** Inventory/task edits require the owner's menu. Series appearance edits check server ownership by UUID. */
 public final class NpcNetwork {
   public record Request(int entity, String action, String data) implements CustomPacketPayload {
-    public static final Type<Request> TYPE = new Type<>(NpcMod.id("request"));
+    public static final Type<Request> TYPE = new Type<>(bep_3davater_companion.id("request"));
     public static final StreamCodec<RegistryFriendlyByteBuf, Request> CODEC =
         StreamCodec.of(
             (b, p) -> {
@@ -32,7 +32,7 @@ public final class NpcNetwork {
   }
 
   public record Response(int entity, String action, String data) implements CustomPacketPayload {
-    public static final Type<Response> TYPE = new Type<>(NpcMod.id("response"));
+    public static final Type<Response> TYPE = new Type<>(bep_3davater_companion.id("response"));
     public static final StreamCodec<RegistryFriendlyByteBuf, Response> CODEC =
         StreamCodec.of(
             (b, p) -> {
@@ -72,6 +72,35 @@ public final class NpcNetwork {
     LIMITS.put(player.getUUID(), new Window(count == 1 ? tick : old.tick, count));
     if (count > 8) return;
     try {
+      if (request.action.equals("series_list")) {
+        reply(player, -1, "series_list", CompanionManagement.list(player, Integer.parseInt(request.data)).toString());
+        return;
+      }
+      if (request.action.equals("series_open") || request.action.equals("series_save")) {
+        var data = JsonParser.parseString(request.data).getAsJsonObject();
+        UUID id = UUID.fromString(data.get("id").getAsString());
+        try {
+          var result = request.action.equals("series_save")
+              ? CompanionManagement.save(player, id, data.get("personality").toString())
+              : CompanionManagement.profile(player, id);
+          reply(player, -1, request.action.equals("series_save") ? "series_saved" : "series_profile", result.toString());
+        } catch (IllegalArgumentException e) {
+          reply(player, -1, "series_error", "NPCを操作できません。所有者と読込状態を確認してください");
+        }
+        return;
+      }
+      if (request.action.equals("series_profiles")) {
+        NpcService.get(player.level().getServer()).readJournal(() -> {
+          var values = new JsonArray();
+          for (var profile : PersonalityCatalog.load(net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get()
+              .resolve("bep_3davater_companion/personalities"))) values.add(JsonParser.parseString(profile.json()));
+          return values.toString();
+        }).whenComplete((data, error) -> player.level().getServer().execute(() -> {
+          if (!player.hasDisconnected()) reply(player, -1, error == null ? "series_profiles" : "series_error",
+              error == null ? data : "性格一覧を読み込めません");
+        }));
+        return;
+      }
       if (request.action.equals("anchor_save")) {
         reply(
             player,
@@ -120,7 +149,7 @@ public final class NpcNetwork {
                       PersonalityCatalog.load(
                           net.neoforged.fml.loading.FMLPaths.CONFIGDIR
                               .get()
-                              .resolve("avatarcraftnpc/personalities")))
+                              .resolve("bep_3davater_companion/personalities")))
                     values.add(JsonParser.parseString(profile.json()));
                   return values.toString();
                 })
@@ -156,7 +185,7 @@ public final class NpcNetwork {
 
   private static boolean holdingJournal(ServerPlayer player) {
     for (var hand : InteractionHand.values())
-      if (player.getItemInHand(hand).is(NpcMod.MEMORY_JOURNAL.get())) return true;
+      if (player.getItemInHand(hand).is(bep_3davater_companion.MEMORY_JOURNAL.get())) return true;
     return false;
   }
 
@@ -171,7 +200,7 @@ public final class NpcNetwork {
 
   public static boolean holdingRecallMap(ServerPlayer player) {
     for (var hand : InteractionHand.values())
-      if (player.getItemInHand(hand).is(NpcMod.RECALL_MAP.get())) return true;
+      if (player.getItemInHand(hand).is(bep_3davater_companion.RECALL_MAP.get())) return true;
     return false;
   }
 

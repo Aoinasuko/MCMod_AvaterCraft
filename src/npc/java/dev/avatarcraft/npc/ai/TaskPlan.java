@@ -160,10 +160,10 @@ public record TaskPlan(int version, String summary, String blocked, List<Step> s
       if (Set.of("remember_location", "forget_location").contains(action) && location.isBlank())
         throw new IllegalArgumentException("Location name required");
       if (action.equals("tool")) {
-        if (!target.startsWith("avatarcraftnpc:") || count != 1)
+        if (!target.startsWith("bep_3davater_companion:") || count != 1)
           throw new IllegalArgumentException("Atomic tool requires count=1 and local tool name");
         NpcTools.validate(
-            target.substring("avatarcraftnpc:".length()),
+            target.substring("bep_3davater_companion:".length()),
             JsonParser.parseString(arguments).getAsJsonObject(),
             NpcTools.names());
       } else if (!arguments.isEmpty()) {
@@ -490,7 +490,7 @@ public record TaskPlan(int version, String summary, String blocked, List<Step> s
         + " position=observed chest/point coordinates or [] for current position; forget_location:"
         + " location=existing name. A full memory does not evict another location. Never invent"
         + " unseen chest coordinates. tool: exactly one low-level operation, count=1,"
-        + " target='avatarcraftnpc:TOOL_NAME',arguments=a JSON-encoded string with the exact"
+        + " target='bep_3davater_companion:TOOL_NAME',arguments=a JSON-encoded string with the exact"
         + " argument object. Available atomic contracts: "
         + NpcTools.compactReference()
         + " . Aim with look_at before use_item; ticks=0 for instant use and 20+ for a bow charge."

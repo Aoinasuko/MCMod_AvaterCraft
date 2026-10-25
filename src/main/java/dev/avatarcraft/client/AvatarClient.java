@@ -1,7 +1,7 @@
 package dev.avatarcraft.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
-import dev.avatarcraft.AvatarCraft;
+import dev.avatarcraft.bep_3davater_loader;
 import dev.avatarcraft.avatar.AvatarArchive;
 import java.nio.file.*;
 import net.minecraft.client.*;
@@ -12,33 +12,28 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.client.event.*;
 import net.neoforged.neoforge.common.NeoForge;
 
-@Mod(value = AvatarCraft.ID, dist = Dist.CLIENT)
+@Mod(value = bep_3davater_loader.ID, dist = Dist.CLIENT)
 public final class AvatarClient {
   private static final KeyMapping.Category CATEGORY =
-      new KeyMapping.Category(Identifier.fromNamespaceAndPath("avatarcraft", "avatarcraft"));
+      new KeyMapping.Category(Identifier.fromNamespaceAndPath("bep_3davater_loader", "bep_3davater_loader"));
   public static final KeyMapping OPEN =
-      new KeyMapping("key.avatarcraft.open", InputConstants.KEY_LBRACKET, CATEGORY);
+      new KeyMapping("key.bep_3davater_loader.open", InputConstants.KEY_LBRACKET, CATEGORY);
+  private static final KeyMapping[] EXPRESSIONS = dev.avatarcraft.avatar.ExpressionConfig.EVENTS.stream()
+      .map(key -> new KeyMapping("key.bep_3davater_loader.expression." + key, InputConstants.UNKNOWN.getValue(), CATEGORY))
+      .toArray(KeyMapping[]::new);
   private boolean restored;
 
   public AvatarClient(IEventBus bus) {
-    bus.addListener(
-        net.neoforged.neoforge.client.network.event.RegisterClientPayloadHandlersEvent.class,
-        event ->
-            event.register(
-                dev.avatarcraft.multiplayer.ShareNetwork.Down.TYPE,
-                (packet, context) -> ShareClient.receive(packet.message())));
-    NeoForge.EVENT_BUS.addListener(
-        ClientPlayerNetworkEvent.LoggingOut.class, e -> ShareClient.disconnect());
+    SeriesTabs.register("bep_3davater_loader", net.minecraft.network.chat.Component.literal("Loader"), AvatarScreen::new);
     bus.addListener(
         RegisterKeyMappingsEvent.class,
         e -> {
           e.registerCategory(CATEGORY);
           e.register(OPEN);
+          for (var key : EXPRESSIONS) e.register(key);
         });
     NeoForge.EVENT_BUS.addListener(ClientTickEvent.Post.class, this::tick);
-    NeoForge.EVENT_BUS.addListener(ClientTickEvent.Pre.class, e -> AvatarQa.tick());
-    NeoForge.EVENT_BUS.addListener(RenderPlayerEvent.Pre.class, AvatarRenderer::render);
-    NeoForge.EVENT_BUS.addListener(RenderArmEvent.class, AvatarFirstPerson::render);
+    NeoForge.EVENT_BUS.addListener(RenderPlayerEvent.Pre.class, AvatarPreview::render);
     AvatarLibrary.reload();
   }
 
@@ -60,12 +55,19 @@ public final class AvatarClient {
               break;
             }
         } catch (Exception e) {
-          System.getLogger("AvatarCraft")
+          System.getLogger("bep_3davater_loader")
               .log(System.Logger.Level.WARNING, "Cannot restore avatar", e);
         }
     }
     while (OPEN.consumeClick())
       if (mc.gui.screen() == null && mc.player != null) mc.gui.setScreen(new AvatarScreen());
-    ShareClient.tick();
+    for (int i = 0; i < EXPRESSIONS.length; i++)
+      while (EXPRESSIONS[i].consumeClick()) {
+        if (mc.gui.screen() != null || AvatarSession.active == null) continue;
+        var selected = AvatarSession.active.expressionKeys;
+        var key = dev.avatarcraft.avatar.ExpressionConfig.EVENTS.get(i);
+        if (key.equals("idle") || selected.keys().equals(java.util.List.of(key))) selected.clear();
+        else selected.set(key);
+      }
   }
 }

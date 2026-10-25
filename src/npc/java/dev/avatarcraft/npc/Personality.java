@@ -116,7 +116,7 @@ public final class Personality {
       throw new IllegalArgumentException(
           "Use an external personality profile for custom characters");
     try (var stream =
-        Personality.class.getResourceAsStream("/data/avatarcraftnpc/personalities/tortobu.json")) {
+        Personality.class.getResourceAsStream("/data/bep_3davater_companion/personalities/tortobu.json")) {
       if (stream == null) throw new IllegalStateException("Missing bundled personality");
       return parse(new String(stream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
     } catch (java.io.IOException e) {

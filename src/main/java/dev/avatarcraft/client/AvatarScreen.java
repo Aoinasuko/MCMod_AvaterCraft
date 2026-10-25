@@ -1,189 +1,70 @@
 package dev.avatarcraft.client;
 
 import java.util.*;
-import net.minecraft.client.gui.*;
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.chat.Component;
 
-public final class AvatarScreen extends Screen {
-  private int page;
-  private List<AvatarLibrary.Entry> shown = List.of();
-  private final Map<String, AvatarTextures> previews = new HashMap<>();
-  private String message = "";
-  private boolean waitingForReload;
+/** Loader catalog and optional Player Model dressing room. Browsing never auto-equips. */
+public class AvatarScreen extends SeriesScreen {
+  private final boolean dressingRoom;
+  private ModelList models;
+  private String selectedId = "", query = "", message = "";
+  private List<AvatarLibrary.Entry> snapshot = List.of();
+  public AvatarScreen() { this("bep_3davater_loader", false); }
+  protected AvatarScreen(String tabId, boolean dressingRoom) { super(tabId); this.dressingRoom = dressingRoom; }
 
-  public AvatarScreen() {
-    super(Component.translatable("screen.avatarcraft.library"));
-  }
-
-  private void button(String text, int x, int y, int w, Runnable action) {
-    addRenderableWidget(
-        Button.builder(Component.literal(text), b -> action.run()).bounds(x, y, w, 20).build());
-  }
-
-  @Override
-  protected void init() {
-    clearWidgets();
-    int rows = Math.max(1, (height - 100) / 72);
-    var entries = AvatarLibrary.entries();
-    page = Math.clamp(page, 0, Math.max(0, (entries.size() - 1) / rows));
-    shown = entries.stream().skip((long) page * rows).limit(rows).toList();
-    for (int i = 0; i < shown.size(); i++) {
-      var e = shown.get(i);
-      int y = 40 + i * 72;
-      var btn =
-          Button.builder(
-                  Component.literal(e.name()),
-                  b -> {
-                    try {
-                      AvatarSession.select(e.archive());
-                      message = "選択しました: " + e.name();
-                    } catch (Exception ex) {
-                      message = ex.getMessage();
-                    }
-                  })
-              .bounds(86, y + 8, Math.max(80, width - 104), 24)
-              .build();
-      btn.active = e.archive() != null;
-      addRenderableWidget(btn);
+  @Override protected void init() {
+    clearWidgets(); initTabs();
+    var search = new EditBox(font, 16, CONTENT_TOP, width - 32, 18, Component.literal("モデルを検索"));
+    search.setValue(query); search.setHint(Component.literal("モデルを検索"));
+    search.setResponder(value -> { query = value; populate(); }); addRenderableWidget(search);
+    if (models != null) models.close();
+    models = addRenderableWidget(new ModelList(8, CONTENT_TOP + 24, width - 16,
+        Math.max(40, height - CONTENT_TOP - 80), entry -> { selectedId = entry.archive().avatar().id; updateActions(); }));
+    int bw = (width - 40) / 4, y = height - 27;
+    if (dressingRoom) {
+      button("選択したモデルを着る", 8, y, bw, () -> {
+        var entry = selected(); if (entry == null) return;
+        try { AvatarSession.select(entry.archive()); message = "着用しました: " + entry.name(); }
+        catch (Exception e) { message = e.getMessage(); }
+      });
+      button("着用を解除", 16 + bw, y, bw, () -> {
+        try { AvatarSession.select(null); message = "着用を解除しました"; }
+        catch (Exception e) { message = e.getMessage(); }
+      });
+    } else {
+      button("表情・シェイプキー", 8, y, bw, () -> {
+        var entry = selected(); if (entry != null) minecraft.gui.setScreen(new ExpressionScreen(this, entry.archive()));
+      });
+      button("表情キーJSON編集", 16 + bw, y, bw, () -> {
+        var entry = selected(); if (entry != null) minecraft.gui.setScreen(new ExpressionJsonScreen(this, entry.archive()));
+      });
     }
-    int bw = Math.max(40, (width - 36) / 4);
-    int bottom = height - 28;
-    button(
-        "標準モデル",
-        8,
-        bottom,
-        bw,
-        () -> {
-          try {
-            AvatarSession.select(null);
-            message = "標準モデルに戻しました";
-          } catch (Exception e) {
-            message = e.getMessage();
-          }
-        });
-    button(
-        "表情設定",
-        16 + bw,
-        bottom,
-        bw,
-        () -> {
-          if (AvatarSession.active != null) minecraft.gui.setScreen(new ExpressionScreen(this));
-          else message = "先にアバターを選択してください";
-        });
-    button(
-        "再読込",
-        24 + bw * 2,
-        bottom,
-        bw,
-        () -> {
-          AvatarLibrary.reload();
-          waitingForReload = true;
-          message = "読込中…";
-        });
-    button("閉じる", 32 + bw * 3, bottom, bw, this::onClose);
-    button(
-        "<",
-        8,
-        12,
-        24,
-        () -> {
-          page--;
-          init();
-        });
-    button(
-        ">",
-        width - 32,
-        12,
-        24,
-        () -> {
-          page++;
-          init();
-        });
+    button("再読込", 24 + bw * 2, y, bw, () -> { AvatarLibrary.reload(); message = "読込中…"; });
+    button("閉じる", 32 + bw * 3, y, bw, this::onClose);
+    populate();
   }
-
-  @Override
-  public void tick() {
-    if (waitingForReload && !AvatarLibrary.loading()) {
-      waitingForReload = false;
-      previews.values().forEach(AvatarTextures::close);
-      previews.clear();
-      message = "再読込しました: " + AvatarLibrary.entries().size() + "件";
-      init();
-      return;
-    }
-    if (!AvatarLibrary.loading() && !AvatarLibrary.entries().containsAll(shown)
-        || !AvatarLibrary.loading() && shown.isEmpty() && !AvatarLibrary.entries().isEmpty())
-      init();
+  private AvatarLibrary.Entry selected() { return AvatarLibrary.resolve(selectedId); }
+  private void updateActions() {
+    for (var child : children()) if (child instanceof net.minecraft.client.gui.components.Button b
+        && (b.getMessage().getString().equals("選択したモデルを着る")
+            || b.getMessage().getString().equals("表情・シェイプキー") || b.getMessage().getString().equals("表情キーJSON編集")))
+      b.active = selected() != null;
   }
-
-  @Override
-  public void extractRenderState(GuiGraphicsExtractor g, int mx, int my, float dt) {
-    g.fill(0, 0, width, height, 0xf018202b);
-    g.text(
-        font,
-        font.plainSubstrByWidth(title.getString(), Math.max(100, width - 224)),
-        40,
-        15,
-        0xffeef4ff);
-    for (int i = 0; i < shown.size(); i++) {
-      var e = shown.get(i);
-      int y = 40 + i * 72;
-      g.fill(8, y, width - 8, y + 66, 0xff293548);
-      if (e.archive() != null) {
-        var a = e.archive();
-        if (a.images().containsKey("preview.png")) {
-          var textures = previews.computeIfAbsent(a.avatar().id, k -> new AvatarTextures(a));
-          g.blit(textures.get("preview.png"), 12, y + 3, 72, y + 63, 0, 1, 0, 1);
-        }
-        g.text(
-            font,
-            Component.literal(
-                a.avatar().meshes.length
-                    + " meshes · "
-                    + a.avatar().humanoid.size()
-                    + " humanoid bones"),
-            88,
-            y + 39,
-            0xffb8c6dc);
-      } else
-        g.text(
-            font,
-            font.plainSubstrByWidth(String.valueOf(e.error()), Math.max(40, width - 104)),
-            88,
-            y + 39,
-            0xffffa8a8);
-    }
-    if (shown.isEmpty())
-      g.centeredText(
-          font,
-          Component.literal(
-              AvatarLibrary.loading()
-                  ? "アバターを読み込んでいます…"
-                  : "config/avatarcraft/avatars に .avc を配置してください"),
-          width / 2,
-          70,
-          0xffbbc9df);
-    g.text(
-        font,
-        font.plainSubstrByWidth(
-            message.isEmpty() ? ShareClient.status() : message + " / " + ShareClient.status(),
-            width - 16),
-        8,
-        height - 43,
-        0xffffdc9b);
+  private void populate() {
+    if (models == null) return;
+    snapshot = AvatarLibrary.entries();
+    var shown = snapshot.stream().filter(e -> (e.name() + " " + (e.archive() == null ? "" : e.archive().avatar().id))
+        .toLowerCase(Locale.ROOT).contains(query.toLowerCase(Locale.ROOT))).toList();
+    models.entries(shown, selectedId); updateActions();
+  }
+  @Override public void tick() { if (snapshot != AvatarLibrary.entries()) populate(); }
+  @Override public void extractRenderState(GuiGraphicsExtractor g, int mx, int my, float dt) {
+    background(g);
+    String text = message.isEmpty() ? (dressingRoom ? "モデルを選んで「着る」で反映します" : "編集するモデルを選択してください") : message;
+    g.text(font, font.plainSubstrByWidth(text, width - 24), 12, height - 46, 0xffffdc9b);
     super.extractRenderState(g, mx, my, dt);
   }
-
-  @Override
-  public boolean isPauseScreen() {
-    return false;
-  }
-
-  @Override
-  public void removed() {
-    for (var p : previews.values()) p.close();
-    previews.clear();
-  }
+  @Override public void removed() { if (models != null) models.close(); }
 }

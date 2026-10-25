@@ -21,7 +21,7 @@ final class NpcRuntimeFixGameTests {
   static void register(RegisterGameTestsEvent event) {
     var env =
         event.registerEnvironment(
-            NpcMod.id("runtime_fixes_qa"), new TestEnvironmentDefinition.AllOf());
+            bep_3davater_companion.id("runtime_fixes_qa"), new TestEnvironmentDefinition.AllOf());
     test(event, env, "immobile_walk_ends_within_21_seconds", NpcRuntimeFixGameTests::stalled);
     test(event, env, "partial_storage_switches_to_other_chest", NpcRuntimeFixGameTests::storage);
     test(event, env, "smelting_refuels_without_burning_tools", h -> smelt(h, false));
@@ -48,10 +48,10 @@ final class NpcRuntimeFixGameTests {
       String name,
       Consumer<GameTestHelper> body) {
     event.registerTest(
-        NpcMod.id(name),
+        bep_3davater_companion.id(name),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(env, NpcMod.id("qa_empty"), 2400, 1, true)) {
+            new TestData<>(env, bep_3davater_companion.id("qa_empty"), 2400, 1, true)) {
           public void run(GameTestHelper h) {
             body.accept(h);
           }
@@ -62,7 +62,7 @@ final class NpcRuntimeFixGameTests {
     for (int x = 0; x < 12; x++) for (int z = 0; z < 12; z++) h.setBlock(x, 0, z, Blocks.BEDROCK);
     var owner = h.makeMockServerPlayerInLevel();
     owner.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(1, 1, 1))));
-    var n = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+    var n = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
     n.initialize(owner, "tortobu");
     n.setFollowsOwner(false);
     n.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(3, 1, 4))));

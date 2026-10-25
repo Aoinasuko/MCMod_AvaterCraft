@@ -2,7 +2,7 @@
 
 2026-10-25 / 0.7.1。Javaの`NpcTools`から抽出した契約に基づく全63種。従来19種（基本17種＋場所記憶2種）と追加44種を併記します。
 
-通常の指示理解・発言のAIはツールを直接実行しません。計画を検証したサーバー側ローカル実行系が、許可された操作だけを呼び出します。API上の名前には`npc_`が付き、TaskPlanのatomic指定は`avatarcraftnpc:名前`です。
+通常の指示理解・発言のAIはツールを直接実行しません。計画を検証したサーバー側ローカル実行系が、許可された操作だけを呼び出します。API上の名前には`npc_`が付き、TaskPlanのatomic指定は`bep_3davater_companion:名前`です。
 
 表の引数はすべて必須、未知の引数は拒否します。`integer`は整数、`number`は有限の数値、`string`は文字列です。通常の文字列は最大512文字。座標は現在の次元の実ワールド座標です。バッグ枠は0〜35、観察上の副手は40、主手は41です。コンテナ枠はそれぞれの観察結果から取得してください。
 
@@ -103,7 +103,7 @@
 
 `acquire`、`smelt`、`delegate`、`delegate_task`、`explore_structure`等は複数Tickや複数の基本操作にまたがります。`attack`、`use_on_block`、`container_put`等は細かい1操作です。高性能モデルがこれらを有限の計画に組み合わせます。
 
-TaskPlanには最大24手順・16KiBの上限があります。`action="tool"`、`target="avatarcraftnpc:look_at"`、`count=1`、`arguments="{\"x\":1,\"y\":65,\"z\":2}"`のように、`arguments`へ正確な引数オブジェクトをJSON文字列として指定します。非tool手順のargumentsは空文字です。
+TaskPlanには最大24手順・16KiBの上限があります。`action="tool"`、`target="bep_3davater_companion:look_at"`、`count=1`、`arguments="{\"x\":1,\"y\":65,\"z\":2}"`のように、`arguments`へ正確な引数オブジェクトをJSON文字列として指定します。非tool手順のargumentsは空文字です。
 
 `plan_next`はツールではなく計画末尾の制御手順です。検証済みの進捗から次の上位計画を要求し、最大64段階で打ち切ります。委任先はこれを使えません。`prepare_tool`、`pickup`等もTaskPlanの目標であり、別のAPIツール名ではありません。
 

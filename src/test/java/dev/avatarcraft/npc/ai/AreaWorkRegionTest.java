@@ -114,7 +114,7 @@ class AreaWorkRegionTest {
     var step =
         new TaskPlan.Step(
             "tool",
-            "avatarcraftnpc:area_work",
+            "bep_3davater_companion:area_work",
             "",
             1,
             -1,

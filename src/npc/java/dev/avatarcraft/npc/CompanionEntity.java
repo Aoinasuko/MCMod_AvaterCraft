@@ -119,6 +119,13 @@ public final class CompanionEntity extends PathfinderMob
       SynchedEntityData.defineId(CompanionEntity.class, EntityDataSerializers.BOOLEAN);
   private static final EntityDataAccessor<Boolean> FOLLOW_OWNER =
       SynchedEntityData.defineId(CompanionEntity.class, EntityDataSerializers.BOOLEAN);
+  @Override
+  public java.util.List<String> avatarExpressionKeys() {
+    boolean eating = isUsingItem() && (getUseItem().getUseAnimation() == net.minecraft.world.item.ItemUseAnimation.EAT
+        || getUseItem().getUseAnimation() == net.minecraft.world.item.ItemUseAnimation.DRINK);
+    return CompanionExpressions.keys(eating, hurtTime > 0 || deathTime > 0);
+  }
+
   private Personality personality = Personality.preset("tortobu");
   public final NpcInventory inventory = new NpcInventory(this);
   public final NpcLocationMemory locations = new NpcLocationMemory();
@@ -282,7 +289,7 @@ public final class CompanionEntity extends PathfinderMob
   protected InteractionResult mobInteract(Player player, InteractionHand hand) {
     if (!ownedBy(player)) {
       if (!level().isClientSide())
-        player.sendOverlayMessage(Component.translatable("message.avatarcraftnpc.not_owner"));
+        player.sendOverlayMessage(Component.translatable("message.bep_3davater_companion.not_owner"));
       return InteractionResult.SUCCESS;
     }
     if (player instanceof ServerPlayer serverPlayer)

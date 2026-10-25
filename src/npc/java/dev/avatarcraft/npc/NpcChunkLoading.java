@@ -7,7 +7,7 @@ import net.neoforged.neoforge.common.world.chunk.*;
 
 /** Persistent entity-owned ticking tickets. Each NPC owns its own overlapping 3x3 square. */
 public final class NpcChunkLoading {
-  public static final TicketController CONTROLLER = new TicketController(NpcMod.id("companions"));
+  public static final TicketController CONTROLLER = new TicketController(bep_3davater_companion.id("companions"));
   private ServerLevel level;
   private Set<Long> chunks = Set.of();
 

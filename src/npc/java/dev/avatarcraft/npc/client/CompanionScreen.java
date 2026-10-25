@@ -17,9 +17,9 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 /** Inventory-style owner menu. All four sections share one authenticated container. */
 public final class CompanionScreen extends AbstractContainerScreen<CompanionMenu> {
-  private static final Identifier ICONS = NpcMod.id("textures/gui/icon.png"),
-      INVENTORY = NpcMod.id("textures/gui/inv.png"),
-      INFO = NpcMod.id("textures/gui/info.png");
+  private static final Identifier ICONS = bep_3davater_companion.id("textures/gui/icon.png"),
+      INVENTORY = bep_3davater_companion.id("textures/gui/inv.png"),
+      INFO = bep_3davater_companion.id("textures/gui/info.png");
   private static final int INK = 0xff353535;
   private int page, avatarIndex;
   private float uiScale = 1;

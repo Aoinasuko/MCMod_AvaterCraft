@@ -52,7 +52,7 @@ public final class NpcService implements AutoCloseable {
 
   private NpcService(MinecraftServer server) {
     this.server = server;
-    var configRoot = FMLPaths.CONFIGDIR.get().resolve("avatarcraftnpc");
+    var configRoot = FMLPaths.CONFIGDIR.get().resolve("bep_3davater_companion");
     CodexConfig loaded;
     try {
       loaded = NpcAiSettings.snapshot();
@@ -64,7 +64,7 @@ public final class NpcService implements AutoCloseable {
     config = loaded;
     workspace = configRoot.resolve("codex-workspace").toAbsolutePath();
     journal =
-        new NpcJournal(server.getWorldPath(LevelResource.ROOT).resolve("avatarcraftnpc/journal"));
+        new NpcJournal(server.getWorldPath(LevelResource.ROOT).resolve("bep_3davater_companion/journal"));
   }
 
   public synchronized CompletableFuture<NpcBrain> brain() {
@@ -151,7 +151,7 @@ public final class NpcService implements AutoCloseable {
           try {
             journal.append(owner, actor, name, listener, kind, text, details);
           } catch (Exception e) {
-            System.getLogger("AvatarCraft NPC")
+            System.getLogger("bep_3davater_loader NPC")
                 .log(System.Logger.Level.ERROR, "Cannot save companion journal", e);
           }
         });

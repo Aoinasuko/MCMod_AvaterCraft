@@ -124,7 +124,7 @@ public final class NpcTeams {
                 s ->
                     Set.of("delegate", "plan_next").contains(s.action())
                         || s.action().equals("tool")
-                            && Set.of("avatarcraftnpc:delegate", "avatarcraftnpc:delegate_task")
+                            && Set.of("bep_3davater_companion:delegate", "bep_3davater_companion:delegate_task")
                                 .contains(s.target())))
       return object(
           "ok", false, "error", "A delegated plan must be finite and cannot recursively delegate");

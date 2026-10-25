@@ -67,7 +67,7 @@ public final class AvatarActorVisual implements AutoCloseable {
           int material = mesh.submeshes[sub].material;
           var mat = material < 0 ? FALLBACK : avatar.materials[material];
           int[] indices = mesh.geometry.indices()[sub];
-          AvatarRenderer.draw(
+          AvatarGeometry.draw(
               assets.textures,
               mesh,
               vertices,
@@ -81,7 +81,7 @@ public final class AvatarActorVisual implements AutoCloseable {
           if (mat.number("_OutlineWidth", 0) > 0
               && mat.shader != null
               && mat.shader.toLowerCase(Locale.ROOT).contains("outline"))
-            AvatarRenderer.draw(
+            AvatarGeometry.draw(
                 assets.textures,
                 mesh,
                 vertices,

@@ -20,12 +20,12 @@ public final class SummoningItem extends Item {
     if (!roster.canSummon(player.getUUID(), NpcSettings.MAX_PER_PLAYER.get())) {
       player.sendOverlayMessage(
           net.minecraft.network.chat.Component.translatable(
-              "message.avatarcraftnpc.summon_limit", NpcSettings.MAX_PER_PLAYER.get()));
+              "message.bep_3davater_companion.summon_limit", NpcSettings.MAX_PER_PLAYER.get()));
       return InteractionResult.FAIL;
     }
     var pos = context.getClickedPos().relative(context.getClickedFace());
     if (!server.mayInteract(player, pos) || !server.hasChunkAt(pos)) return InteractionResult.FAIL;
-    var npc = NpcMod.COMPANION.get().create(server, EntitySpawnReason.SPAWN_ITEM_USE);
+    var npc = bep_3davater_companion.COMPANION.get().create(server, EntitySpawnReason.SPAWN_ITEM_USE);
     if (npc == null) return InteractionResult.FAIL;
     npc.setPos(pos.getX() + .5, pos.getY(), pos.getZ() + .5);
     npc.setYRot(player.getYRot());

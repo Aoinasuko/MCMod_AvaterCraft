@@ -11,7 +11,7 @@ public final class SurfaceMaterial {
   public static final List<String> SLOTS;
 
   static {
-    try (var in = SurfaceMaterial.class.getResourceAsStream("/assets/avatarcraft/surface.json")) {
+    try (var in = SurfaceMaterial.class.getResourceAsStream("/assets/bep_3davater_loader/surface.json")) {
       if (in == null) throw new IOException("Missing material schema");
       SCHEMA =
           JsonParser.parseString(new String(in.readAllBytes(), StandardCharsets.UTF_8))

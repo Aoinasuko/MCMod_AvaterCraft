@@ -12,7 +12,7 @@ public final class NpcInstructionExamples {
   private static List<JsonObject> load() {
     try (var in =
         NpcInstructionExamples.class.getResourceAsStream(
-            "/data/avatarcraftnpc/ai/instruction-examples.json")) {
+            "/data/bep_3davater_companion/ai/instruction-examples.json")) {
       if (in == null) throw new IOException("Missing instruction curriculum");
       byte[] bytes = in.readNBytes(1048577);
       if (bytes.length > 1048576) throw new IOException("Instruction curriculum too large");

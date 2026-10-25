@@ -2,19 +2,23 @@ plugins {
     id 'java-library'
     id 'net.neoforged.moddev' version '2.0.148'
 }
-version = '0.7.1'
+version = '26.3-0.10.0'
 group = 'dev.avatarcraft'
-base { archivesName = 'avatarcraft' }
+base { archivesName = 'bep_3davater_loader' }
 java.toolchain.languageVersion = JavaLanguageVersion.of(25)
 repositories { mavenCentral() }
 sourceSets {
+    player {
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
+    }
     npc {
         compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
         runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
     }
     test {
-        compileClasspath += sourceSets.npc.output
-        runtimeClasspath += sourceSets.npc.output
+        compileClasspath += sourceSets.npc.output + sourceSets.player.output
+        runtimeClasspath += sourceSets.npc.output + sourceSets.player.output
     }
 }
 neoForge {
@@ -28,6 +32,12 @@ neoForge {
             }
         }
         server { server(); programArgument '--nogui' }
+        playerGameTest {
+            type = 'gameTestServer'
+            gameDirectory = file('run-player-qa')
+            systemProperty 'avatarcraft.playerGameTest', 'true'
+            systemProperty 'neoforge.enabledGameTestNamespaces', 'bep_3davater_player'
+        }
         anchorClient {
             client()
             gameDirectory = file('run-anchor-ui-qa')
@@ -43,7 +53,7 @@ neoForge {
             systemProperty 'avatarcraft.npcGameTest', 'true'
             systemProperty 'avatarcraft.areaQa', 'true'
             systemProperty 'avatarcraft.areaLive', providers.environmentVariable('AVATARCRAFT_AREA_LIVE').getOrElse('false')
-            systemProperty 'neoforge.enabledGameTestNamespaces', 'avatarcraftnpc'
+            systemProperty 'neoforge.enabledGameTestNamespaces', 'bep_3davater_companion'
         }
         anchorGameTest {
             type = 'gameTestServer'
@@ -51,7 +61,7 @@ neoForge {
             systemProperty 'avatarcraft.npcGameTest', 'true'
             systemProperty 'avatarcraft.anchorQa', 'true'
             systemProperty 'avatarcraft.anchorLive', providers.environmentVariable('AVATARCRAFT_ANCHOR_LIVE').getOrElse('false')
-            systemProperty 'neoforge.enabledGameTestNamespaces', 'avatarcraftnpc'
+            systemProperty 'neoforge.enabledGameTestNamespaces', 'bep_3davater_companion'
         }
         npcComplexGameTest {
             type = 'gameTestServer'
@@ -61,25 +71,89 @@ neoForge {
             systemProperty 'avatarcraft.complexLive', providers.environmentVariable('AVATARCRAFT_COMPLEX_E2E').getOrElse('false')
             systemProperty 'avatarcraft.complexQaCases', providers.environmentVariable('AVATARCRAFT_COMPLEX_CASES').getOrElse('')
             systemProperty 'avatarcraft.complexControl', providers.environmentVariable('AVATARCRAFT_COMPLEX_CONTROL').getOrElse('false')
-            systemProperty 'neoforge.enabledGameTestNamespaces', 'avatarcraftnpc'
+            systemProperty 'neoforge.enabledGameTestNamespaces', 'bep_3davater_companion'
         }
         npcGameTest {
             type = 'gameTestServer'
             gameDirectory = file('run-npc-qa')
             systemProperty 'avatarcraft.npcGameTest', 'true'
-            systemProperty 'neoforge.enabledGameTestNamespaces', 'avatarcraftnpc'
+            systemProperty 'neoforge.enabledGameTestNamespaces', 'bep_3davater_companion'
         }
     }
     mods {
-        avatarcraft { sourceSet sourceSets.main }
-        avatarcraftnpc { sourceSet sourceSets.npc }
+        bep_3davater_loader { sourceSet sourceSets.main }
+        bep_3davater_player { sourceSet sourceSets.player }
+        bep_3davater_companion { sourceSet sourceSets.npc }
     }
 }
 tasks.register('npcJar', Jar) {
-    archiveBaseName = 'avatarcraft-npc'
+    archiveBaseName = 'bep_3davater_companion'
     from sourceSets.npc.output
 }
-assemble.dependsOn tasks.named('npcJar')
+tasks.register('playerJar', Jar) {
+    archiveBaseName = 'bep_3davater_player'
+    from sourceSets.player.output
+}
+assemble.dependsOn tasks.named('npcJar'), tasks.named('playerJar')
+
+neoForge.runs {
+    aiSettingsClient {
+        client()
+        gameDirectory = file('run-ai-settings-client-qa')
+        programArgument '--quickPlaySingleplayer'
+        programArgument 'New World'
+    }
+    aiSettingsGameTest {
+        type = 'gameTestServer'
+        gameDirectory = file('run-ai-settings-qa')
+        loadedMods = [neoForge.mods.bep_3davater_loader, neoForge.mods.bep_3davater_companion]
+        systemProperty 'avatarcraft.npcGameTest', 'true'
+        systemProperty 'avatarcraft.aiSettingsQa', 'true'
+        systemProperty 'neoforge.enabledGameTestNamespaces', 'bep_3davater_companion'
+    }
+    seriesClient {
+        client()
+        gameDirectory = file('run-series-client-qa')
+        programArgument '--quickPlaySingleplayer'
+        programArgument 'New World'
+    }
+    loaderClient {
+        client()
+        gameDirectory = file('run-loader-qa')
+        loadedMods = [neoForge.mods.bep_3davater_loader]
+    }
+    playerClient {
+        client()
+        gameDirectory = file('run-player-client-qa')
+        loadedMods = [neoForge.mods.bep_3davater_loader, neoForge.mods.bep_3davater_player]
+    }
+    companionClient {
+        client()
+        gameDirectory = file('run-companion-client-qa')
+        loadedMods = [neoForge.mods.bep_3davater_loader, neoForge.mods.bep_3davater_companion]
+    }
+    loaderGameTest {
+        type = 'gameTestServer'
+        gameDirectory = file('run-loader-server-qa')
+        loadedMods = [neoForge.mods.bep_3davater_loader]
+        systemProperty 'avatarcraft.loaderGameTest', 'true'
+        systemProperty 'neoforge.enabledGameTestNamespaces', 'bep_3davater_loader'
+    }
+    playerGameTest {
+        loadedMods = [neoForge.mods.bep_3davater_loader, neoForge.mods.bep_3davater_player]
+    }
+    npcGameTest {
+        loadedMods = [neoForge.mods.bep_3davater_loader, neoForge.mods.bep_3davater_companion]
+    }
+}
+['loaderClient', 'playerClient', 'companionClient'].each { runName ->
+    neoForge.runs.named(runName) {
+        if (System.getenv('AVATARCRAFT_QA_WORLD')) {
+            programArgument '--quickPlaySingleplayer'
+            programArgument System.getenv('AVATARCRAFT_QA_WORLD')
+        }
+    }
+}
 dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter:5.12.2'
     testImplementation 'org.joml:joml:1.10.9'

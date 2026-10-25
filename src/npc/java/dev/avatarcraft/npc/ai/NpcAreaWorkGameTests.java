@@ -37,14 +37,14 @@ final class NpcAreaWorkGameTests {
   }
 
   private static void test(RegisterGameTestsEvent e, String name, Consumer<GameTestHelper> run) {
-    var env = e.registerEnvironment(NpcMod.id(name), new TestEnvironmentDefinition.AllOf());
+    var env = e.registerEnvironment(bep_3davater_companion.id(name), new TestEnvironmentDefinition.AllOf());
     e.registerTest(
-        NpcMod.id(name),
+        bep_3davater_companion.id(name),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
             new TestData<>(
                 env,
-                NpcMod.id("qa_complex"),
+                bep_3davater_companion.id("qa_complex"),
                 Boolean.getBoolean("avatarcraft.areaLive") ? 200000 : 12000,
                 1,
                 true)) {
@@ -63,7 +63,7 @@ final class NpcAreaWorkGameTests {
   private static CompanionEntity npc(GameTestHelper h) {
     var owner = h.makeMockServerPlayerInLevel();
     owner.setPos(Vec3.atBottomCenterOf(p(h, 1, 1, 3)));
-    var n = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+    var n = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
     n.initialize(owner, "tortobu");
     n.setFollowsOwner(false);
     n.setPos(Vec3.atBottomCenterOf(p(h, 3, 1, 5)));
@@ -353,7 +353,7 @@ final class NpcAreaWorkGameTests {
   private static void protectedBlocks(GameTestHelper h) {
     h.setBlock(5, 1, 5, Blocks.STONE);
     h.setBlock(6, 1, 5, Blocks.CHEST);
-    h.setBlock(7, 1, 5, NpcMod.AVATAR_ANCHOR.get());
+    h.setBlock(7, 1, 5, bep_3davater_companion.AVATAR_ANCHOR.get());
     h.setBlock(8, 1, 5, Blocks.BEDROCK);
     var n = npc(h);
     n.inventory.setItem(0, new ItemStack(Items.IRON_PICKAXE));
@@ -370,7 +370,7 @@ final class NpcAreaWorkGameTests {
           h.assertTrue(
               h.getLevel().getBlockState(p(h, 5, 1, 5)).isAir()
                   && h.getLevel().getBlockState(p(h, 6, 1, 5)).is(Blocks.CHEST)
-                  && h.getLevel().getBlockState(p(h, 7, 1, 5)).is(NpcMod.AVATAR_ANCHOR.get())
+                  && h.getLevel().getBlockState(p(h, 7, 1, 5)).is(bep_3davater_companion.AVATAR_ANCHOR.get())
                   && h.getLevel().getBlockState(p(h, 8, 1, 5)).is(Blocks.BEDROCK),
               "Protected blocks intact");
         });
@@ -487,7 +487,7 @@ final class NpcAreaWorkGameTests {
           boolean used =
               brain.plans.stream()
                   .flatMap(plan -> plan.steps().stream())
-                  .anyMatch(s -> s.target().equals("avatarcraftnpc:area_work"));
+                  .anyMatch(s -> s.target().equals("bep_3davater_companion:area_work"));
           boolean success =
               done
                   && used

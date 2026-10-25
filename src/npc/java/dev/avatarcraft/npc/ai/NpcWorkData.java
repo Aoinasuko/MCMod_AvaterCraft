@@ -2,7 +2,7 @@ package dev.avatarcraft.npc.ai;
 
 import com.google.gson.*;
 import com.mojang.serialization.Codec;
-import dev.avatarcraft.npc.NpcMod;
+import dev.avatarcraft.npc.bep_3davater_companion;
 import java.util.*;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.saveddata.*;
@@ -91,7 +91,7 @@ public final class NpcWorkData extends SavedData {
 
   public static final SavedDataType<NpcWorkData> TYPE =
       new SavedDataType<>(
-          NpcMod.id("work"),
+          bep_3davater_companion.id("work"),
           NpcWorkData::new,
           Codec.STRING.xmap(NpcWorkData::parse, data -> GSON.toJson(data)));
 

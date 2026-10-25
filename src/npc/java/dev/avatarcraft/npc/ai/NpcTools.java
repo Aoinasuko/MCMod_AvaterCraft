@@ -499,7 +499,7 @@ public final class NpcTools {
         String action = step.get("action").getAsString();
         if (Set.of("delegate", "plan_next").contains(action)
             || action.equals("tool")
-                && Set.of("avatarcraftnpc:delegate", "avatarcraftnpc:delegate_task")
+                && Set.of("bep_3davater_companion:delegate", "bep_3davater_companion:delegate_task")
                     .contains(step.get("target").getAsString()))
           throw new IllegalArgumentException("Delegated plans cannot delegate or advance phases");
       }

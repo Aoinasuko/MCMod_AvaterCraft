@@ -1,7 +1,7 @@
 package dev.avatarcraft.npc.client;
 
 import com.google.gson.*;
-import dev.avatarcraft.npc.NpcMod;
+import dev.avatarcraft.npc.bep_3davater_companion;
 import java.util.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.geom.builders.UVPair;
@@ -29,7 +29,7 @@ final class BlueprintPreview {
 
   private static final Map<String, Plan> PLANS = new LinkedHashMap<>();
   private static final ContextKey<List<Ghost>> KEY =
-      new ContextKey<>(NpcMod.id("blueprint_preview"));
+      new ContextKey<>(bep_3davater_companion.id("blueprint_preview"));
 
   static void install() {
     NeoForge.EVENT_BUS.addListener(ExtractLevelRenderStateEvent.class, BlueprintPreview::extract);

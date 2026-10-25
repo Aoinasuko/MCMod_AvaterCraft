@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "bep_3davater_companion:item/soulstone"
+  }
+}

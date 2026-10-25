@@ -17,7 +17,7 @@ def step(action, target='', block='', count=1, **extra):
                 slot=-1, hand='main', seconds=10, position=[], location='', arguments='', **extra)
 
 def atomic(name, args):
-    s = step('tool', 'avatarcraftnpc:' + name)
+    s = step('tool', 'bep_3davater_companion:' + name)
     s['arguments'] = json.dumps(args, separators=(',', ':'))
     return s
 
@@ -220,7 +220,7 @@ def generate(output, counts):
                      ['畑を','farm','field'],['あれを','that thing'],['トウヒ以外','excluding spruce']][key],
             context=e['state'],steps=e['expectedPlan']['steps'],blocked=e['expectedPlan']['blocked'])
     runtime.extend(contextual.values())
-    resource=Path('src/npc/resources/data/avatarcraftnpc/ai/instruction-examples.json')
+    resource=Path('src/npc/resources/data/bep_3davater_companion/ai/instruction-examples.json')
     resource.write_text(json.dumps(runtime,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     for offset,(split,count) in enumerate(counts.items()):
         rng=random.Random(SEED+offset); path=output/(split+'.jsonl.gz'); unique=set(); ambiguous=0

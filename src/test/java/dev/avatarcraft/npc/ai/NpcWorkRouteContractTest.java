@@ -33,7 +33,7 @@ class NpcWorkRouteContractTest {
     var s =
         new TaskPlan.Step(
             "tool",
-            "avatarcraftnpc:work_route",
+            "bep_3davater_companion:work_route",
             "",
             1,
             -1,

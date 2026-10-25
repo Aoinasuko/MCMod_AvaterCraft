@@ -250,7 +250,7 @@ class CodexLiveTest {
                     s ->
                         s.action().equals("delegate")
                             || s.action().equals("tool")
-                                && s.target().equals("avatarcraftnpc:delegate_task")),
+                                && s.target().equals("bep_3davater_companion:delegate_task")),
             "Advanced planner must actually assign work");
         results.add(new com.google.gson.Gson().toJsonTree(plan));
         session.close();

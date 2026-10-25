@@ -25,7 +25,7 @@ class NpcPlanningTierTest {
     var valid =
         new TaskPlan.Step(
             "tool",
-            "avatarcraftnpc:look_at",
+            "bep_3davater_companion:look_at",
             "",
             1,
             -1,
@@ -41,13 +41,13 @@ class NpcPlanningTierTest {
         IllegalArgumentException.class,
         () ->
             new TaskPlan.Step(
-                "tool", "avatarcraftnpc:shell", "", 1, -1, -1, "main", 1, List.of(), "", "{}"));
+                "tool", "bep_3davater_companion:shell", "", 1, -1, -1, "main", 1, List.of(), "", "{}"));
     assertThrows(
         IllegalArgumentException.class,
         () ->
             new TaskPlan.Step(
                 "tool",
-                "avatarcraftnpc:jump",
+                "bep_3davater_companion:jump",
                 "",
                 1,
                 -1,
@@ -100,7 +100,7 @@ class NpcPlanningTierTest {
     var scan =
         new TaskPlan.Step(
             "tool",
-            "avatarcraftnpc:inspect_structures",
+            "bep_3davater_companion:inspect_structures",
             "",
             1,
             -1,

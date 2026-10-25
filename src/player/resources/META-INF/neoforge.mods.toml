@@ -1,0 +1,24 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="All Rights Reserved"
+[[mods]]
+modId="bep_3davater_player"
+version="26.3-0.10.0"
+displayName="B.E.P 3DAvater Player Model"
+description='''Replace player models and arms with Loader avatars; trigger expression keys for game events.'''
+[[dependencies.bep_3davater_player]]
+modId="bep_3davater_loader"
+type="required"
+versionRange="[26.3-0.10.0,26.3-0.11)"
+ordering="AFTER"
+side="BOTH"
+[[dependencies.bep_3davater_player]]
+modId="neoforge"
+type="required"
+versionRange="[26.3.0.95,26.4)"
+side="BOTH"
+[[dependencies.bep_3davater_player]]
+modId="minecraft"
+type="required"
+versionRange="[26.3]"
+side="BOTH"

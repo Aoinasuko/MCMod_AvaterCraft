@@ -22,7 +22,7 @@ final class NpcWorkRouteGameTests {
   static void register(RegisterGameTestsEvent event) {
     var env =
         event.registerEnvironment(
-            NpcMod.id("work_route_qa"), new TestEnvironmentDefinition.AllOf());
+            bep_3davater_companion.id("work_route_qa"), new TestEnvironmentDefinition.AllOf());
     test(event, env, "logs_through_dense_leaf_shell", 4000, NpcWorkRouteGameTests::leaves);
     test(event, env, "tall_tree_builds_walkable_stairs", 7000, NpcWorkRouteGameTests::tallTree);
     test(event, env, "dig_through_wall_to_owner", 4000, NpcWorkRouteGameTests::tunnel);
@@ -133,10 +133,10 @@ final class NpcWorkRouteGameTests {
       int ticks,
       Consumer<GameTestHelper> body) {
     event.registerTest(
-        NpcMod.id(name),
+        bep_3davater_companion.id(name),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(env, NpcMod.id("qa_large"), ticks, 1, true)) {
+            new TestData<>(env, bep_3davater_companion.id("qa_large"), ticks, 1, true)) {
           public void run(GameTestHelper h) {
             body.accept(h);
           }
@@ -146,7 +146,7 @@ final class NpcWorkRouteGameTests {
   private static CompanionEntity npc(GameTestHelper h, int x, int y, int z) {
     var owner = h.makeMockServerPlayerInLevel();
     owner.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(1, y, 1))));
-    var n = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+    var n = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
     n.initialize(owner, "tortobu");
     n.setFollowsOwner(false);
     n.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(x, y, z))));

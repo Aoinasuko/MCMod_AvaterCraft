@@ -20,17 +20,17 @@ final class NpcExpeditionScenarioGameTests {
   static void register(RegisterGameTestsEvent event) {
     var env =
         event.registerEnvironment(
-            NpcMod.id("expedition_scenarios_qa"), new TestEnvironmentDefinition.AllOf());
+            bep_3davater_companion.id("expedition_scenarios_qa"), new TestEnvironmentDefinition.AllOf());
     for (String scenario :
         List.of(
             "surface_to_underground_161_blocks",
             "base_village_round_trip_764_blocks",
             "remote_farm_harvest_replant_return_store"))
       event.registerTest(
-          NpcMod.id(scenario),
+          bep_3davater_companion.id(scenario),
           new FunctionGameTestInstance(
               BuiltinTestFunctions.ALWAYS_PASS,
-              new TestData<>(env, NpcMod.id("qa_longtravel"), 10000, 1, true)) {
+              new TestData<>(env, bep_3davater_companion.id("qa_longtravel"), 10000, 1, true)) {
             public void run(GameTestHelper h) {
               if (scenario.startsWith("surface")) descend(h);
               else expedition(h, scenario.startsWith("remote"));
@@ -47,7 +47,7 @@ final class NpcExpeditionScenarioGameTests {
     for (int x = 0; x <= 528; x++) for (int z = 0; z < 16; z++) h.setBlock(x, 0, z, Blocks.BEDROCK);
     var owner = h.makeMockServerPlayerInLevel();
     owner.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(1, 1, 1))));
-    var n = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+    var n = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
     n.initialize(owner, "tortobu");
     n.setFollowsOwner(false);
     n.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(4, 1, 5))));
@@ -103,7 +103,7 @@ final class NpcExpeditionScenarioGameTests {
 
   private static TaskPlan.Step atomic(String tool, JsonObject args) {
     return new TaskPlan.Step(
-        "tool", "avatarcraftnpc:" + tool, "", 1, -1, -1, "main", 1, List.of(), "", args.toString());
+        "tool", "bep_3davater_companion:" + tool, "", 1, -1, -1, "main", 1, List.of(), "", args.toString());
   }
 
   private static int carried(CompanionEntity n, Item item) {

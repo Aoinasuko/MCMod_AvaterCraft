@@ -23,7 +23,7 @@ public final class NpcInteractionGameTests {
   public static void register(RegisterGameTestsEvent event) {
     var env =
         event.registerEnvironment(
-            NpcMod.id("interaction_qa"), new TestEnvironmentDefinition.AllOf());
+            bep_3davater_companion.id("interaction_qa"), new TestEnvironmentDefinition.AllOf());
     test(event, env, "double_chest_shared_openers", false, NpcInteractionGameTests::sharedChest);
     test(event, env, "barrel_transfer_opens_then_closes", false, NpcInteractionGameTests::barrel);
     test(
@@ -335,10 +335,10 @@ public final class NpcInteractionGameTests {
       boolean large,
       Consumer<GameTestHelper> body) {
     event.registerTest(
-        NpcMod.id(name),
+        bep_3davater_companion.id(name),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(env, NpcMod.id(large ? "qa_large" : "qa_empty"), 500, 1, true)) {
+            new TestData<>(env, bep_3davater_companion.id(large ? "qa_large" : "qa_empty"), 500, 1, true)) {
           public void run(GameTestHelper h) {
             body.accept(h);
           }
@@ -353,7 +353,7 @@ public final class NpcInteractionGameTests {
   }
 
   private static CompanionEntity npc(GameTestHelper h, ServerPlayer owner, int x, int z) {
-    var n = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+    var n = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
     n.initialize(owner, "tortobu");
     n.setFollowsOwner(false);
     n.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(x, 1, z))));

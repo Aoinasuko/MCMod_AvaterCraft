@@ -16,8 +16,7 @@ public final class ExpressionPlayer {
       ExpressionConfig c,
       Map<String, Float> defaults,
       double now,
-      boolean eating,
-      boolean hurt,
+      java.util.Collection<String> keys,
       String preview) {
     if (!Double.isFinite(nextBlink) || now > nextBlink + 10) nextBlink = now + interval(c);
     var result = new HashMap<>(defaults);
@@ -33,8 +32,7 @@ public final class ExpressionPlayer {
       weight = weight * weight * (3 - 2 * weight);
       apply(result, c, "blink", weight);
     }
-    if (eating) apply(result, c, "eat", 1);
-    if (hurt) apply(result, c, "hurt", 1);
+    for (String key : keys) apply(result, c, key, 1);
     if (preview != null) apply(result, c, preview, 1);
     return result;
   }

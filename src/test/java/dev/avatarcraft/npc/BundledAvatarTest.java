@@ -3,6 +3,7 @@ package dev.avatarcraft.npc;
 import static org.junit.jupiter.api.Assertions.*;
 
 import dev.avatarcraft.avatar.AvatarArchive;
+import dev.avatarcraft.api.BundledAvatar;
 import java.nio.file.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

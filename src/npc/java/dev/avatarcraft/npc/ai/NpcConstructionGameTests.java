@@ -29,14 +29,14 @@ final class NpcConstructionGameTests {
   }
 
   private static void test(RegisterGameTestsEvent e, String name, Consumer<GameTestHelper> body) {
-    var env = e.registerEnvironment(NpcMod.id(name), new TestEnvironmentDefinition.AllOf());
+    var env = e.registerEnvironment(bep_3davater_companion.id(name), new TestEnvironmentDefinition.AllOf());
     e.registerTest(
-        NpcMod.id(name),
+        bep_3davater_companion.id(name),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
             new TestData<>(
                 env,
-                NpcMod.id("qa_complex"),
+                bep_3davater_companion.id("qa_complex"),
                 Boolean.getBoolean("avatarcraft.areaLive") ? 200000 : 16000,
                 1,
                 true)) {
@@ -55,7 +55,7 @@ final class NpcConstructionGameTests {
   private static CompanionEntity npc(GameTestHelper h) {
     var owner = h.makeMockServerPlayerInLevel();
     owner.setPos(Vec3.atBottomCenterOf(p(h, 1, 1, 3)));
-    var n = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+    var n = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
     n.initialize(owner, "tortobu");
     n.setFollowsOwner(false);
     n.setPos(Vec3.atBottomCenterOf(p(h, 3, 1, 5)));

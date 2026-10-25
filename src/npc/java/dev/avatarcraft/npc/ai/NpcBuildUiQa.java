@@ -30,7 +30,7 @@ public final class NpcBuildUiQa {
       var job = JOBS.get(player.getUUID());
       if (job == null) {
         job = new Job();
-        var n = NpcMod.COMPANION.get().create(player.level(), EntitySpawnReason.COMMAND);
+        var n = bep_3davater_companion.COMPANION.get().create(player.level(), EntitySpawnReason.COMMAND);
         n.initialize(player, "tortobu");
         n.setFollowsOwner(false);
         n.setPos(player.position().add(3, 0, -2));

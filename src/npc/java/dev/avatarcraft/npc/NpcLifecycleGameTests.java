@@ -26,10 +26,10 @@ public final class NpcLifecycleGameTests {
       String name,
       java.util.function.Consumer<GameTestHelper> action) {
     event.registerTest(
-        NpcMod.id(name),
+        bep_3davater_companion.id(name),
         new FunctionGameTestInstance(
             BuiltinTestFunctions.ALWAYS_PASS,
-            new TestData<>(env, NpcMod.id("qa_empty"), 400, 1, true)) {
+            new TestData<>(env, bep_3davater_companion.id("qa_empty"), 400, 1, true)) {
           public void run(GameTestHelper h) {
             action.accept(h);
           }
@@ -38,12 +38,37 @@ public final class NpcLifecycleGameTests {
 
   public static void register(RegisterGameTestsEvent event) {
     var env =
-        event.registerEnvironment(NpcMod.id("lifecycle_qa"), new TestEnvironmentDefinition.AllOf());
+        event.registerEnvironment(bep_3davater_companion.id("lifecycle_qa"), new TestEnvironmentDefinition.AllOf());
     test(event, env, "death_drops_and_owner_respawn", h -> death(h, true));
     test(event, env, "death_preserves_and_owner_respawn", h -> death(h, false));
     test(event, env, "recall_across_dimensions", NpcLifecycleGameTests::recall);
     test(event, env, "server_summon_cap_and_roster", NpcLifecycleGameTests::limit);
     test(event, env, "recall_and_journal_recipes", NpcLifecycleGameTests::recipes);
+    test(event, env, "series_settings_ownership_and_save", NpcLifecycleGameTests::seriesSettings);
+  }
+
+  private static void seriesSettings(GameTestHelper h) {
+    var owner = owner(h); var stranger = h.makeMockServerPlayerInLevel();
+    var npc = npc(h, owner);
+    var roster = NpcRoster.get(h.getLevel().getServer()); roster.update(npc);
+    var before = npc.personalityJson();
+    h.assertTrue(CompanionManagement.list(owner, 0).get("total").getAsInt() >= 1, "Owner list contains summoned NPC");
+    h.assertTrue(CompanionManagement.list(stranger, 0).get("total").getAsInt() == 0, "Another player cannot see the owner's NPC list");
+    boolean deniedRead = false, deniedSave = false;
+    try { CompanionManagement.profile(stranger, npc.getUUID()); } catch (IllegalArgumentException expected) { deniedRead = true; }
+    try { CompanionManagement.save(stranger, npc.getUUID(), before); } catch (IllegalArgumentException expected) { deniedSave = true; }
+    h.assertTrue(deniedRead && deniedSave && npc.personalityJson().equals(before), "UUID guessing cannot read or change another owner's NPC");
+    boolean invalid = false;
+    try { CompanionManagement.save(owner, npc.getUUID(), "{broken"); } catch (RuntimeException expected) { invalid = true; }
+    h.assertTrue(invalid && npc.personalityJson().equals(before), "Invalid JSON never mutates the NPC");
+    var changed = npc.personality(); changed.name = "設定テスト"; changed.avatar = "custom_model";
+    changed.instructions = "おっとりした、ぼくの性格サンプル";
+    CompanionManagement.save(owner, npc.getUUID(), changed.json());
+    h.assertTrue(npc.avatarId().equals("custom_model") && npc.personality().instructions.equals(changed.instructions), "Appearance and personality apply together");
+    h.assertTrue(roster.owned(owner.getUUID(), npc.getUUID()).name().equals(changed.name), "Roster updates the displayed name");
+    var restored = Personality.parse(CompanionManagement.profile(owner, npc.getUUID()).get("personality").toString());
+    h.assertTrue(restored.avatar.equals("custom_model") && restored.name.equals(changed.name), "Reopening uses server state");
+    h.succeed();
   }
 
   private static ServerPlayer owner(GameTestHelper h) {
@@ -54,7 +79,7 @@ public final class NpcLifecycleGameTests {
   }
 
   private static CompanionEntity npc(GameTestHelper h, ServerPlayer owner) {
-    var n = NpcMod.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+    var n = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
     n.initialize(owner, "tortobu");
     n.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(3, 1, 3))));
     n.setFollowsOwner(false);
@@ -121,7 +146,7 @@ public final class NpcLifecycleGameTests {
 
   private static void recall(GameTestHelper h) {
     var owner = owner(h);
-    owner.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(NpcMod.RECALL_MAP.get()));
+    owner.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(bep_3davater_companion.RECALL_MAP.get()));
     var n = npc(h, owner);
     var id = n.getUUID();
     var nether = h.getLevel().getServer().getLevel(Level.NETHER);
@@ -139,7 +164,7 @@ public final class NpcLifecycleGameTests {
         NpcRoster.get(h.getLevel().getServer()).owned(stranger.getUUID(), id) == null,
         "Other player must not enumerate or claim this actor");
     var other = owner(h);
-    other.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(NpcMod.RECALL_MAP.get()));
+    other.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(bep_3davater_companion.RECALL_MAP.get()));
     h.assertTrue(
         NpcRecall.request(other, id).contains("自分のNPC"),
         "Server must reject a forged request for another owner's NPC");
@@ -185,12 +210,12 @@ public final class NpcLifecycleGameTests {
             && !saved.canSummon(owner.getUUID(), count),
         "Roster and cap must survive saved-data round trip");
     var pos = h.absolutePos(new BlockPos(5, 0, 5));
-    owner.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(NpcMod.SOULSTONE.get(), 2));
+    owner.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(bep_3davater_companion.SOULSTONE.get(), 2));
     int configured = NpcSettings.MAX_PER_PLAYER.get();
     NpcSettings.MAX_PER_PLAYER.set(3);
     try {
       var result =
-          new ItemStack(NpcMod.SOULSTONE.get())
+          new ItemStack(bep_3davater_companion.SOULSTONE.get())
               .useOn(
                   new UseOnContext(
                       owner,
@@ -201,7 +226,7 @@ public final class NpcLifecycleGameTests {
           "Server cap must reject summon without consuming item");
       NpcSettings.MAX_PER_PLAYER.set(-1);
       var allowed =
-          new ItemStack(NpcMod.SOULSTONE.get())
+          new ItemStack(bep_3davater_companion.SOULSTONE.get())
               .useOn(
                   new UseOnContext(
                       owner,
@@ -232,7 +257,7 @@ public final class NpcLifecycleGameTests {
         skills
             .execute(
                 "craft",
-                dev.avatarcraft.npc.ai.CodexBridge.object("recipe", "avatarcraftnpc:recall_map"))
+                dev.avatarcraft.npc.ai.CodexBridge.object("recipe", "bep_3davater_companion:recall_map"))
             .thenCompose(
                 r -> {
                   h.assertTrue(
@@ -241,7 +266,7 @@ public final class NpcLifecycleGameTests {
                   return skills.execute(
                       "craft",
                       dev.avatarcraft.npc.ai.CodexBridge.object(
-                          "recipe", "avatarcraftnpc:memory_journal"));
+                          "recipe", "bep_3davater_companion:memory_journal"));
                 })
             .toCompletableFuture();
     h.onEachTick(
@@ -253,8 +278,8 @@ public final class NpcLifecycleGameTests {
           int maps = 0, books = 0, materials = 0;
           for (int i = 0; i < NpcInventory.SIZE; i++) {
             var stack = n.inventory.getItem(i);
-            if (stack.is(NpcMod.RECALL_MAP.get())) maps += stack.getCount();
-            if (stack.is(NpcMod.MEMORY_JOURNAL.get())) books += stack.getCount();
+            if (stack.is(bep_3davater_companion.RECALL_MAP.get())) maps += stack.getCount();
+            if (stack.is(bep_3davater_companion.MEMORY_JOURNAL.get())) books += stack.getCount();
             if (stack.is(Items.IRON_INGOT) || stack.is(Items.MAP) || stack.is(Items.BOOK))
               materials += stack.getCount();
           }

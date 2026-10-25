@@ -100,16 +100,16 @@ class AvatarRuntimeTest {
     double first = 2 + expectedRandom.nextDouble() * 2;
     var p = new ExpressionPlayer(new Random(42));
     assertEquals(
-        0f, p.evaluate(c, Map.of("face:blink", 0f), 0, false, false, null).get("face:blink"));
+        0f, p.evaluate(c, Map.of("face:blink", 0f), 0, List.of(), null).get("face:blink"));
     assertEquals(
         0f,
-        p.evaluate(c, Map.of("face:blink", 0f), first - .01, false, false, null).get("face:blink"));
+        p.evaluate(c, Map.of("face:blink", 0f), first - .01, List.of(), null).get("face:blink"));
     assertEquals(
         100f,
-        p.evaluate(c, Map.of("face:blink", 0f), first + .08, false, false, null).get("face:blink"),
+        p.evaluate(c, Map.of("face:blink", 0f), first + .08, List.of(), null).get("face:blink"),
         .001);
-    assertEquals(75f, p.evaluate(c, Map.of(), first + .08, true, true, null).get("face:blink"));
-    assertEquals(30f, p.evaluate(c, Map.of(), first + .08, true, true, "eat").get("face:blink"));
+    assertEquals(75f, p.evaluate(c, Map.of(), first + .08, List.of("eat", "hurt"), null).get("face:blink"));
+    assertEquals(30f, p.evaluate(c, Map.of(), first + .08, List.of("eat", "hurt"), "eat").get("face:blink"));
   }
 
   @Test

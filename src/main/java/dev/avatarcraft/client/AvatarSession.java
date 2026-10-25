@@ -7,12 +7,21 @@ import java.util.*;
 
 public final class AvatarSession {
   public static AvatarSession active;
+  public static Runnable selectionChanged = () -> {};
+  public static java.util.function.Supplier<String> status = () -> "";
+  public final dev.avatarcraft.api.ExpressionKeys expressionKeys = new dev.avatarcraft.api.ExpressionKeys();
+  private AvatarActorVisual previewVisual;
+
+  public AvatarActorVisual previewVisual() {
+    if (previewVisual == null) previewVisual = new AvatarActorVisual(archive, 0);
+    return previewVisual;
+  }
+
+  public void close() {
+    if (previewVisual != null) previewVisual.close();
+    textures.close();
+  }
   public final AvatarArchive archive;
-  public final AvatarPose pose;
-  public final AvatarPose previewPose;
-  public final FirstPersonArm leftFirstPerson, rightFirstPerson;
-  public final MotionFacing facing = new MotionFacing();
-  public final ExpressionPlayer expressions = new ExpressionPlayer(new Random());
   public ExpressionConfig config;
   public String preview;
   public final AvatarTextures textures;
@@ -23,10 +32,6 @@ public final class AvatarSession {
 
   public AvatarSession(AvatarArchive a, boolean remote) throws IOException {
     archive = a;
-    pose = new AvatarPose(a.avatar());
-    previewPose = new AvatarPose(a.avatar());
-    leftFirstPerson = remote ? null : new FirstPersonArm(a.avatar(), true);
-    rightFirstPerson = remote ? null : new FirstPersonArm(a.avatar(), false);
     config = a.expressions().copy();
     var path = AvatarLibrary.expressionPath(a.avatar().id);
     if (!remote && Files.exists(path)) {
@@ -44,14 +49,21 @@ public final class AvatarSession {
         AvatarArchive.GSON.toJson(Map.of("avatar", archive == null ? "" : archive.avatar().id)));
     var old = active;
     active = next;
-    if (old != null) old.textures.close();
-    ShareClient.selectionChanged();
+    if (old != null) old.close();
+    selectionChanged.run();
   }
 
   public void saveExpressions() throws IOException {
     config.validate(archive.avatar());
+    String json = AvatarArchive.GSON.toJson(config);
+    if (json.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 1 << 20)
+      throw new IOException("Expression config exceeds 1 MiB");
     AvatarLibrary.atomicWrite(
-        AvatarLibrary.expressionPath(archive.avatar().id), AvatarArchive.GSON.toJson(config));
-    ShareClient.selectionChanged();
+        AvatarLibrary.expressionPath(archive.avatar().id), json);
+    if (active != null && active.archive.avatar().id.equals(archive.avatar().id)) {
+      active.config = config.copy();
+      selectionChanged.run();
+    }
+    AvatarLibrary.reloadAfterCurrent();
   }
 }

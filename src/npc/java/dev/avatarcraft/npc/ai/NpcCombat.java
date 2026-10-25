@@ -14,7 +14,7 @@ import net.neoforged.neoforge.event.entity.ProjectileImpactEvent;
 /** Companion-only boss damage type; ordinary mobs and their damage types are unchanged. */
 public final class NpcCombat {
   private static final ResourceKey<DamageType> TYPE =
-      ResourceKey.create(Registries.DAMAGE_TYPE, NpcMod.id("companion_attack"));
+      ResourceKey.create(Registries.DAMAGE_TYPE, bep_3davater_companion.id("companion_attack"));
 
   static boolean boss(Entity target) {
     return target instanceof EnderDragon || target instanceof EnderDragonPart;

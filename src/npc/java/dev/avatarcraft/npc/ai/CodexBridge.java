@@ -47,7 +47,7 @@ public final class CodexBridge implements NpcBrain {
     var params =
         object(
             "clientInfo",
-            object("name", "avatarcraft_npc", "title", "AvatarCraft NPC", "version", "0.6.0"),
+            object("name", "avatarcraft_npc", "title", "bep_3davater_loader NPC", "version", "0.6.0"),
             "capabilities",
             object("experimentalApi", true));
     return rpc.request("initialize", params)
@@ -97,7 +97,13 @@ public final class CodexBridge implements NpcBrain {
   }
 
   public CompletableFuture<JsonObject> models() {
-    return rpc.request("model/list", object("limit", 50, "includeHidden", false));
+    return models(null);
+  }
+
+  public CompletableFuture<JsonObject> models(String cursor) {
+    var params = object("limit", 50, "includeHidden", false);
+    if (cursor != null) params.addProperty("cursor", cursor);
+    return rpc.request("model/list", params);
   }
 
   public CompletableFuture<Session> open(

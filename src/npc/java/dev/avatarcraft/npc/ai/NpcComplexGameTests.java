@@ -82,15 +82,15 @@ final class NpcComplexGameTests {
       if (!selected.contains("") && !selected.contains(String.format("%02d", i + 1))) continue;
       var env =
           event.registerEnvironment(
-              NpcMod.id("complex_diagnostics_" + String.format("%02d", i + 1)),
+              bep_3davater_companion.id("complex_diagnostics_" + String.format("%02d", i + 1)),
               new TestEnvironmentDefinition.AllOf());
       event.registerTest(
-          NpcMod.id("complex_" + String.format("%02d", i + 1) + "_" + KEYS[i]),
+          bep_3davater_companion.id("complex_" + String.format("%02d", i + 1) + "_" + KEYS[i]),
           new FunctionGameTestInstance(
               BuiltinTestFunctions.ALWAYS_PASS,
               new TestData<>(
                   env,
-                  NpcMod.id(i == 15 ? "qa_longtravel" : "qa_complex"),
+                  bep_3davater_companion.id(i == 15 ? "qa_longtravel" : "qa_complex"),
                   Boolean.getBoolean("avatarcraft.complexLive") ? 2000000 : BUDGETS[i] + 500,
                   1,
                   true)) {
@@ -154,7 +154,7 @@ final class NpcComplexGameTests {
         for (int z = 0; z < 24; z++) h.setBlock(x, 0, z, Blocks.BEDROCK);
       var owner = h.makeMockServerPlayerInLevel();
       owner.setPos(Vec3.atBottomCenterOf(p(1, 1, 1)));
-      n = NpcMod.COMPANION.get().create(level, EntitySpawnReason.COMMAND);
+      n = bep_3davater_companion.COMPANION.get().create(level, EntitySpawnReason.COMMAND);
       n.initialize(owner, "tortobu");
       n.setFollowsOwner(false);
       n.setPos(Vec3.atBottomCenterOf(p(3, 1, 6)));
@@ -197,7 +197,7 @@ final class NpcComplexGameTests {
     TaskPlan.Step atomic(String name, JsonObject args) {
       return new TaskPlan.Step(
           "tool",
-          "avatarcraftnpc:" + name,
+          "bep_3davater_companion:" + name,
           "",
           1,
           -1,
@@ -301,7 +301,7 @@ final class NpcComplexGameTests {
 
     CompanionEntity colleague(int x, int z) {
       var owner = level.getServer().getPlayerList().getPlayer(n.ownerId());
-      var e = NpcMod.COMPANION.get().create(level, EntitySpawnReason.COMMAND);
+      var e = bep_3davater_companion.COMPANION.get().create(level, EntitySpawnReason.COMMAND);
       e.initialize(owner, "tortobu");
       e.setFollowsOwner(false);
       e.setPos(Vec3.atBottomCenterOf(p(x, 1, z)));

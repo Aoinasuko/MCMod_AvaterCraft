@@ -19,7 +19,7 @@ namespace AvatarCraft.Editor
     public static class AvatarCraftExporter
     {
         static readonly JsonSerializerSettings Json = new JsonSerializerSettings { Formatting = Formatting.None };
-        [MenuItem("Tools/AvatarCraft/Export selected avatar")]
+        [MenuItem("Tools/B.E.P 3DAvater Exporter/Export selected avatar")]
         public static void ExportSelected()
         {
             AvatarCraftExportWindow.OpenSelected();
@@ -247,7 +247,7 @@ namespace AvatarCraft.Editor
                 GL.sRGBWrite = !linear && QualitySettings.activeColorSpace == ColorSpace.Linear;
                 if (normal) {
                     var shader = Shader.Find("Hidden/AvatarCraft/ExportNormal");
-                    if (!shader) throw new InvalidOperationException("Missing AvatarCraft normal export shader");
+                    if (!shader) throw new InvalidOperationException("Missing B.E.P 3DAvater Exporter normal export shader");
                     decode = new Material(shader);
                     Graphics.Blit(texture, rt, decode);
                 } else Graphics.Blit(texture, rt);

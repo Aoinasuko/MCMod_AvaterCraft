@@ -292,7 +292,7 @@ public final class LocalTaskRunner implements AutoCloseable {
       if (candidates.size() > 8) candidates.subList(8, candidates.size()).clear();
       // Guard owns combat and its pursuit boundary. Generic self-defense must not bypass it.
       if (!(step.action().equals("tool")
-          && Set.of("avatarcraftnpc:guard", "avatarcraftnpc:guard_post").contains(step.target())))
+          && Set.of("bep_3davater_companion:guard", "bep_3davater_companion:guard_post").contains(step.target())))
         for (var option : world.tactics(observation)) option(candidates, option, "defend");
       int food = observation.get("food").getAsInt(), foodSlot = world.foodSlot();
       if (food <= 12
@@ -416,7 +416,7 @@ public final class LocalTaskRunner implements AutoCloseable {
         problem = "Verified phase complete; plan remaining mission";
       }
       case "tool" -> {
-        String tool = s.target().substring("avatarcraftnpc:".length());
+        String tool = s.target().substring("bep_3davater_companion:".length());
         add(
             out,
             Set.of("look_at", "equip_armor").contains(tool)

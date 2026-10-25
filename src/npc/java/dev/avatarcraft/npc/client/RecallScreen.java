@@ -18,7 +18,7 @@ public final class RecallScreen extends Screen {
   private String message = "";
 
   public RecallScreen() {
-    super(Component.translatable("item.avatarcraftnpc.recall_map"));
+    super(Component.translatable("item.bep_3davater_companion.recall_map"));
   }
 
   private int panelWidth() {

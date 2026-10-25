@@ -21,7 +21,7 @@ public final class CompanionMenu extends AbstractContainerMenu {
   }
 
   public CompanionMenu(int id, Inventory playerInventory, CompanionEntity npc) {
-    super(NpcMod.COMPANION_MENU.get(), id);
+    super(bep_3davater_companion.COMPANION_MENU.get(), id);
     this.npc = npc;
     for (int row = 0; row < 4; row++)
       for (int col = 0; col < 9; col++)

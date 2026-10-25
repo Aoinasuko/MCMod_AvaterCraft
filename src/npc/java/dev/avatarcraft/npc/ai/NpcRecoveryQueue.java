@@ -17,7 +17,7 @@ public final class NpcRecoveryQueue {
                 s ->
                     Set.of("plan_next", "delegate").contains(s.action())
                         || s.action().equals("tool")
-                            && Set.of("avatarcraftnpc:delegate", "avatarcraftnpc:delegate_task")
+                            && Set.of("bep_3davater_companion:delegate", "bep_3davater_companion:delegate_task")
                                 .contains(s.target())))
       throw new IllegalArgumentException("Recovery reservation requires 3 to 5 local task slots");
     steps.add(new TaskPlan.Step("plan_next", "", "", 1, -1, -1, "main", 1, List.of()));

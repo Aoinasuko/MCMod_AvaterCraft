@@ -1,9 +1,9 @@
 {
   "name": "dev.avatarcraft.exporter",
-  "version": "0.7.1",
-  "displayName": "AvatarCraft Exporter",
+  "version": "0.10.0",
+  "displayName": "B.E.P 3DAvater Exporter",
   "unity": "2022.3",
-  "description": "Export skinned avatars, expressions, lilToon materials and secondary motion to AvatarCraft.",
+  "description": "Export Humanoid avatars, expression keys, lilToon materials and secondary motion for the B.E.P 3DAvater series. Japanese and English UI.",
   "license": "All Rights Reserved",
   "dependencies": {
     "com.unity.nuget.newtonsoft-json": "3.2.1"

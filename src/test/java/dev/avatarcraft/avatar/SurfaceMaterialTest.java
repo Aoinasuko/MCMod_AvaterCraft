@@ -71,7 +71,7 @@ class SurfaceMaterialTest {
             "unity/Packages/dev.avatarcraft.exporter/Editor/Resources/AvatarCraft/surface.json");
     assertArrayEquals(
         Files.readAllBytes(source),
-        Files.readAllBytes(Path.of("src/main/resources/assets/avatarcraft/surface.json")));
+        Files.readAllBytes(Path.of("src/main/resources/assets/bep_3davater_loader/surface.json")));
   }
 
   private record Fixture(

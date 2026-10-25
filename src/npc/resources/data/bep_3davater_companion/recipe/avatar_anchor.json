@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "III",
+    "ICI",
+    "III"
+  ],
+  "key": {
+    "I": "minecraft:iron_ingot",
+    "C": "#minecraft:planks"
+  },
+  "result": {
+    "id": "bep_3davater_companion:avatar_anchor",
+    "count": 1
+  }
+}

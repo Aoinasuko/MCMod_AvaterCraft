@@ -2,22 +2,22 @@ modLoader="javafml"
 loaderVersion="[1,)"
 license="All Rights Reserved"
 [[mods]]
-modId="avatarcraftnpc"
-version="0.7.1"
-displayName="AvatarCraft AI Companions"
+modId="bep_3davater_companion"
+version="26.3-0.10.0"
+displayName="B.E.P 3DAvater Companion"
 description='''AI-driven avatar companions with equipment, personalities and persistent memories.'''
-[[dependencies.avatarcraftnpc]]
-modId="avatarcraft"
+[[dependencies.bep_3davater_companion]]
+modId="bep_3davater_loader"
 type="required"
-versionRange="[0.7.1,)"
+versionRange="[26.3-0.10.0,26.3-0.11)"
 ordering="AFTER"
 side="BOTH"
-[[dependencies.avatarcraftnpc]]
+[[dependencies.bep_3davater_companion]]
 modId="neoforge"
 type="required"
 versionRange="[26.3.0.95,26.4)"
 side="BOTH"
-[[dependencies.avatarcraftnpc]]
+[[dependencies.bep_3davater_companion]]
 modId="minecraft"
 type="required"
 versionRange="[26.3]"

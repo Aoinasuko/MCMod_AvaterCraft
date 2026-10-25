@@ -277,11 +277,11 @@ class LocalTaskRunnerTest {
   @Test
   void versionFourHasRealTwentyMiBWeightsAndRejectsCorruption() throws Exception {
     byte[] weights =
-        getClass().getResourceAsStream("/data/avatarcraftnpc/ai/action-policy.bin").readAllBytes();
+        getClass().getResourceAsStream("/data/bep_3davater_companion/ai/action-policy.bin").readAllBytes();
     String json =
         new String(
             getClass()
-                .getResourceAsStream("/data/avatarcraftnpc/ai/action-policy.json")
+                .getResourceAsStream("/data/bep_3davater_companion/ai/action-policy.json")
                 .readAllBytes(),
             java.nio.charset.StandardCharsets.UTF_8);
     assertEquals(21020020, weights.length);

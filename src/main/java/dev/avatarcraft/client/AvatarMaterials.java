@@ -44,9 +44,9 @@ public final class AvatarMaterials {
           var p =
               RenderPipeline.builder()
                   .withLocation(
-                      Identifier.fromNamespaceAndPath("avatarcraft", "pipeline/" + CACHE.size()))
-                  .withVertexShader(Identifier.fromNamespaceAndPath("avatarcraft", "core/avatar"))
-                  .withFragmentShader(Identifier.fromNamespaceAndPath("avatarcraft", "core/avatar"))
+                      Identifier.fromNamespaceAndPath("bep_3davater_loader", "pipeline/" + CACHE.size()))
+                  .withVertexShader(Identifier.fromNamespaceAndPath("bep_3davater_loader", "core/avatar"))
+                  .withFragmentShader(Identifier.fromNamespaceAndPath("bep_3davater_loader", "core/avatar"))
                   .withBindGroupLayout(BindGroupLayouts.GLOBALS)
                   .withBindGroupLayout(BindGroupLayouts.PROJECTION)
                   .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
@@ -118,7 +118,7 @@ public final class AvatarMaterials {
                       () -> RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR))
                   .useLightmap();
           if (transparent) setup.sortOnUpload();
-          return RenderType.create("avatarcraft", setup.createRenderSetup());
+          return RenderType.create("bep_3davater_loader", setup.createRenderSetup());
         });
   }
 

@@ -8,11 +8,15 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.client.event.*;
 import net.neoforged.neoforge.common.NeoForge;
 
-@Mod(value = NpcMod.ID, dist = Dist.CLIENT)
+@Mod(value = bep_3davater_companion.ID, dist = Dist.CLIENT)
 public final class NpcClient {
   private AvatarActorRenderer<CompanionEntity> renderer;
 
   public NpcClient(IEventBus bus, net.neoforged.fml.ModContainer container) {
+    dev.avatarcraft.client.SeriesTabs.register(bep_3davater_companion.ID,
+        net.minecraft.network.chat.Component.literal("Companion"), CompanionSettingsScreen::new);
+    dev.avatarcraft.client.SeriesTabs.register(AiModelScreen.TAB_ID,
+        net.minecraft.network.chat.Component.literal("AIモデル"), AiModelScreen::new);
     BlueprintPreview.install();
     if (Boolean.getBoolean("avatarcraft.anchorUiQa"))
       NeoForge.EVENT_BUS.addListener(
@@ -22,18 +26,8 @@ public final class NpcClient {
                   .getWindow()
                   .setTitle(
                       Boolean.getBoolean("avatarcraft.blueprintUiQa")
-                          ? "AvatarCraft Blueprint QA"
-                          : "AvatarCraft 0.7.0 Anchor QA"));
-    java.util.concurrent.CompletableFuture.runAsync(
-        () -> {
-          try {
-            BundledAvatar.install(dev.avatarcraft.client.AvatarLibrary.ROOT.resolve("avatars"));
-            dev.avatarcraft.client.AvatarLibrary.reloadAfterCurrent();
-          } catch (Exception e) {
-            System.getLogger("AvatarCraft NPC")
-                .log(System.Logger.Level.ERROR, "Cannot install bundled tortobu", e);
-          }
-        });
+                          ? "bep_3davater_loader Blueprint QA"
+                          : "bep_3davater_loader 0.7.0 Anchor QA"));
     container.registerExtensionPoint(
         net.neoforged.neoforge.client.gui.IConfigScreenFactory.class,
         net.neoforged.neoforge.client.gui.ConfigurationScreen::new);
@@ -44,6 +38,10 @@ public final class NpcClient {
                 NpcNetwork.Response.TYPE,
                 (response, context) -> {
                   var minecraft = net.minecraft.client.Minecraft.getInstance();
+                  if (response.action().startsWith("series_")
+                      && minecraft.gui.screen() instanceof CompanionSettingsScreen settings) {
+                    settings.receive(response); return;
+                  }
                   if (response.action().equals("blueprint")) {
                     BlueprintPreview.receive(response.data());
                     return;
@@ -84,7 +82,7 @@ public final class NpcClient {
         EntityRenderersEvent.RegisterRenderers.class,
         event ->
             event.registerEntityRenderer(
-                NpcMod.COMPANION.get(),
+                bep_3davater_companion.COMPANION.get(),
                 context -> {
                   if (renderer != null) renderer.close();
                   renderer = new AvatarActorRenderer<>(context);
@@ -92,7 +90,7 @@ public final class NpcClient {
                 }));
     bus.addListener(
         RegisterMenuScreensEvent.class,
-        event -> event.register(NpcMod.COMPANION_MENU.get(), CompanionScreen::new));
+        event -> event.register(bep_3davater_companion.COMPANION_MENU.get(), CompanionScreen::new));
     NeoForge.EVENT_BUS.addListener(
         ClientPlayerNetworkEvent.LoggingOut.class,
         event -> {

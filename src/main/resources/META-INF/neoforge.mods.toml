@@ -2,17 +2,17 @@ modLoader="javafml"
 loaderVersion="[1,)"
 license="All Rights Reserved"
 [[mods]]
-modId="avatarcraft"
-version="0.7.1"
-displayName="AvatarCraft"
-description='''Unity avatar rendering and expression editor.'''
-[[dependencies.avatarcraft]]
+modId="bep_3davater_loader"
+version="26.3-0.10.0"
+displayName="B.E.P 3DAvater Loader"
+description='''Shared avatar loading, rendering and named expression keys. Includes tortobu.'''
+[[dependencies.bep_3davater_loader]]
 modId="neoforge"
 type="required"
 versionRange="[26.3.0.95,26.4)"
 ordering="NONE"
 side="BOTH"
-[[dependencies.avatarcraft]]
+[[dependencies.bep_3davater_loader]]
 modId="minecraft"
 type="required"
 versionRange="[26.3]"

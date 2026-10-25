@@ -16,7 +16,7 @@ public final class AnchorScreen extends Screen {
   private boolean success;
 
   public AnchorScreen(JsonObject data) {
-    super(Component.translatable("block.avatarcraftnpc.avatar_anchor"));
+    super(Component.translatable("block.bep_3davater_companion.avatar_anchor"));
     token = data.get("token").getAsString();
     value = data.get("id").getAsString();
   }

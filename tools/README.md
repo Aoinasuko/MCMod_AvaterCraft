@@ -61,9 +61,9 @@ C#スクリプトでは、Hierarchyで明示的に選択したHumanoidアバタ�
 
 `validate-visible-bounds.cs` は一時メッシュを生成し、インポートされた境界の余白・未使用頂点を除いて寸法を求め、ルートの縮尺を一度だけ適用することをUnityで確認します。シーンは保存しません。
 
-NPCのHTTPプロバイダーはJUnitの模擬APIで検証します（外部APIキー不要）。実環境の設定は `config/avatarcraftnpc-ai.toml` です。開発GUIは提供画像に合わせて209×272の論理領域を使い、小画面では描画と入力を同倍率に縮小します。
+NPCのHTTPプロバイダーはJUnitの模擬APIで検証します（外部APIキー不要）。実環境の設定は `config/bep_3davater_companion-ai.toml` です。開発GUIは提供画像に合わせて209×272の論理領域を使い、小画面では描画と入力を同倍率に縮小します。
 
-0.4.0以降、NPC用JARには再配布が許可されたタートブだけを同梱します。`tools/package_release.py` は同梱モデルの名前・エントリ・ハッシュと作者クレジットを検証し、他のモデルを含む場合は失敗します。
+0.9.0以降、Loader用JARには再配布が許可されたtortobuだけを同梱し、Companion用JARは性格プリセットを含みます。`tools/package_release.py` は同梱モデルの名前・エントリ・ハッシュと作者クレジットを検証し、他のモデルを含む場合は失敗します。
 
 ## lilToon素材の検証
 
@@ -73,7 +73,7 @@ NPCのHTTPプロバイダーはJUnitの模擬APIで検証します（外部API�
 
 ## 非公開プレイヤー同期の検証
 
-`PrivateAvatarTest` は複数のプロトコルクライアントを模し、実際のタートブと表情設定を暗号化して受け渡します。暗号・宛先拘束・他人の装着拒否・遅れての参加・改ざん・容量予約・時間切れ・退出時の削除を確認します。GameTestの `private_avatar_wire` は実際のNeoForgeパケットCODECとMinecraftサーバー宛てのサイズ上限を検証します。クライアント実機2台の画面確認とは別の検証です。
+`PrivateAvatarTest` は複数のプロトコルクライアントを模し、実際のtortobuと表情設定を暗号化して受け渡します。暗号・宛先拘束・他人の装着拒否・遅れての参加・改ざん・容量予約・時間切れ・退出時の削除を確認します。GameTestの `private_avatar_wire` は実際のNeoForgeパケットCODECとMinecraftサーバー宛てのサイズ上限を検証します。クライアント実機2台の画面確認とは別の検証です。
 
 ## ローカル行動モデル
 
@@ -96,3 +96,27 @@ NPCのHTTPプロバイダーはJUnitの模擬APIで検証します（外部API�
 `tools/dev.ps1 -Task runAreaGameTest`は独立した`run-area-qa/`で矩形掘削・埋立・耕作・種まき、混合テンプレートの依存、設計図保存、チェストからの資材確保、実建築と仮足場の撤去を検証します。通常の`runNpcGameTest`にも含めています。`AVATARCRAFT_AREA_LIVE=true`を設定した場合だけ、Codex OAuthで実際の指示理解／設計から範囲作業・建築完了までを検証し、`build/area-live-result.json`と`build/construction-live-result.json`へ結果を記録します。
 
 `AVATARCRAFT_BLUEPRINT_UI_QA=true`で`runAnchorClient`を実行すると、既存の独立したAnchor UI QAワールドで建築画面確認用の開発フックを有効にできます。開発ワールドのプレイヤーに`avatarcraft_blueprint_preview_qa`タグがある場合のみ、実際の設計図作成ツールを実行します。`avatarcraft_blueprint_build_qa`タグで実際の資材確保／施工ツールを実行します。結果は`build/blueprint-ui-qa.json`、画像はその実行ディレクトリの`screenshots/`に保存します。製品環境ではこのフックを実行しません。
+
+## 3つのMODの分離検証
+
+`runLoaderGameTest`はLoader単体、`runPlayerGameTest`はLoader＋Player Modelの専用サーバーで検証します。`runNpcGameTest`はLoader＋Companionで既存のNPCシナリオを実行します。クライアントは `runLoaderClient`・`runPlayerClient`・`runCompanionClient` で独立した開発ディレクトリに起動します。通常の `runClient` は3つを読み込みます。
+
+エントリーポイントクラスは `dev.avatarcraft.bep_3davater_loader`、`dev.avatarcraft.player.bep_3davater_player`、`dev.avatarcraft.npc.bep_3davater_companion` です。`package_release.py`は3つのJARの依存関係・クラス重複・相互参照・モデルの同梱先と性格を検証します。
+
+`python tools/unity_mcp.py code tools/export-bundled-tortobu.cs` は、シーン直下のtortobuをHumanoidとして検証し、プロジェクト内の `AvatarCraftExports/tortobu.avc` に出力します。確認後にLoaderの `src/main/resources/assets/bep_3davater_loader/avatars/tortobu.avc` へ配置します。
+
+## シリーズ設定と日英Exporter
+
+クライアント拡張は `SeriesTabs.register(modId, title, ScreenのSupplier)` でタブを登録します。画面を `SeriesScreen` から継承して `initTabs()` と `background()` を利用すると、同じ上部タブを表示できます。Loaderは他のMODのクラスを参照しません。モデル一覧の選択と着用を分離し、表情編集は独立した `AvatarSession` を使います。
+
+`runSeriesClient` は `run-series-client-qa/saves/New World` を3つのMODで開きます。事前に独立した検証ワールドを配置してください。実AI接続を必要としない画面確認では、この実行ディレクトリのAI設定を無効にします。通常の `runClient` は従来どおり利用できます。
+
+`ExpressionShapesTest` は結合Bodyメッシュの顔と胴体・指のキーを区別することを検証します。GameTestの `series_settings_ownership_and_save` は所有者に限定した一覧・読取・保存、不正JSONの拒否と再読込を実サーバーで確認します。
+
+Unityの表示名・メニューはB.E.P 3DAvater Exporterです。`ExporterLanguage` がEditorPrefsで日英選択を保存し、動作名・Clip名も切り替えます。英語の利用手順は `release/Export_en.md` に置き、配布ZIPの `Docs/Export_en.md` とUPM tarballの `README_EN.md` に同梱します。
+
+## AI接続設定の検証
+
+`AiModelCatalogTest`は外部キー不要のローカル模擬APIでモデル一覧・認証ヘッダー・ページ送り・エラー非表示・リダイレクト拒否・容量上限を確認します。`runAiSettingsGameTest`は`run-ai-settings-qa/`の独立した専用サーバーでLOCAL設定の保存と不正値の拒否、他の実行設定の保持を確認し、試験後に元の設定へ戻します。実AIへは接続しません。
+
+`runAiSettingsClient`は`run-ai-settings-client-qa/saves/New World`を開く独立したGUI検証用です。実環境の設定をコピーせず、模擬APIと偽のキーを使って表示と保存を確認してください。APIキーをスクリーンショットやログへ出しません。
