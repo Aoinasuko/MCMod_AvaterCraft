@@ -1,5 +1,6 @@
 """Build and verify a portable release from an already-built mod JAR (stdlib only)."""
 from pathlib import Path
+import argparse
 import gzip
 import hashlib
 import io
@@ -9,6 +10,8 @@ import shutil
 import tarfile
 import tempfile
 import zipfile
+
+from validate_release_docs import validate as validate_docs
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "unity/Packages/dev.avatarcraft.exporter"
@@ -21,7 +24,12 @@ MOD_VERSION = f"{MINECRAFT_VERSION}-{VERSION}"
 if not re.search(rf"^version = '{re.escape(MOD_VERSION)}'$",
                  (ROOT / "build.gradle").read_text(encoding="utf-8"), re.MULTILINE):
     raise ValueError("Gradle mod version must match Minecraft version + exporter version")
-NAME = f"BEP-3DAvater-{MOD_VERSION}"
+PARSER = argparse.ArgumentParser(description=__doc__)
+PARSER.add_argument("--revision", default="", help="Optional distribution suffix; preserve previous archives")
+ARGS = PARSER.parse_args()
+if ARGS.revision and not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,31}", ARGS.revision):
+    raise ValueError("Invalid distribution revision")
+NAME = f"BEP-3DAvater-{MOD_VERSION}" + (f"-{ARGS.revision}" if ARGS.revision else "")
 OUTPUT = ROOT / "PublishPackage"
 DEST = OUTPUT / NAME
 ARCHIVE = OUTPUT / f"{NAME}.zip"
@@ -29,6 +37,65 @@ ARCHIVE = OUTPUT / f"{NAME}.zip"
 
 def sha(data):
     return hashlib.sha256(data).hexdigest()
+
+
+def license_text():
+    return "AvatarCraft\nAll Rights Reserved.\n\nTemplate notice:\n" + (ROOT / "LICENSE").read_text(encoding="utf-8")
+
+
+def guide_files():
+    return sorted(p for p in (ROOT / "release").rglob("*") if p.is_file())
+
+
+def make_unitypackage(destination):
+    """Unity's GUID/asset/asset.meta/pathname format, retaining original source GUIDs."""
+    assets = {}
+    target_root = "Assets/BEP3DAvaterExporter"
+
+    def add(pathname, content, metadata=None, folder=False):
+        guid = sha(("bep-exporter:" + pathname).encode())[:32]
+        if metadata is None:
+            metadata = (f"fileFormatVersion: 2\nguid: {guid}\n" +
+                        ("folderAsset: yes\nDefaultImporter:\n  externalObjects: {}\n" if folder
+                         else "DefaultImporter:\n  externalObjects: {}\n")).encode()
+        else:
+            match = re.search(rb"^guid: ([a-f0-9]{32})\r?$", metadata, re.MULTILINE)
+            assert match, f"Missing Unity GUID: {pathname}"
+            guid = match.group(1).decode()
+        assert guid not in assets, f"Duplicate Unity GUID: {pathname}"
+        assets[guid] = {"pathname": pathname.encode(), "asset": content, "asset.meta": metadata}
+
+    add(target_root, b"", folder=True)
+    for source in sorted(PACKAGE.rglob("*")):
+        relative = source.relative_to(PACKAGE).as_posix()
+        if source.suffix == ".meta" or relative == "package.json":
+            continue
+        metadata = Path(str(source) + ".meta").read_bytes()
+        add(f"{target_root}/{relative}", b"" if source.is_dir() else source.read_bytes(),
+            metadata, source.is_dir())
+    add(f"{target_root}/Documentation", b"", folder=True)
+    add(f"{target_root}/Documentation/assets", b"", folder=True)
+    for source in guide_files():
+        add(f"{target_root}/Documentation/{source.relative_to(ROOT / 'release').as_posix()}", source.read_bytes())
+    add(f"{target_root}/LICENSE.txt", license_text().encode())
+    with destination.open("wb") as raw:
+        with gzip.GzipFile(fileobj=raw, mode="wb", filename="", mtime=0) as compressed:
+            with tarfile.open(fileobj=compressed, mode="w") as tar:
+                for guid, entries in assets.items():
+                    for name, data in entries.items():
+                        info = tarfile.TarInfo(f"{guid}/{name}")
+                        info.size, info.mode, info.mtime = len(data), 0o644, 0
+                        tar.addfile(info, io.BytesIO(data))
+    with tarfile.open(destination, "r:gz") as tar:
+        assert len(tar.getmembers()) == len(assets) * 3
+        for guid, entries in assets.items():
+            for name, data in entries.items():
+                assert tar.extractfile(f"{guid}/{name}").read() == data
+        paths = {row["pathname"].decode() for row in assets.values()}
+        assert f"{target_root}/Editor/AvatarCraftExportWindow.cs" in paths
+        assert f"{target_root}/Editor/Resources/AvatarCraft/motions.json" in paths
+        assert f"{target_root}/Documentation/index.html" in paths
+        assert not any(p.endswith("package.json") for p in paths)
 
 
 def verify_jar(data, role):
@@ -136,10 +203,10 @@ def make_upm(destination):
                     info = tarfile.TarInfo(f"package/{relative}")
                     info.size, info.mode, info.mtime = len(data), 0o644, 0
                     tar.addfile(info, io.BytesIO(data))
-                for name, source in (("README.md", ROOT / "release/README_ja.md"),
-                                     ("README_EN.md", ROOT / "release/Export_en.md"),
-                                     ("LICENSE.txt", ROOT / "release/LICENSE.txt")):
-                    data = source.read_bytes()
+                documents = [(f"Documentation~/{p.relative_to(ROOT / 'release').as_posix()}", p.read_bytes())
+                             for p in guide_files()]
+                documents.append(("LICENSE.txt", license_text().encode()))
+                for name, data in documents:
                     info = tarfile.TarInfo(f"package/{name}")
                     info.size, info.mode, info.mtime = len(data), 0o644, 0
                     tar.addfile(info, io.BytesIO(data))
@@ -157,10 +224,12 @@ def make_upm(destination):
         assert library
         assert METADATA["dependencies"]["com.unity.nuget.newtonsoft-json"] == "3.2.1"
         assert METADATA["displayName"] == "B.E.P 3DAvater Exporter"
-        assert packed["package/README_EN.md"] == (ROOT / "release/Export_en.md").read_bytes()
+        for source in guide_files():
+            assert packed[f"package/Documentation~/{source.relative_to(ROOT / 'release').as_posix()}"] == source.read_bytes()
 
 
 def main():
+    validate_docs()
     if DEST.exists() or ARCHIVE.exists():
         raise FileExistsError(f"Release already exists: {NAME}; preserve it or use a new version")
     jar_source = ROOT / f"build/libs/bep_3davater_loader-{MOD_VERSION}.jar"
@@ -182,32 +251,27 @@ def main():
         stage = Path(temporary) / NAME
         (stage / "Minecraft/mods").mkdir(parents=True)
         (stage / "Unity").mkdir()
-        (stage / "Docs").mkdir()
         shutil.copy2(jar_source, stage / "Minecraft/mods" / jar_source.name)
         shutil.copy2(npc_source, stage / "Minecraft/mods" / npc_source.name)
         shutil.copy2(player_source, stage / "Minecraft/mods" / player_source.name)
         (stage / "Examples/Personalities").mkdir(parents=True)
         shutil.copy2(ROOT / "src/npc/resources/data/bep_3davater_companion/personalities/tortobu.json",
                      stage / "Examples/Personalities/tortobu.json")
-        for name in ("README_ja.md", "CHANGELOG_ja.md", "LICENSE.txt", "Tortobu_Notice_ja.md"):
-            shutil.copy2(ROOT / "release" / name, stage / name)
-        shutil.copy2(ROOT / "release/Guide_ja.md", stage / "Docs/Guide_ja.md")
-        shutil.copy2(ROOT / "release/Expression_API_ja.md", stage / "Docs/Expression_API_ja.md")
-        shutil.copy2(ROOT / "release/Export_en.md", stage / "Docs/Export_en.md")
-        shutil.copy2(ROOT / "release/NPC_Guide_ja.md", stage / "Docs/NPC_Guide_ja.md")
-        shutil.copy2(ROOT / "release/AI_Settings_ja.md", stage / "Docs/AI_Settings_ja.md")
-        shutil.copy2(ROOT / "release/NPC_LocalAI_ja.md", stage / "Docs/NPC_LocalAI_ja.md")
-        shutil.copy2(ROOT / "release/NPC_Tools_ja.md", stage / "Docs/NPC_Tools_ja.md")
-        shutil.copy2(ROOT / "release/LilToon_ja.md", stage / "Docs/LilToon_ja.md")
-        shutil.copy2(ROOT / "release/Multiplayer_ja.md", stage / "Docs/Multiplayer_ja.md")
+        for source in guide_files():
+            target = stage / source.relative_to(ROOT / "release")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+        (stage / "LICENSE.txt").write_text(license_text(), encoding="utf-8")
         make_upm(stage / f"Unity/dev.avatarcraft.exporter-{VERSION}.tgz")
+        make_unitypackage(stage / f"Unity/BEP-3DAvater-Exporter-{VERSION}.unitypackage")
         for document in stage.rglob("*"):
-            if document.is_file() and document.suffix in {".md", ".txt"}:
+            if document.is_file() and document.suffix in {".html", ".txt"}:
                 assert not re.search(r"clonka|yilnel", document.read_text(encoding="utf-8"), re.IGNORECASE), document
         files = [{"path": p.relative_to(stage).as_posix(), "size": p.stat().st_size,
                   "sha256": sha(p.read_bytes())} for p in sorted(stage.rglob("*")) if p.is_file()]
         manifest = {"name": "B.E.P 3DAvater", "version": MOD_VERSION,
                     "exporterVersion": VERSION,
+                    "documentationEntry": "index.html",
                     "minecraft": MINECRAFT_VERSION, "neoforgeTested": "26.3.0.95", "java": 25,
                     "unityTested": "2022.3.22f1", "license": "All Rights Reserved",
                     "includesAvatarAssets": True, "files": files}

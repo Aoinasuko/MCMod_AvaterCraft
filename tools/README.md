@@ -77,11 +77,11 @@ NPCのHTTPプロバイダーはJUnitの模擬APIで検証します（外部API�
 
 ## ローカル行動モデル
 
-`python tools/generate_npc_curriculum.py`で日英216,000組の命令・観察・計画・候補データを生成し、`python tools/train_npc_policy.py`でversion 4の5専門家を学習します。48→1000→1000→1を専門家ごとに持ち、計5,255,005パラメータ・21,020,020 bytesです。各候補では1専門家だけを使用します。既定は学習192,000組・40epoch、検証12,000組・独立評価12,000組。初期重みは生成先の`initial-policy.bin`へ保存します。言語理解は接続AI、ローカルモデルは構造化候補の順位付けです。推論はJavaのみで、利用者にPython・GPUの導入は不要です。`tools/export_npc_policy_examples.py`のログ抽出はレビュー資料用で、未レビューの選択結果を正解として自動学習しません。`tools/NpcCurriculumCheck.java`は全想定計画を実際のTaskPlanの契約で検証します。詳しくは [構成と学習手順](../release/NPC_LocalAI_ja.md)。
+`python tools/generate_npc_curriculum.py`で日英216,000組の命令・観察・計画・候補データを生成し、`python tools/train_npc_policy.py`でversion 4の5専門家を学習します。48→1000→1000→1を専門家ごとに持ち、計5,255,005パラメータ・21,020,020 bytesです。各候補では1専門家だけを使用します。既定は学習192,000組・40epoch、検証12,000組・独立評価12,000組。初期重みは生成先の`initial-policy.bin`へ保存します。言語理解は接続AI、ローカルモデルは構造化候補の順位付けです。推論はJavaのみで、利用者にPython・GPUの導入は不要です。`tools/export_npc_policy_examples.py`のログ抽出はレビュー資料用で、未レビューの選択結果を正解として自動学習しません。`tools/NpcCurriculumCheck.java`は全想定計画を実際のTaskPlanの契約で検証します。詳しくは [構成と学習手順](../Docs/NpcPolicyV4.md)。
 
 `tools/NpcPolicyBenchmark.java` はJava 25のソースファイル実行で、コンパイル済みNPCクラス・NPCリソース・Gsonをクラスパスに指定して動かします。24候補の評価だけを測り、ワールド探索・経路探索・API応答時間は含みません。
 
-`tools/NpcToolCatalog.java` は同じクラスパスで実際の`NpcTools`定義をJSONへ抽出します。出力を`build/npc-tools.json`へ保存し、`python tools/generate_npc_tool_docs.py`で`Docs/NpcTools.md`と配布用`release/NPC_Tools_ja.md`を生成します。全63種の引数名・型と日本語の実行条件を同期し、説明のないツールがあれば失敗します。
+`tools/NpcToolCatalog.java` は同じクラスパスで実際の`NpcTools`定義をJSONへ抽出します。出力を`build/npc-tools.json`へ保存し、`python tools/generate_npc_tool_docs.py`で開発者用の`Docs/NpcTools.md`を生成します。全63種の引数名・型と日本語の実行条件を同期し、説明のないツールがあれば失敗します。
 
 ## アバターアンカーの検証
 
@@ -113,10 +113,16 @@ NPCのHTTPプロバイダーはJUnitの模擬APIで検証します（外部API�
 
 `ExpressionShapesTest` は結合Bodyメッシュの顔と胴体・指のキーを区別することを検証します。GameTestの `series_settings_ownership_and_save` は所有者に限定した一覧・読取・保存、不正JSONの拒否と再読込を実サーバーで確認します。
 
-Unityの表示名・メニューはB.E.P 3DAvater Exporterです。`ExporterLanguage` がEditorPrefsで日英選択を保存し、動作名・Clip名も切り替えます。英語の利用手順は `release/Export_en.md` に置き、配布ZIPの `Docs/Export_en.md` とUPM tarballの `README_EN.md` に同梱します。
+Unityの表示名・メニューはB.E.P 3DAvater Exporterです。`ExporterLanguage` がEditorPrefsで日英選択を保存し、動作名・Clip名も切り替えます。利用手順は `release/index.html`・`player.html`・`npc.html` に日英切り替え付きでまとめ、配布ZIPのルート、UPMの `Documentation~`、UnityPackageの `Documentation` に同梱します。
 
 ## AI接続設定の検証
 
 `AiModelCatalogTest`は外部キー不要のローカル模擬APIでモデル一覧・認証ヘッダー・ページ送り・エラー非表示・リダイレクト拒否・容量上限を確認します。`runAiSettingsGameTest`は`run-ai-settings-qa/`の独立した専用サーバーでLOCAL設定の保存と不正値の拒否、他の実行設定の保持を確認し、試験後に元の設定へ戻します。実AIへは接続しません。
 
 `runAiSettingsClient`は`run-ai-settings-client-qa/saves/New World`を開く独立したGUI検証用です。実環境の設定をコピーせず、模擬APIと偽のキーを使って表示と保存を確認してください。APIキーをスクリーンショットやログへ出しません。
+
+## HTML配布ガイド
+
+`python tools/generate_release_docs.py`で3ページを生成し、`python tools/validate_release_docs.py`で言語・ページ間リンク・アンカー・ローカル素材を検証します。`release/assets/guide.css`と`guide.js`は共通です。`release`へ旧Markdown資料を再生成しません。
+
+`python tools/package_release.py --revision html-guide`は過去の配布物を残してHTML版のZIPを作成します。3つのMOD、Assets用 `.unitypackage`、UPM用 `.tgz`、日英HTMLガイド、性格サンプルを収録し、UnityのGUIDとアセットの一致・全ファイルのハッシュを検証します。UnityPackageは依存パッケージを自動導入しないため、必要なNewtonsoft.Jsonの導入手順もガイドへ記載しています。

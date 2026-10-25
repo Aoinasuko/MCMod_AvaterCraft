@@ -120,7 +120,7 @@ def main():
         '再生成は`tools/NpcToolCatalog.java`で`build/npc-tools.json`を出力後、`python tools/generate_npc_tool_docs.py`。ツールの増減・説明の欠落は生成時に失敗します。', '',
     ]
     text = '\n'.join(lines)
-    for path in ('Docs/NpcTools.md', 'release/NPC_Tools_ja.md'):
+    for path in ('Docs/NpcTools.md',):
         (ROOT / path).write_text(text, encoding='utf-8')
     print(f'Wrote {len(tools)} tool contracts')
 

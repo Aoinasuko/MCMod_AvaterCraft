@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ja" data-language="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="B.E.P 3DAvater — Japanese / English offline guide for Unity export, player avatars and AI companions.">
+<title>導入・変換ガイド | B.E.P 3DAvater</title><link rel="stylesheet" href="assets/guide.css"><script src="assets/guide.js" defer></script></head>
+<body data-title-ja="導入・変換ガイド" data-title-en="Installation &amp; export">
+<a class="skip" href="#main">本文へ / Skip to content</a>
+<aside class="sidebar"><a class="brand" data-page-link href="index.html"><span class="brandmark" aria-hidden="true">B</span><span><strong>B.E.P 3DAvater</strong><small>USER GUIDE</small></span></a>
+<div class="nav-label" data-i18n="ja" lang="ja">ガイド</div><div class="nav-label" data-i18n="en" lang="en">DOCUMENTATION</div><nav class="main-nav" aria-label="Guide navigation"><a data-page-link href="index.html" aria-current="page"><span class="nav-icon" aria-hidden="true">01</span><span data-i18n="ja" lang="ja">導入・変換ガイド</span><span data-i18n="en" lang="en">Installation & export</span></a><div class="page-toc"><a href="#install"><span data-i18n="ja" lang="ja">UnityPackageの導入</span><span data-i18n="en" lang="en">Install the UnityPackage</span></a><a href="#export"><span data-i18n="ja" lang="ja">ツールの使い方</span><span data-i18n="en" lang="en">Use the exporter</span></a><a href="#files"><span data-i18n="ja" lang="ja">変換データの配置</span><span data-i18n="en" lang="en">Place your exported data</span></a><a href="#settings"><span data-i18n="ja" lang="ja">ゲーム内での設定</span><span data-i18n="en" lang="en">Configure in game</span></a><a href="#help"><span data-i18n="ja" lang="ja">困ったとき・クレジット</span><span data-i18n="en" lang="en">Help & credits</span></a></div><a data-page-link href="player.html"><span class="nav-icon" aria-hidden="true">02</span><span data-i18n="ja" lang="ja">Playerモデルの設定方法</span><span data-i18n="en" lang="en">Player model setup</span></a><a data-page-link href="npc.html"><span class="nav-icon" aria-hidden="true">03</span><span data-i18n="ja" lang="ja">NPCMODの使い方</span><span data-i18n="en" lang="en">NPC mod guide</span></a></nav>
+<div class="sidebar-foot"><strong>26.3-0.10.0</strong><br>Minecraft 26.3 · NeoForge<br><span data-i18n="ja" lang="ja">オフライン対応 / 日英ガイド</span><span data-i18n="en" lang="en">Offline-ready · JA / EN</span></div></aside>
+<div class="shell"><header class="topbar"><div class="breadcrumb">USER GUIDE <b><span data-i18n="ja" lang="ja">導入・変換ガイド</span><span data-i18n="en" lang="en">Installation & export</span></b></div><div class="language" role="group" aria-label="Language / 言語"><button type="button" data-language-button="ja" aria-pressed="true">日本語</button><button type="button" data-language-button="en" aria-pressed="false">English</button></div></header>
+<noscript><p class="noscript">言語切り替えにはJavaScriptを有効にしてください。 / Enable JavaScript to switch languages.</p></noscript>
+<main class="content" id="main"><div class="hero"><div class="eyebrow">GETTING STARTED</div><h1 data-i18n="ja" lang="ja">アバターを、<br><em>Minecraftへ。</em></h1><h1 data-i18n="en" lang="en">Your avatar.<br><em>A new world.</em></h1><p class="lead" data-i18n="ja" lang="ja">VRChatプロジェクトからアバターを変換し、Minecraftで使うまで。Unityツールの導入からゲーム内の設定まで、順番に案内します。</p><p class="lead" data-i18n="en" lang="en">Bring an avatar from its VRChat Unity project into Minecraft. Follow the steps from installing the exporter to configuring your model in game.</p><div class="version-badges"><span class="badge green">26.3-0.10.0</span><span class="badge">Minecraft 26.3</span><span class="badge">NeoForge 26.3.0.95</span><span class="badge">Java 25</span><span class="badge">Unity 2022.3</span></div></div>
+<div class="flow" aria-label="Setup steps"><a href="#install"><span class="step-no">01</span><span data-i18n="ja" lang="ja">ツールを入れる</span><span data-i18n="en" lang="en">Install</span><small data-i18n="ja" lang="ja">UnityPackageを導入</small><small data-i18n="en" lang="en">Import the UnityPackage</small></a><a href="#export"><span class="step-no">02</span><span data-i18n="ja" lang="ja">アバターを変換</span><span data-i18n="en" lang="en">Export</span><small data-i18n="ja" lang="ja">.avcを書き出す</small><small data-i18n="en" lang="en">Create an .avc file</small></a><a href="#files"><span class="step-no">03</span><span data-i18n="ja" lang="ja">ゲームへ配置</span><span data-i18n="en" lang="en">Place files</span><small data-i18n="ja" lang="ja">MODとデータを配置</small><small data-i18n="en" lang="en">Install mods & model data</small></a><a href="#settings"><span class="step-no">04</span><span data-i18n="ja" lang="ja">ゲーム内で設定</span><span data-i18n="en" lang="en">Configure</span><small data-i18n="ja" lang="ja">@キーから選択</small><small data-i18n="en" lang="en">Open settings with @ / [</small></a></div><section class="chapter" id="install"><div class="section-label">01 / UNITY PROJECT</div><h2 data-i18n="ja" lang="ja">VRChatプロジェクトへUnityPackageを導入する</h2><h2 data-i18n="en" lang="en">Install the UnityPackage in your VRChat project</h2><div data-i18n="ja" lang="ja">
+<p>普段アバターを編集しているUnityプロジェクトを使います。変換するアバターのルートに、有効な<strong>Humanoid Animator</strong>が必要です。確認環境はUnity 2022.3.22f1です。</p>
+<ol><li>配布ZIPを展開し、<code>Unity/BEP-3DAvater-Exporter-0.10.0.unitypackage</code>を確認します。</li>
+<li>アバターのUnityプロジェクトを開き、SDK・シェーダーなどのコンパイルが終わるまで待ちます。Modular Avatarを使うアバターでは、そのプロジェクトにModular AvatarとNDMFも必要です。</li>
+<li><strong>Assets &gt; Import Package &gt; Custom Package…</strong>から上記のUnityPackageを選択します。</li>
+<li>インポート画面でファイルを選択したまま<strong>Import</strong>を押します。ツールは<code>Assets/BEP3DAvaterExporter/</code>へ入ります。</li>
+<li>コンパイル後、メニューに<strong>Tools &gt; B.E.P 3DAvater Exporter</strong>が表示されることを確認します。</li></ol>
+<div class="callout"><strong>既に導入済みのとき</strong>UPM版（Package Managerのローカル／tarball）とUnityPackage版を同時に入れないでください。UPM版を使っていた場合は、Package Managerからその登録を外してからUnityPackage版を導入します。アバターや保存したモーションプロファイルは残してください。</div>
+<details><summary>Newtonsoft.Jsonのエラーが出る場合・UPM形式で導入する場合</summary><p>UnityPackageは依存パッケージを自動導入しません。Newtonsoft.Jsonが未導入の場合は、<strong>Window &gt; Package Manager &gt; + &gt; Add package by name…</strong>で<code>com.unity.nuget.newtonsoft-json</code>、バージョン<code>3.2.1</code>を追加します。インターネット接続が必要になる場合があります。</p><p>UPM版を使う場合はUnityPackageを導入せず、<strong>Add package from tarball…</strong>で<code>Unity/dev.avatarcraft.exporter-0.10.0.tgz</code>を選びます。UPM版は同じツールと依存パッケージ指定を含みます。</p></details>
+</div><div data-i18n="en" lang="en">
+<p>Use the Unity project where you normally edit your avatar. The avatar root must have a valid <strong>Humanoid Animator</strong>. The exporter was checked with Unity 2022.3.22f1.</p>
+<ol><li>Extract the release ZIP and locate <code>Unity/BEP-3DAvater-Exporter-0.10.0.unitypackage</code>.</li>
+<li>Open the avatar's Unity project and wait for its SDK and shaders to compile. If the avatar uses Modular Avatar, install Modular Avatar and NDMF in that project too.</li>
+<li>Choose <strong>Assets &gt; Import Package &gt; Custom Package…</strong> and select the UnityPackage.</li>
+<li>Keep the package files selected and click <strong>Import</strong>. The tool is installed under <code>Assets/BEP3DAvaterExporter/</code>.</li>
+<li>After compilation, check for <strong>Tools &gt; B.E.P 3DAvater Exporter</strong> in the menu.</li></ol>
+<div class="callout"><strong>Updating an existing installation</strong>Use one installation method per project. If you used the UPM version through Package Manager, remove its registration before importing the UnityPackage. Keep your avatar and saved motion profiles.</div>
+<details><summary>Newtonsoft.Json errors / installing the UPM version</summary><p>The UnityPackage does not install package dependencies automatically. If Newtonsoft.Json is missing, open <strong>Window &gt; Package Manager &gt; + &gt; Add package by name…</strong> and add <code>com.unity.nuget.newtonsoft-json</code> version <code>3.2.1</code>. This may require an internet connection.</p><p>For UPM installation, skip the UnityPackage and use <strong>Add package from tarball…</strong> to select <code>Unity/dev.avatarcraft.exporter-0.10.0.tgz</code>. It contains the same tool and declares the dependency.</p></details>
+</div></section><section class="chapter" id="export"><div class="section-label">02 / EXPORTER</div><h2 data-i18n="ja" lang="ja">ツールを使って、.avcへ変換する</h2><h2 data-i18n="en" lang="en">Export your avatar as an .avc file</h2><div data-i18n="ja" lang="ja">
+<ol><li>Hierarchyでアバターのルートを選び、<strong>Tools &gt; B.E.P 3DAvater Exporter &gt; Avatar export and motions</strong>を開きます。</li>
+<li>上部の<strong>Language / 言語</strong>から<strong>日本語</strong>または<strong>English</strong>を選び、アバターのルート欄を確認します。ルートをドラッグして指定することもできます。</li>
+<li>動作ごとの「標準モーション」を選びます。34動作・39本の標準Clipを収録しています。「差し替えClip（任意）」には独自のAnimationClipを指定できます。</li>
+<li>「確認」でプレビューし、再生速度（0.1〜4倍）と切替時間（0〜2秒）を調整します。「編集用 .anim を生成」は、編集用のClipをAssets以下に作成します。</li>
+<li><strong>設定を保存</strong>でモーションプロファイルをAssets以下へ保存します。必要なアバターでは、複製上へのModular Avatar / NDMF適用を有効にします。</li>
+<li><strong>この設定で .avc を変換</strong>を押し、保存先とファイル名を選びます。結果と警告を確認し、できた<code>.avc</code>を次の手順でゲームへ配置します。</li></ol>
+<div class="callout"><strong>Unityで設定を変えたら、再変換</strong>衣装・素材・PhysBone・モーションの変更は、.avcを再出力して反映します。元のシーンアバターは保持されます。NDMFによる一時アセットがプロジェクト内に残る場合があります。</div>
+<details><summary>変換で再現する範囲</summary><p>メッシュ、テクスチャ、Humanoid参照、BlendShape、対応するlilToon素材、モーション、PhysBone情報を変換します。UnityのシェーダーとVRChatの物理を近似するため、見た目や揺れは完全には一致しません。Animator FX、VRChat Expression Menu、実行時スクリプト、他者によるPhysBoneの掴みは動きません。Minecraftの防具・エリトラの外観もアバターへ合成しません。</p></details>
+</div><div data-i18n="en" lang="en">
+<ol><li>Select the avatar root in the Hierarchy. Open <strong>Tools &gt; B.E.P 3DAvater Exporter &gt; Avatar export and motions</strong>.</li>
+<li>Choose <strong>日本語</strong> or <strong>English</strong> under <strong>Language / 言語</strong>. Check <strong>Avatar root</strong>; you can drag the root into this field.</li>
+<li>Choose a <strong>Built-in motion</strong> for each action. The library includes 34 actions and 39 clips. Assign your own AnimationClip to <strong>Custom clip (optional)</strong> when needed.</li>
+<li>Use <strong>Preview</strong> to check the result. Set playback speed (0.1–4×) and blend duration (0–2 seconds). <strong>Generate editable .anim clips</strong> creates clips in an Assets subfolder.</li>
+<li>Click <strong>Save profile</strong> to save a motion profile in Assets. Enable <strong>Apply Modular Avatar / NDMF to an isolated clone</strong> if your avatar requires it.</li>
+<li>Click <strong>Export .avc with this profile</strong>, select the destination and filename, then check the result and warnings. Place the exported <code>.avc</code> in Minecraft as described next.</li></ol>
+<div class="callout"><strong>Changed something in Unity? Export again.</strong>Changes to clothing, materials, PhysBones and motions require a new .avc export. The original scene avatar is preserved. NDMF may leave generated temporary assets in the project.</div>
+<details><summary>What conversion supports</summary><p>The exporter includes meshes, textures, Humanoid references, BlendShapes, supported lilToon material settings, motions and PhysBone data. Shader and physics behavior is approximated, so it may differ from Unity or VRChat. Animator FX, VRChat Expression Menus, runtime scripts and PhysBone grabbing by other users are not executed. Minecraft armor and elytra visuals are not combined with the avatar.</p></details>
+</div></section><section class="chapter" id="files"><div class="section-label">03 / MINECRAFT FILES</div><h2 data-i18n="ja" lang="ja">MOD環境へ、変換したデータを置く</h2><h2 data-i18n="en" lang="en">Place the exported data in your modded game</h2><div data-i18n="ja" lang="ja">
+<p><strong>Minecraft Java Edition 26.3 / NeoForge 26.3.0.95 / Java 25</strong>の環境を使います。配置先は、実際に起動するランチャープロファイルの<strong>ゲームディレクトリ</strong>です。</p>
+<ol><li>ゲームを終了し、配布物の<code>Minecraft/mods/</code>から必要なJARをゲームディレクトリの<code>mods/</code>へコピーします。</li><li>変換した<code>.avc</code>を<code>config/bep_3davater_loader/avatars/</code>へ置きます。フォルダがなければ作成します。.avcは展開しません。</li><li>ゲームを起動します。起動中にデータを追加・更新した場合は、Loaderタブで「再読込」を押してください。</li></ol>
+<div class="table-wrap"><table><thead><tr><th>使いたい機能</th><th>導入するMOD</th></tr></thead><tbody><tr><td>モデル一覧・表情設定</td><td>Loader</td></tr><tr><td>プレイヤーに着せる</td><td>Loader ＋ Player Model</td></tr><tr><td>AIの仲間を使う</td><td>Loader ＋ Companion</td></tr><tr><td>両方使う</td><td>Loader ＋ Player Model ＋ Companion</td></tr></tbody></table></div>
+</div><div data-i18n="en" lang="en">
+<p>Use <strong>Minecraft Java Edition 26.3 / NeoForge 26.3.0.95 / Java 25</strong>. Place files in the <strong>game directory</strong> used by the launcher profile you actually start.</p>
+<ol><li>Close the game. Copy the required JARs from the release's <code>Minecraft/mods/</code> into the game directory's <code>mods/</code> folder.</li><li>Place the exported <code>.avc</code> in <code>config/bep_3davater_loader/avatars/</code>. Create the folder if needed. Do not extract the .avc archive.</li><li>Start the game. If you add or update files while it is running, click <strong>再読込</strong> (Reload) in Loader.</li></ol>
+<div class="table-wrap"><table><thead><tr><th>What you want to use</th><th>Required mods</th></tr></thead><tbody><tr><td>Model list & expressions</td><td>Loader</td></tr><tr><td>A player avatar</td><td>Loader + Player Model</td></tr><tr><td>An AI companion</td><td>Loader + Companion</td></tr><tr><td>Both</td><td>Loader + Player Model + Companion</td></tr></tbody></table></div>
+</div></section><pre aria-label="Game directory layout">game-directory/
+├─ mods/
+│  ├─ bep_3davater_loader-26.3-0.10.0.jar
+│  ├─ bep_3davater_player-26.3-0.10.0.jar
+│  └─ bep_3davater_companion-26.3-0.10.0.jar
+└─ config/
+   └─ bep_3davater_loader/
+      └─ avatars/
+         └─ your-avatar.avc</pre><div class="callout" data-i18n="ja" lang="ja"><strong>tortobuなら、変換なしで試せます</strong>Loaderは標準モデルtortobu（作者：aoi_nasuko）を同梱し、初回起動時にavatarsへ配置します。同名の既存ファイルは上書きしません。</div><div class="callout" data-i18n="en" lang="en"><strong>Try tortobu without exporting</strong>Loader includes tortobu by aoi_nasuko and places it in avatars on startup. Existing files with the same name are preserved.</div><section class="chapter" id="settings"><div class="section-label">04 / IN-GAME SETTINGS</div><h2 data-i18n="ja" lang="ja">@キーから、ゲーム内で設定する</h2><h2 data-i18n="en" lang="en">Open the in-game series settings</h2><div data-i18n="ja" lang="ja">
+<p>ワールド内で<kbd>@</kbd>（JIS配列）、またはUS配列の<kbd>[</kbd>に相当する位置のキーを押します。キーはMinecraftの操作設定で変更できます。導入したMODに合わせてタブが追加されます。</p>
+<div class="tab-demo" aria-label="タブ構成の例"><span class="selected">Loader</span><span>Player Model</span><span>Companion</span><span>AIモデル</span></div>
+<ul><li><strong>Loader：</strong>モデルを検索・選択します。「表情・シェイプキー」は頭部をまとめた検索＋縦スクロール式です。表示を「すべて」へ変えると他のキーも表示します。</li><li><strong>表情キーJSON編集：</strong>通常・まばたき・食事・被ダメージ、任意の表情キーを編集し、検証して保存します。設定は<code>config/bep_3davater_loader/expressions/&lt;avatar-id&gt;.json</code>へ保存されます。</li><li><strong>Player Model：</strong>モデルを選んで「選択したモデルを着る」を押します。</li><li><strong>Companion：</strong>召喚済みの自分のNPCをクリックして、モデルと性格を変更します。</li><li><strong>AIモデル：</strong>Companion導入時に表示されます。接続方式・APIキー・モデルを設定し、保存してからワールドを開き直します。</li></ul>
+<div class="callout"><strong>一覧で選ぶだけでは、プレイヤーの外見は変わりません</strong>プレイヤーへの着用はPlayer Modelタブから行います。NPCへの適用はCompanionタブから保存してください。詳しい手順は下の各ページへ進んでください。</div>
+</div><div data-i18n="en" lang="en">
+<p>In a world, press <kbd>@</kbd> on a JIS keyboard, or the physical key corresponding to <kbd>[</kbd> on a US keyboard. Change the binding in Minecraft's controls if necessary. Installed mods add their own tabs.</p>
+<div class="tab-demo" aria-label="Example tab layout"><span class="selected">Loader</span><span>Player Model</span><span>Companion</span><span>AIモデル</span></div>
+<ul><li><strong>Loader:</strong> search and select models. <strong>表情・シェイプキー</strong> (Expressions / Shape keys) groups head morphs and supports search and continuous scrolling. Use the “all” filter to show other morphs.</li><li><strong>表情キーJSON編集</strong> (Expression-key JSON): edit idle, blink, eating, damage and custom keys; validate and save. Overrides are stored in <code>config/bep_3davater_loader/expressions/&lt;avatar-id&gt;.json</code>.</li><li><strong>Player Model:</strong> select a model and click <strong>選択したモデルを着る</strong> (Wear selected model).</li><li><strong>Companion:</strong> click one of your summoned NPCs to change its model and personality.</li><li><strong>AIモデル</strong> (AI Models): appears with Companion. Choose the connection method, API key and model. Save, then reopen the world.</li></ul>
+<div class="callout"><strong>Selecting a model in Loader does not equip it</strong>Wear your avatar through Player Model. Save NPC changes through Companion. Continue to the relevant page below for detailed steps. English explanations retain the Japanese button labels where the game UI uses them.</div>
+</div></section><div class="two-columns"><a class="next-card" data-page-link href="player.html"><span class="arrow">↗</span><b data-i18n="ja" lang="ja">Playerモデルの設定方法</b><b data-i18n="en" lang="en">Player model setup</b><small data-i18n="ja" lang="ja">自分のプレイヤーに着せる・表情・オンライン表示</small><small data-i18n="en" lang="en">Wear a model, configure expressions and play online</small></a><a class="next-card" data-page-link href="npc.html"><span class="arrow">↗</span><b data-i18n="ja" lang="ja">NPCMODの使い方</b><b data-i18n="en" lang="en">NPC mod guide</b><small data-i18n="ja" lang="ja">AIへの接続・召喚・モデルと性格・作業指示</small><small data-i18n="en" lang="en">Connect AI, summon NPCs, customize them and give tasks</small></a></div><section class="chapter" id="help"><div class="section-label">REFERENCE</div><h2 data-i18n="ja" lang="ja">困ったとき・クレジット</h2><h2 data-i18n="en" lang="en">Troubleshooting & credits</h2><div data-i18n="ja" lang="ja">
+<details><summary>変換メニューが出ない / コンパイルエラー</summary><p>Unity Consoleの最初のエラーを確認してください。Newtonsoft.Jsonなどの依存関係、アバターに必要なSDK・シェーダー、UPM版とUnityPackage版の重複を確認します。</p></details>
+<details><summary>モデルが一覧に出ない / タブが足りない</summary><p>使用中のゲームディレクトリ、.avcの拡張子、avatars直下への配置を確認して「再読込」します。Player ModelとCompanionのタブは、それぞれのMODを導入したときだけ表示されます。モデルの読込エラーは<code>logs/latest.log</code>を確認してください。</p></details>
+<details><summary>衣装・表情・揺れが違う</summary><p>必要なSDK・NDMF等を含む元プロジェクトで再変換します。表情名が異なる場合はLoaderでキーを手動調整します。VRChatと同一の描画・物理・Expression Menu動作を保証するものではありません。</p></details>
+<p class="rights"><strong>クレジット：</strong>同梱モデル：tortobu / 作者：aoi_nasuko。Companionの同梱性格は一人称「ぼく」でおっとりした性格です。<br><strong>ライセンス：</strong>AvatarCraft — All Rights Reserved. アバターの利用条件はそれぞれの権利者の条件に従ってください。</p>
+</div><div data-i18n="en" lang="en">
+<details><summary>No export menu / compilation errors</summary><p>Check the first error in the Unity Console. Verify Newtonsoft.Json, required avatar SDKs and shaders, and that you have not installed both the UPM and UnityPackage versions.</p></details>
+<details><summary>A model or tab is missing</summary><p>Check the active game directory, .avc extension and placement directly inside avatars, then click Reload. Player Model and Companion tabs appear only when their respective mods are installed. Check <code>logs/latest.log</code> for model-loading errors.</p></details>
+<details><summary>Clothing, expressions or physics look different</summary><p>Re-export from the original project with its required SDK and NDMF packages. Adjust expression keys in Loader if morph names differ. Rendering, physics and Expression Menu behavior do not exactly match VRChat.</p></details>
+<p class="rights"><strong>Credits:</strong> bundled model: tortobu / author: aoi_nasuko. The bundled Companion personality is gentle and laid-back and uses “ぼく” (boku) in Japanese.<br><strong>License:</strong> AvatarCraft — All Rights Reserved. Follow the rights holder's conditions for each avatar you use.</p>
+</div></section><details><summary><span data-i18n="ja" lang="ja">開発テンプレートのライセンス表記</span><span data-i18n="en" lang="en">Development template license notice</span></summary><pre>MIT License
+
+Copyright (c) 2026 aoi_nasuko
+
+This license applies to the template files as supplied by github.com/NeoForged/MDK
+
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the &quot;Software&quot;), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+</pre></details><footer><span>B.E.P 3DAvater · User Guide</span><span>tortobu by aoi_nasuko · All Rights Reserved.</span></footer></main></div></body></html>

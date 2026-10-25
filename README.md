@@ -12,14 +12,14 @@ Minecraft Java **26.3** / NeoForge **26.3.0.95** / Java **25** 向けの3つのM
 
 ## 使い方
 
-1. UnityのPackage Managerで `unity/Packages/dev.avatarcraft.exporter/package.json` を `Add package from disk...` から追加します。配布版の `.tgz` は `Add package from tarball...` から追加できます。
-2. Humanoid Animatorのあるアバターのルートを選び、`Tools > B.E.P 3DAvater Exporter > Avatar export and motions` を開きます。34動作それぞれのモーション、再生速度・切替時間を選び、設定を保存して `.avc` を出力します。任意のAnimationClipによる差し替えと、編集用39本の `.anim` の生成にも対応します。Modular AvatarはNDMF経由で複製上に適用します。詳しくは [設定ガイド](release/Guide_ja.md)。
+1. 配布版の `.unitypackage` をUnityの `Assets > Import Package > Custom Package...` から導入します。開発時はPackage Managerの `Add package from disk...` で `unity/Packages/dev.avatarcraft.exporter/package.json` を追加する方法も使えます。二重導入は避けてください。
+2. Humanoid Animatorのあるアバターのルートを選び、`Tools > B.E.P 3DAvater Exporter > Avatar export and motions` を開きます。34動作それぞれのモーション、再生速度・切替時間を選び、設定を保存して `.avc` を出力します。任意のAnimationClipによる差し替えと、編集用39本の `.anim` の生成にも対応します。Modular AvatarはNDMF経由で複製上に適用します。詳しくは [設定ガイド](release/index.html#export)。
 3. `.avc` をMinecraftの `config/bep_3davater_loader/avatars/` に配置し、MODのJARを `mods/` に配置します。
 4. ワールド内でJISキーボードの **@** を押すと、プレビュー画像付き一覧を開きます。キーはMinecraftの操作設定から変更できます。英語配列では `[` の物理位置です。
 5. 上部のタブで設定するMODを選びます。Loaderではモデル一覧、頭部をまとめたスクロール＋検索式の表情編集、表情キーJSONの直接編集を行えます。モデルを選ぶだけでは着用しません。
 6. Player Modelではモデルを選び「選択したモデルを着る」で着用します。Companionでは自分の召喚済みNPCをクリックし、モデル・性格を選んで保存します。導入したMODだけがタブに追加されます。
 
-Unityツールは **B.E.P 3DAvater Exporter** です。ウィンドウ上部の **Language / 言語** から日本語・Englishを切り替えられます。[英語のエクスポート手順](release/Export_en.md)も同梱しています。
+Unityツールは **B.E.P 3DAvater Exporter** です。ウィンドウ上部の **Language / 言語** から日本語・Englishを切り替えられます。[英語のエクスポート手順](release/index.html?lang=en#install)も同梱しています。
 
 着用は `config/bep_3davater_loader/selection.json`、表情は `config/bep_3davater_loader/expressions/<avatar-id>.json` に保存します。アバターを再変換しても同じIDなら表情設定は維持されます。ファイル更新後は一覧の「再読込」で読み直し、Player Modelで再度着用してください。
 
@@ -29,29 +29,29 @@ Unityツールは **B.E.P 3DAvater Exporter** です。ウィンドウ上部の 
 
 Loaderは文字列キー `idle`・`blink`・`eat`・`hurt` と任意の追加キーで表情を再生します。Minecraftの操作設定には通常・まばたき・食事・被ダメージの手動キーを用意し、初期状態は未割当です。同じキーの再入力または通常キーで解除できます。自動まばたきは共通再生機能です。
 
-Player ModelとCompanionがそれぞれ食事・飲み物・被ダメージを判定し、Loaderへ `eat`・`hurt` を渡します。Loader自身はゲームイベントから表情を選びません。両方のイベントが重なる場合は被ダメージを優先します。APIと任意キーの設定例は [表情キーAPI](release/Expression_API_ja.md) を参照してください。
+Player ModelとCompanionがそれぞれ食事・飲み物・被ダメージを判定し、Loaderへ `eat`・`hurt` を渡します。Loader自身はゲームイベントから表情を選びません。両方のイベントが重なる場合は被ダメージを優先します。表情キーの設定は [表情設定ガイド](release/player.html#expressions) を参照してください。
 
 ## マルチプレイの非公開アバター
 
 選択中のモデルと表情設定を暗号化してサーバーへ送信し、周囲のプレイヤーは表示専用キャッシュとして受信します。装着できるのはアップロードした本人だけで、サーバーはMinecraftの認証済みUUIDを検証します。受信側のアバター一覧やNPC選択には追加しません。復元・検証が済むまで通常スキンを表示します。
 
-専用サーバーは `online-mode=true` が必要です。詳細、キャッシュと利用規約上の確認点は [マルチプレイガイド](release/Multiplayer_ja.md) を参照してください。
+専用サーバーは `online-mode=true` が必要です。詳細、キャッシュと利用規約上の確認点は [マルチプレイガイド](release/player.html#multiplayer) を参照してください。
 
 ## AIモデル設定
 
 Companionを導入すると、@キーのシリーズ設定に「AIモデル」タブが追加されます。Codex OAuth、OpenAI API、Anthropic API、LM Studio、Ollama、OpenAI互換APIを選び、接続先URL・伏せ字のAPIキー・通常モデル・複雑な計画用モデルを設定できます。接続先からモデル一覧を取得して検索・選択でき、モデルIDの直接入力にも対応します。
 
-「設定を保存」でホストPCの `config/bep_3davater_companion-ai.toml` へ保存し、ワールドを開き直すと反映します。専用サーバーへ接続中にこのPCの設定を編集しても、専用サーバー側のAI設定は変わりません。詳しくは [AIモデル設定ガイド](release/AI_Settings_ja.md)。
+「設定を保存」でホストPCの `config/bep_3davater_companion-ai.toml` へ保存し、ワールドを開き直すと反映します。専用サーバーへ接続中にこのPCの設定を編集しても、専用サーバー側のAI設定は変わりません。詳しくは [AIモデル設定ガイド](release/npc.html#ai)。
 
 ## AIアバターNPC
 
 Companionは、クラフトした召喚石からアバターを召喚し、Codex CLIのChatGPT OAuth認証、OpenAI互換API（LM Studio・Ollamaを含む）、Anthropic互換APIで動かします。右クリックで上下に並べたNPC・プレイヤーの持ち物、防具・主手・副手、性格JSON、アバター、作業指示、記録を操作できます。近くのNPCとの会話、作業中の定期発言、クラフトできる記録帳を備えます。Loaderに同梱した標準モデル「tortobu」（作者：aoi_nasuko）を共通のソウルストーンから召喚します。Companionには一人称「ぼく」でおっとりした性格のサンプルを同梱します。モデルと性格はGUIから変更でき、追加モデル・性格は外部ファイルとして読み込みます。近くの所有者のチャットを会話や作業指示として受け取れます。
 
-召喚上限はサーバー設定で1人3体（-1で無制限）。倒れたNPCは所持品を落とし、所有者のリスポーン地点で待機します。所持品を保持する設定もあります。「呼び戻しの地図」から自分のNPCを別次元から呼び戻せます。通常会話は同一次元・半径64以内、重要通知は所有者へ距離を問わず届きます。レシピと設定は [NPCガイド](release/NPC_Guide_ja.md) を参照してください。
+召喚上限はサーバー設定で1人3体（-1で無制限）。倒れたNPCは所持品を落とし、所有者のリスポーン地点で待機します。所持品を保持する設定もあります。「呼び戻しの地図」から自分のNPCを別次元から呼び戻せます。通常会話は同一次元・半径64以内、重要通知は所有者へ距離を問わず届きます。レシピと設定は [NPCガイド](release/npc.html) を参照してください。
 
-サーバー側でCodex CLIへログインし、NPCを使うクライアントとサーバーへLoaderとCompanionのJARを導入します。導入・レシピ・認証・保存先・APIは [NPCガイド](release/NPC_Guide_ja.md) を参照してください。
+サーバー側でCodex CLIへログインし、NPCを使うクライアントとサーバーへLoaderとCompanionのJARを導入します。導入・レシピ・認証・保存先・APIは [NPCガイド](release/npc.html) を参照してください。
 
-新しい日英の指示は現在のAIが計画へ変換し、通常の行動は同梱の約20MiB・5専門家の学習済みモデルで選択します。日英21.6万組の命令・状況データに、曖昧な参照、不足分、収納先、除外指定、確認が必要な例を含めています。仲間への担当割当、空の持ち物からの道具準備と実精錬、階段状の地下採掘、最大8件の場所記憶と回収・帰還に対応します。アバターアンカーに付けた場所IDはすべてのNPCで共有し、名前での移動と周囲のチェストへの収納・取り出しに使用できます。NPC周囲3×3チャンクを常時読み込みし、複雑な依頼は設定した上位モデルで段階的に計画します。木製ドアの開閉、樹種をまたぐ原木の採集と収納、成熟作物の収穫にも対応します。発言は別に30〜60秒ごと（既定45秒）に生成します。構成・対応範囲・再学習は [ローカル行動モデル](release/NPC_LocalAI_ja.md)、引数・条件は [全63種のツール一覧](release/NPC_Tools_ja.md) を参照してください。新規ワールドからドラゴン討伐までの完全自律完走は未検証です。
+新しい日英の指示は現在のAIが計画へ変換し、通常の行動は同梱の約20MiB・5専門家の学習済みモデルで選択します。日英21.6万組の命令・状況データに、曖昧な参照、不足分、収納先、除外指定、確認が必要な例を含めています。仲間への担当割当、空の持ち物からの道具準備と実精錬、階段状の地下採掘、最大8件の場所記憶と回収・帰還に対応します。アバターアンカーに付けた場所IDはすべてのNPCで共有し、名前での移動と周囲のチェストへの収納・取り出しに使用できます。NPC周囲3×3チャンクを常時読み込みし、複雑な依頼は設定した上位モデルで段階的に計画します。木製ドアの開閉、樹種をまたぐ原木の採集と収納、成熟作物の収穫にも対応します。発言は別に30〜60秒ごと（既定45秒）に生成します。構成・対応範囲・再学習は [ローカル行動モデル](Docs/NpcPolicyV4.md)、引数・条件は [全63種のツール一覧](Docs/NpcTools.md) を参照してください。新規ワールドからドラゴン討伐までの完全自律完走は未検証です。
 
 ## 開発
 
@@ -82,6 +82,8 @@ VRChatの非公開PhysBoneソルバーとの完全一致、Animator FX／Express
 
 NPCの防具・頭装備・エリトラのモデルは非表示にし、装備の性能は保持します。半透明とカットアウト、色のalpha、AlphaMaskの置換・乗算・加算・減算を近似描画します。
 
-詳しい導入手順は [導入ガイド](release/README_ja.md)、設定と対応範囲は [設定ガイド](release/Guide_ja.md) を参照してください。
+詳しい導入手順は [導入ガイド](release/index.html)、設定と対応範囲は [設定ガイド](release/index.html#export) を参照してください。
 
 MODのバージョンは `<Minecraftバージョン>-<MODバージョン>`（例：`26.3-0.10.0`）です。3つのJARと配布ZIPに同じ表記を使い、Unity Exporterのパッケージバージョンは `0.10.0` のままです。
+
+配布ガイドは [release/index.html](release/index.html) をブラウザーで開いてください。日本語・English切り替え、Playerモデル設定、NPCMODの使い方をオフラインで閲覧できます。`python tools/generate_release_docs.py` で再生成、`python tools/validate_release_docs.py` でリンク・言語ブロックを検証します。
