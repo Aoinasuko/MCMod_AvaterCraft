@@ -37,6 +37,11 @@ public final class NpcCompletionSpeech {
 
   public static CompletableFuture<String> generate(
       CompletionStage<NpcBrain> connection, Personality personality, JsonObject outcome) {
+    return generate(connection, personality, prompt(outcome), text -> accepted(text, personality));
+  }
+
+  static CompletableFuture<String> generate(CompletionStage<NpcBrain> connection, Personality personality,
+      String prompt, java.util.function.UnaryOperator<String> accept) {
     var profile = Personality.parse(personality.json());
     profile.allowedSkills.clear();
     var result = new CompletableFuture<String>();
@@ -73,13 +78,13 @@ public final class NpcCompletionSpeech {
                       return;
                     }
                     session
-                        .turn(prompt(outcome), true)
+                        .turn(prompt, true)
                         .whenComplete(
                             (reply, error) -> {
                               if (error != null) result.completeExceptionally(error);
                               else
                                 result.complete(
-                                    accepted(reply == null ? null : reply.speech(), profile));
+                                    accept.apply(reply == null ? null : reply.speech()));
                             });
                   });
         });

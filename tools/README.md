@@ -123,6 +123,10 @@ Unityの表示名・メニューはB.E.P 3DAvater Exporterです。`ExporterLang
 
 ## HTML配布ガイド
 
+`runJournalGameTest`は独立した`run-journal-qa`で、オーナー不在時の発言・AI呼び出しの抑止、性格と死亡位置の受け渡し・重要通知の記録を模擬AIで確認します。`runJournalClient`は`run-journal-client-qa/saves/New World`に画面確認用の架空の記録を作り、記録帳を開きます。事前にその検証ディレクトリのAIを無効にしてください。実運用のワールドやキーは使いません。
+
+`JournalStatisticsTest`は100件の絞り込み、所有者の分離、60分境界、空の1分枠、失敗・リトライ・引継ぎの区別、100件を超える全文エクスポートを検証します。`NpcDeathSpeechTest`は性格・座標・ツール無効化・ログアウト相当のキャンセルを確認します。
+
 `python tools/generate_release_docs.py`で3ページを生成し、`python tools/validate_release_docs.py`で言語・ページ間リンク・アンカー・ローカル素材を検証します。`release/assets/guide.css`と`guide.js`は共通です。`release`へ旧Markdown資料を再生成しません。
 
 `python tools/package_release.py --revision html-guide`は過去の配布物を残してHTML版のZIPを作成します。3つのMOD、Assets用 `.unitypackage`、UPM用 `.tgz`、日英HTMLガイド、性格サンプルを収録し、UnityのGUIDとアセットの一致・全ファイルのハッシュを検証します。UnityPackageは依存パッケージを自動導入しないため、必要なNewtonsoft.Jsonの導入手順もガイドへ記載しています。

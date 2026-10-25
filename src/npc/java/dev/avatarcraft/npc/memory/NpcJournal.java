@@ -56,6 +56,11 @@ public final class NpcJournal {
       String text,
       JsonObject details)
       throws IOException {
+    return appendAt(owner, actor, actorName, listener, kind, text, details, clock.millis());
+  }
+
+  public synchronized Entry appendAt(UUID owner, UUID actor, String actorName, UUID listener,
+      String kind, String text, JsonObject details, long timestamp) throws IOException {
     if (actorName == null
         || actorName.length() > 64
         || kind == null
@@ -68,7 +73,7 @@ public final class NpcJournal {
     var entry =
         new Entry(
             UUID.randomUUID().toString(),
-            clock.millis(),
+            timestamp,
             owner,
             actor,
             actorName,
@@ -78,7 +83,7 @@ public final class NpcJournal {
             details.deepCopy());
     byte[] bytes = (GSON.toJson(entry) + "\n").getBytes(StandardCharsets.UTF_8);
     Path directory = directory(owner, actor);
-    String date = LocalDate.now(clock).toString();
+    String date = Instant.ofEpochMilli(timestamp).atZone(clock.getZone()).toLocalDate().toString();
     for (int part = 0; part < 10000; part++) {
       Path file =
           directory.resolve(date + "-" + String.format(Locale.ROOT, "%05d", part) + ".jsonl");
@@ -205,4 +210,32 @@ public final class NpcJournal {
             : "";
     return new Page(List.copyOf(entries), next);
   }
+
+  /** Reverse iterator, including segment/window boundaries. False stops without scanning history. */
+  public synchronized void visit(UUID owner, UUID actor, java.util.function.Predicate<Entry> visitor)
+      throws IOException {
+    String cursor = "";
+    do {
+      var page = read(owner, actor, cursor, 30);
+      for (var entry : page.entries()) if (!visitor.test(entry)) return;
+      String next = page.nextCursor();
+      if (next.equals(cursor) && !next.isEmpty()) throw new IOException("Journal cursor stalled");
+      cursor = next;
+    } while (!cursor.isEmpty());
+  }
+
+  public synchronized List<Entry> recent(UUID owner, UUID actor, boolean conversation) throws IOException {
+    var result = new ArrayList<Entry>();
+    visit(owner, actor, entry -> {
+      if (!conversation || conversation(entry.kind())) result.add(entry);
+      return result.size() < 100;
+    });
+    return List.copyOf(result);
+  }
+
+  public static boolean conversation(String kind) {
+    return Set.of("speech", "player_chat", "death", "death_notice").contains(kind);
+  }
+
+  public long now() { return clock.millis(); }
 }

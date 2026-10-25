@@ -556,7 +556,7 @@ public final class CompanionEntity extends PathfinderMob
       standBy();
       var data = dev.avatarcraft.npc.ai.NpcWorkData.get(server);
       if (data.furnaces.values().removeIf(getUUID()::equals)) data.setDirty();
-      NpcService.get(server.getServer()).notice(this, "倒れました。作業を中断し、あなたのリスポーン地点へ戻ります。");
+      NpcService.get(server.getServer()).reportDeath(this, source.getMsgId());
     }
   }
 

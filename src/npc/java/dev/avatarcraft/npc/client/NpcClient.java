@@ -18,6 +18,11 @@ public final class NpcClient {
     dev.avatarcraft.client.SeriesTabs.register(AiModelScreen.TAB_ID,
         net.minecraft.network.chat.Component.literal("AIモデル"), AiModelScreen::new);
     BlueprintPreview.install();
+    NeoForge.EVENT_BUS.addListener(ClientTickEvent.Post.class, event -> {
+      JournalExportClient.tick();
+      if (Boolean.getBoolean("avatarcraft.journalUiQa")) net.minecraft.client.Minecraft.getInstance().getWindow()
+          .setTitle("B.E.P Companion Journal QA 26.3-0.10.0");
+    });
     if (Boolean.getBoolean("avatarcraft.anchorUiQa"))
       NeoForge.EVENT_BUS.addListener(
           net.neoforged.neoforge.client.event.ClientTickEvent.Post.class,
@@ -38,6 +43,7 @@ public final class NpcClient {
                 NpcNetwork.Response.TYPE,
                 (response, context) -> {
                   var minecraft = net.minecraft.client.Minecraft.getInstance();
+                  if (response.action().startsWith("journal_export_")) { JournalExportClient.receive(response); return; }
                   if (response.action().startsWith("series_")
                       && minecraft.gui.screen() instanceof CompanionSettingsScreen settings) {
                     settings.receive(response); return;
@@ -94,6 +100,7 @@ public final class NpcClient {
     NeoForge.EVENT_BUS.addListener(
         ClientPlayerNetworkEvent.LoggingOut.class,
         event -> {
+          JournalExportClient.reset();
           if (renderer != null) renderer.close();
         });
   }

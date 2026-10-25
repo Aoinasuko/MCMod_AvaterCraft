@@ -29,3 +29,5 @@ run-loader-server-qa/
 run-series-client-qa/
 run-ai-settings-qa/
 run-ai-settings-client-qa/
+run-journal-client-qa/
+run-journal-qa/

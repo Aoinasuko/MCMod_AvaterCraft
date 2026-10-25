@@ -130,6 +130,13 @@ def verify_jar(data, role):
             assert "dev/avatarcraft/npc/client/AnchorScreen.class" in jar.namelist()
             assert "dev/avatarcraft/npc/CompanionManagement.class" in names
             assert "dev/avatarcraft/npc/client/CompanionSettingsScreen.class" in names
+            for component in ("JournalScreen", "JournalList", "JournalExportClient"):
+                assert f"dev/avatarcraft/npc/client/{component}.class" in names
+            for component in ("JournalStatistics", "JournalArchive"):
+                assert f"dev/avatarcraft/npc/memory/{component}.class" in names
+            assert "dev/avatarcraft/npc/ai/NpcDeathSpeech.class" in names
+            journal_texture = "assets/bep_3davater_companion/textures/gui/journal.png"
+            assert jar.read(journal_texture) == (ROOT / "src/npc/resources" / journal_texture).read_bytes()
             for component in ("AiModelScreen", "AiModelPickerScreen"):
                 assert f"dev/avatarcraft/npc/client/{component}.class" in names
             for component in ("AiModelCatalog", "AiConnectionMethod"):
@@ -291,6 +298,9 @@ def main():
         manifest["privatePlayerAvatarSync"] = {"protocol": "private-1", "ownerOnly": True, "cipher": "AES-256-GCM", "keyEnvelope": "RSA-OAEP-SHA256", "maxEncryptedBytes": 67108864}
         manifest["codexTested"] = "0.163.0"
         manifest["npcAuthentication"] = "Host-only Codex OAuth, OpenAI-compatible API, or Anthropic-compatible API"
+        manifest["companionJournal"] = {"recentEntries": 100, "windowMinutes": 60, "bucketMinutes": 1,
+                                         "export": ["actions.jsonl", "statistics.csv", "summary.json"],
+                                         "ownerOfflineSpeech": False, "deathNoticeIncludesCoordinates": True}
         (stage / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         sums = "".join(f"{sha(p.read_bytes())}  {p.relative_to(stage).as_posix()}\n"
                        for p in sorted(stage.rglob("*")) if p.is_file())

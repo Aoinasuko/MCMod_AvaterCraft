@@ -59,6 +59,7 @@ public final class NpcNetwork {
 
   public static void clear() {
     LIMITS.clear();
+    JournalRequests.clear();
     AnchorEditing.clear();
     dev.avatarcraft.npc.ai.NpcBlueprints.clearClientCache();
     dev.avatarcraft.npc.ai.NpcBuildUiQa.clear();
@@ -72,6 +73,7 @@ public final class NpcNetwork {
     LIMITS.put(player.getUUID(), new Window(count == 1 ? tick : old.tick, count));
     if (count > 8) return;
     try {
+      if (JournalRequests.handle(player, request)) return;
       if (request.action.equals("series_list")) {
         reply(player, -1, "series_list", CompanionManagement.list(player, Integer.parseInt(request.data)).toString());
         return;
@@ -183,7 +185,7 @@ public final class NpcNetwork {
     }
   }
 
-  private static boolean holdingJournal(ServerPlayer player) {
+  static boolean holdingJournal(ServerPlayer player) {
     for (var hand : InteractionHand.values())
       if (player.getItemInHand(hand).is(bep_3davater_companion.MEMORY_JOURNAL.get())) return true;
     return false;

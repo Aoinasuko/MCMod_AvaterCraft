@@ -1,4 +1,4 @@
-param([ValidateSet('build','test','runClient','runNpcGameTest','runNpcComplexGameTest','runAnchorGameTest','runAnchorClient','runAreaGameTest','runPlayerGameTest','runLoaderGameTest','runLoaderClient','runPlayerClient','runCompanionClient','runSeriesClient','runAiSettingsGameTest','runAiSettingsClient')][string]$Task = 'build')
+param([ValidateSet('build','test','runClient','runNpcGameTest','runNpcComplexGameTest','runAnchorGameTest','runAnchorClient','runAreaGameTest','runPlayerGameTest','runLoaderGameTest','runLoaderClient','runPlayerClient','runCompanionClient','runSeriesClient','runAiSettingsGameTest','runAiSettingsClient','runJournalGameTest','runJournalClient')][string]$Task = 'build')
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot -Parent)
 $jdk25 = Join-Path $env:USERPROFILE '.gradle\jdks\eclipse_adoptium-25-amd64-windows.2'

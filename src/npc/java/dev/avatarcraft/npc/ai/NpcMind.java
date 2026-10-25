@@ -41,6 +41,7 @@ public final class NpcMind implements AutoCloseable {
   private long nextSpeechOpen;
   private boolean announcedBlock;
   private boolean advancedPlanning;
+  private boolean planningRetryPending;
   private final NpcSpeechClock speechClock;
   private final Deque<String> memories = new ArrayDeque<>();
   private final LinkedHashSet<UUID> heardEvents = new LinkedHashSet<>();
@@ -70,8 +71,7 @@ public final class NpcMind implements AutoCloseable {
     }
     skills.tick();
     long now = level.getGameTime();
-    if (npc.ownerId() == null
-        || level.getServer().getPlayerList().getPlayer(npc.ownerId()) == null) {
+    if (!service.ownerOnline(npc)) {
       if (work != null
           || speech != null
           || playerChat != null
@@ -115,7 +115,7 @@ public final class NpcMind implements AutoCloseable {
             .getEntitiesOfClass(
                 CompanionEntity.class,
                 npc.getBoundingBox().inflate(12),
-                e -> e != npc && e.isAlive() && npc.hasLineOfSight(e))
+                e -> e != npc && e.isAlive() && service.ownerOnline(e) && npc.hasLineOfSight(e))
             .stream()
             .min(
                 Comparator.comparingInt(
@@ -372,7 +372,14 @@ public final class NpcMind implements AutoCloseable {
       announceBlock();
       return;
     }
-    if (reservation) recoveryAttempts++;
+    if (reservation) {
+      recoveryAttempts++;
+      service.record(npc, "ai_handoff", "Local retries exhausted; requesting advanced recovery plan", null,
+          object("attempt", recoveryAttempts, "requestId", requestId));
+    } else if (replans > 0 || planningRetryPending) {
+      service.record(npc, "planning_retry", "Planning retry started", null, object("attempt", replans, "requestId", requestId));
+    }
+    planningRetryPending = false;
     nextThink = now + 60;
     npc.setAiStatus("AIが指示を理解しています");
     service.record(
@@ -564,6 +571,7 @@ public final class NpcMind implements AutoCloseable {
   }
 
   public void hear(UUID event, int fromId, String name, String text) {
+    if (!service.ownerOnline(npc)) return;
     if (!heardEvents.add(event)) return;
     if (heardEvents.size() > 128) heardEvents.remove(heardEvents.iterator().next());
     memories.addLast(name + ": " + text);
@@ -573,6 +581,7 @@ public final class NpcMind implements AutoCloseable {
   }
 
   public void hearPlayer(net.minecraft.server.level.ServerPlayer speaker, String text) {
+    if (!service.ownerOnline(npc)) return;
     boolean owner = npc.ownedBy(speaker);
     var chat =
         new HumanChat(
@@ -709,6 +718,7 @@ public final class NpcMind implements AutoCloseable {
   }
 
   public void instructionChanged(String instruction) {
+    planningRetryPending = false;
     NpcTeams.changed(npc);
     stop();
     replans = 0;
@@ -814,6 +824,7 @@ public final class NpcMind implements AutoCloseable {
 
   /** Log the stage and exception type, never provider payloads, headers or credentials. */
   private void recordFailure(String stage, Throwable error) {
+    if (stage.equals("planning") || stage.equals("planning_session")) planningRetryPending = true;
     while (error instanceof java.util.concurrent.CompletionException && error.getCause() != null)
       error = error.getCause();
     service.record(

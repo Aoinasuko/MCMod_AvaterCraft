@@ -94,6 +94,7 @@ public final class bep_3davater_companion {
         net.neoforged.neoforge.event.tick.ServerTickEvent.Post.class,
         event -> {
           NpcRecall.tick(event.getServer());
+          JournalUiQa.tick(event.getServer());
           dev.avatarcraft.npc.ai.NpcBuildUiQa.tick(event.getServer());
           dev.avatarcraft.npc.ai.NpcBlueprints.tick(event.getServer());
           if (event.getServer().getTickCount() % 20 == 0)
@@ -119,6 +120,26 @@ public final class bep_3davater_companion {
       bus.addListener(
           net.neoforged.neoforge.event.RegisterGameTestsEvent.class,
           dev.avatarcraft.npc.ai.NpcGameTests::register);
+    NeoForge.EVENT_BUS.addListener(
+        net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent.class,
+        event -> {
+          if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
+            var service = NpcService.existing(player.level().getServer());
+            if (service != null) service.ownerJoined(player.getUUID());
+          }
+        });
+    NeoForge.EVENT_BUS.addListener(
+        net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent.class,
+        event -> {
+          if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
+            var service = NpcService.existing(player.level().getServer());
+            if (service == null) return;
+            service.ownerLeft(player.getUUID());
+            for (var level : player.level().getServer().getAllLevels())
+              for (var entity : level.getAllEntities())
+                if (entity instanceof CompanionEntity npc && npc.ownedBy(player)) npc.mind().tick();
+          }
+        });
     NeoForge.EVENT_BUS.addListener(
         ServerStoppingEvent.class,
         event -> {

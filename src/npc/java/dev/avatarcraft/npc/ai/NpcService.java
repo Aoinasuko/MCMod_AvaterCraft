@@ -2,6 +2,7 @@ package dev.avatarcraft.npc.ai;
 
 import com.google.gson.JsonObject;
 import dev.avatarcraft.npc.CompanionEntity;
+import dev.avatarcraft.npc.Personality;
 import dev.avatarcraft.npc.memory.NpcJournal;
 import java.io.*;
 import java.util.*;
@@ -35,6 +36,7 @@ public final class NpcService implements AutoCloseable {
     var service = SERVICES.remove(server);
     if (service != null) service.close();
   }
+  public static synchronized NpcService existing(MinecraftServer server) { return SERVICES.get(server); }
 
   public final CodexConfig config;
   public final NpcJournal journal;
@@ -49,6 +51,8 @@ public final class NpcService implements AutoCloseable {
   private long retryAfter, nextRequest;
   private volatile boolean closed;
   private String error = "";
+  private final Map<UUID, Set<CompletableFuture<String>>> deathSpeech = new HashMap<>();
+  private final Set<UUID> offlineOwners = new HashSet<>();
 
   private NpcService(MinecraftServer server) {
     this.server = server;
@@ -146,10 +150,12 @@ public final class NpcService implements AutoCloseable {
     if (owner == null || closed) return;
     var actor = npc.getUUID();
     var name = npc.getName().getString();
+    long timestamp = System.currentTimeMillis();
+    var capturedDetails = details.deepCopy();
     io.execute(
         () -> {
           try {
-            journal.append(owner, actor, name, listener, kind, text, details);
+            journal.appendAt(owner, actor, name, listener, kind, text, capturedDetails, timestamp);
           } catch (Exception e) {
             System.getLogger("bep_3davater_loader NPC")
                 .log(System.Logger.Level.ERROR, "Cannot save companion journal", e);
@@ -166,6 +172,7 @@ public final class NpcService implements AutoCloseable {
   }
 
   public void say(CompanionEntity npc, String message, int targetId, SpeechAudience audience) {
+    if (!ownerOnline(npc)) return;
     String text = message.replaceAll("[\\p{Cntrl}&&[^\\n]]", " ").strip();
     if (text.isEmpty()) return;
     if (text.length() > 512) text = text.substring(0, 512);
@@ -190,8 +197,51 @@ public final class NpcService implements AutoCloseable {
     for (var actor :
         level.getEntitiesOfClass(
             CompanionEntity.class, npc.getBoundingBox().inflate(12), n -> n != npc && n.isAlive()))
-      if (npc.hasLineOfSight(actor))
+      if (ownerOnline(actor) && npc.hasLineOfSight(actor))
         actor.mind().hear(event, npc.getId(), npc.getName().getString(), text);
+  }
+
+  public boolean ownerOnline(CompanionEntity npc) {
+    return !closed && npc.ownerId() != null && !offlineOwners.contains(npc.ownerId())
+        && server.getPlayerList().getPlayer(npc.ownerId()) != null;
+  }
+
+  public void ownerLeft(UUID owner) {
+    offlineOwners.add(owner);
+    var requests = deathSpeech.remove(owner);
+    if (requests != null) List.copyOf(requests).forEach(future -> future.cancel(false));
+  }
+  public void ownerJoined(UUID owner) { offlineOwners.remove(owner); }
+
+  public void reportDeath(CompanionEntity npc, String cause) { reportDeath(npc, cause, null); }
+
+  void reportDeath(CompanionEntity npc, String cause, CompletionStage<NpcBrain> testConnection) {
+    var facts = CodexBridge.object("dimension", npc.level().dimension().identifier().toString(),
+        "x", npc.blockPosition().getX(), "y", npc.blockPosition().getY(), "z", npc.blockPosition().getZ(),
+        "cause", cause, "event", UUID.randomUUID().toString());
+    record(npc, "death", "死亡: " + NpcDeathSpeech.location(facts), null, facts);
+    if (!ownerOnline(npc)) return;
+    UUID owner = npc.ownerId(), actor = npc.getUUID();
+    String name = npc.getName().getString();
+    var personality = Personality.parse(npc.personality().json());
+    CompletableFuture<String> future = config.enabled || testConnection != null
+        ? NpcDeathSpeech.generate(testConnection == null ? brain() : testConnection, personality, facts)
+        : CompletableFuture.completedFuture(NpcDeathSpeech.accepted(null, personality, facts));
+    deathSpeech.computeIfAbsent(owner, ignored -> new HashSet<>()).add(future);
+    future.whenComplete((text, error) -> server.execute(() -> {
+      var pending = deathSpeech.get(owner);
+      if (pending == null || !pending.remove(future)) return;
+      if (pending.isEmpty()) deathSpeech.remove(owner);
+      var player = server.getPlayerList().getPlayer(owner);
+      if (closed || future.isCancelled() || player == null) return;
+      String line = error == null ? text : NpcDeathSpeech.accepted(null, personality, facts);
+      player.sendSystemMessage(Component.literal("<" + name + "> " + line));
+      long timestamp = System.currentTimeMillis();
+      io.execute(() -> {
+        try { journal.appendAt(owner, actor, name, null, "death_notice", line, facts, timestamp); }
+        catch (IOException e) { System.getLogger("bep_3davater_companion").log(System.Logger.Level.ERROR, "Cannot save death notice", e); }
+      });
+    }));
   }
 
   public <T> CompletableFuture<T> readJournal(Callable<T> read) {
@@ -208,6 +258,9 @@ public final class NpcService implements AutoCloseable {
 
   public void close() {
     closed = true;
+    var pendingDeath = deathSpeech.values().stream().flatMap(Set::stream).toList();
+    deathSpeech.clear();
+    pendingDeath.forEach(future -> future.cancel(false));
     var startup = connecting;
     if (startup != null) startup.close();
     if (bridge != null)

@@ -137,16 +137,17 @@ public final class NpcLocalWorld implements LocalTaskRunner.World {
     service.record(npc, "tool_start", tool, null, NpcObservations.bounded(start, 6000));
     return skills
         .execute(tool, args)
-        .thenApply(
-            result -> {
-              var logged = result.deepCopy();
+        .whenComplete(
+            (result, error) -> {
+              var logged = error == null && result != null ? result.deepCopy()
+                  : object("ok", false, "error", "Action failed", "exception", error == null ? "null" : error.getClass().getSimpleName());
+              if (!logged.has("ok")) logged.addProperty("ok", false);
               logged.addProperty("actionId", actionId);
               if (logged.has("error"))
                 logged.addProperty(
                     "code", NpcExecutionMemory.failureCode(logged.get("error").getAsString()));
               service.record(npc, "tool_result", tool, null, NpcObservations.bounded(logged, 6000));
-              npc.rememberResult(tool, result);
-              return result;
+              if (result != null) npc.rememberResult(tool, result);
             });
   }
 
@@ -1013,5 +1014,8 @@ public final class NpcLocalWorld implements LocalTaskRunner.World {
   public void record(JsonObject selection) {
     NpcService.get(((ServerLevel) npc.level()).getServer())
         .record(npc, "local_policy", "Action selection", null, selection);
+  }
+  @Override public void event(String kind, JsonObject details) {
+    NpcService.get(((ServerLevel) npc.level()).getServer()).record(npc, kind, "Local action retry", null, details);
   }
 }

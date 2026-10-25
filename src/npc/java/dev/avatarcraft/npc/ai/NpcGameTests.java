@@ -25,6 +25,7 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 /** Opt-in development GameTest; uses an isolated world and the actual server game operations. */
 public final class NpcGameTests {
   public static void register(RegisterGameTestsEvent event) {
+    if (Boolean.getBoolean("avatarcraft.journalQa")) { NpcJournalGameTests.register(event); return; }
     if (Boolean.getBoolean("avatarcraft.aiSettingsQa")) { NpcAiSettingsGameTests.register(event); return; }
     if (Boolean.getBoolean("avatarcraft.areaQa")) {
       NpcAreaWorkGameTests.register(event);

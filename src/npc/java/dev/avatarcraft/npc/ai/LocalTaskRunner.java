@@ -63,6 +63,7 @@ public final class LocalTaskRunner implements AutoCloseable {
     }
 
     default void record(JsonObject selection) {}
+    default void event(String kind, JsonObject details) {}
 
     default boolean storageReachable(JsonObject chest) {
       return distance(observe(), vector(chest)) <= 3;
@@ -108,7 +109,7 @@ public final class LocalTaskRunner implements AutoCloseable {
   private long microTick = -1, microDeadline;
   private int microBudget;
   private long settlingSince = -1;
-  private boolean pending, closed, scannedBlocks, scannedChests;
+  private boolean pending, closed, scannedBlocks, scannedChests, retryPending;
   private JsonArray blocks = new JsonArray(), chests = new JsonArray();
   private String problem = "", lastFailure = "";
   private final Set<String> rejected = new HashSet<>();
@@ -365,6 +366,7 @@ public final class LocalTaskRunner implements AutoCloseable {
                     : done));
         index++;
         done = failures = 0;
+        retryPending = false;
         dryMines = pickupWaits = 0;
         lastCollectionCount = -1;
         explorationActions = 0;
@@ -913,6 +915,10 @@ public final class LocalTaskRunner implements AutoCloseable {
   }
 
   private void run(Candidate c, long now) {
+    if (retryPending) {
+      world.event("local_retry", object("tool", c.tool, "step", index, "priorFailures", failures));
+      retryPending = false;
+    }
     pending = true;
     activity =
         c.kind.equals("excavate")
@@ -945,6 +951,7 @@ public final class LocalTaskRunner implements AutoCloseable {
                     || !result.get("ok").getAsBoolean()) {
                   if (c.tool.equals("eat")) eating = null;
                   failures++;
+                  retryPending = true;
                   lastFailure =
                       result != null && result.has("error")
                           ? result.get("error").getAsString()
@@ -1017,6 +1024,7 @@ public final class LocalTaskRunner implements AutoCloseable {
       pending = false;
       eating = null;
       failures++;
+      retryPending = true;
       lastFailure = "Local action was rejected";
     }
   }

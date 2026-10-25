@@ -97,6 +97,22 @@ tasks.register('playerJar', Jar) {
 assemble.dependsOn tasks.named('npcJar'), tasks.named('playerJar')
 
 neoForge.runs {
+    journalClient {
+        client()
+        gameDirectory = file('run-journal-client-qa')
+        loadedMods = [neoForge.mods.bep_3davater_loader, neoForge.mods.bep_3davater_companion]
+        systemProperty 'avatarcraft.journalUiQa', 'true'
+        programArgument '--quickPlaySingleplayer'
+        programArgument 'New World'
+    }
+    journalGameTest {
+        type = 'gameTestServer'
+        gameDirectory = file('run-journal-qa')
+        loadedMods = [neoForge.mods.bep_3davater_loader, neoForge.mods.bep_3davater_companion]
+        systemProperty 'avatarcraft.npcGameTest', 'true'
+        systemProperty 'avatarcraft.journalQa', 'true'
+        systemProperty 'neoforge.enabledGameTestNamespaces', 'bep_3davater_companion'
+    }
     aiSettingsClient {
         client()
         gameDirectory = file('run-ai-settings-client-qa')
