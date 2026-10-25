@@ -1,6 +1,6 @@
 # NPCツール一覧
 
-2026-10-25 / 0.7.0。Javaの`NpcTools`から抽出した契約に基づく全57種。従来19種（基本17種＋場所記憶2種）と追加38種を併記します。
+2026-10-25 / 0.7.1。Javaの`NpcTools`から抽出した契約に基づく全63種。従来19種（基本17種＋場所記憶2種）と追加44種を併記します。
 
 通常の指示理解・発言のAIはツールを直接実行しません。計画を検証したサーバー側ローカル実行系が、許可された操作だけを呼び出します。API上の名前には`npc_`が付き、TaskPlanのatomic指定は`avatarcraftnpc:名前`です。
 
@@ -9,11 +9,15 @@
 | 区分 | 名前・必須引数 | 動作・条件・結果 |
 |---|---|---|
 | 追加 | `acquire(item: string, count: integer)` | itemをバッグ等にcount=1〜256個確保する複合操作。実レシピ・採集・道具準備・設備配置・精錬へ再帰分解し、実所持数で判定する。最大2048操作・30分。 |
+| 追加 | `area_work(x1: integer, y1: integer, z1: integer, x2: integer, y2: integer, z2: integer, order: string, steps_json: string)` | 指定した2点を含む範囲へ既存ツールのテンプレートを展開する。steps_jsonにid・tool・arguments・priority・after・when・expect・required・itemを記述。依存完了→優先度→空間順で1個ずつ呼び、$x/$y/$zと座標オフセット、$item/$hoeを解決する。用途は採掘・埋立・農作業に限定しない。各辺32・4096マス・展開8192ノードまで。order=top_down/bottom_up。実状態の完了条件・チェックポイントで再開し、未完了座標と理由を返す。 |
 | 既存 | `attack(entity_id: integer)` | 近くの敵対Mob・ボス・エンドクリスタル等へ接近して1回攻撃する。命中は討伐完了を意味しない。プレイヤーや味方を対象にしない。 |
 | 追加 | `await_teammate(entity_id: integer)` | 担当が実際に完了するまで待つ。entity_id=-1は全担当。失敗／取り消しは失敗を返す。待機上限は36000Tick。 |
+| 追加 | `build_blueprint(blueprint_id: string)` | 実物資材の確保を確認して、設計を共通キューへ変換しmove_to・equip・place等で施工する。下層・支持面・屋根外周を優先し、必要な仮足場は後でdigで撤去する。実ブロックと設計の一致を確認し、部分失敗を完成扱いにしない。 |
+| 追加 | `cancel_blueprint(blueprint_id: string)` | 設計の残作業と半透明表示を中止する。配置済みのブロックは巻き戻さない。 |
 | 追加 | `container_put(x: integer, y: integer, z: integer, slot: integer, container_slot: integer, count: integer)` | 4ブロック以内のアクセス可能なコンテナのcontainer_slotへバッグslotからcount=1〜64個を入れる。枠の制約・ロック・所有権・かまど担当を確認する。 |
 | 追加 | `container_take(x: integer, y: integer, z: integer, container_slot: integer, count: integer)` | 同条件のコンテナのcontainer_slotからcount=1〜64個をバッグへ移す。満杯であふれた分を勝手に落とさない。 |
 | 既存 | `craft(recipe: string)` | 登録済みrecipeを1回実行する。実材料を消費し、大きいレシピには近くの作業台が必要。 |
+| 追加 | `create_blueprint(design_json: string, site_json: string)` | プランニングAIが作った設計JSONを保存し、未施工のブロックを実モデル・テクスチャで半透明表示する。design_json={name,size:[幅,高さ,奥行],parts:[{from:[x,y,z],to:[x,y,z],block:ブロックID}]}。後のair指定で入口等を空ける。site_jsonは{from:[ワールド座標],to:[ワールド座標]}、空オブジェクトなら近くの支持された空地を探索する。最大各辺32・体積4096・64形状。 |
 | 追加 | `defeat(entity_id: integer, seconds: integer)` | 敵対Mobへ通常移動と同じ広域経路・ドア／ゲート処理で接近し、実際の死亡を確認するまで繰り返し攻撃する。seconds=1〜60の上限で未達なら失敗を返す。1回の命中を討伐完了にしない。 |
 | 追加 | `delegate(entity_id: integer, item: string, count: integer)` | 48ブロック以内の同じ所有者の空いているNPCへitemをcount=1〜64個確保してリーダーへ渡す担当を割り当てる。entity_id=-1は自動選択。再帰委任は禁止。 |
 | 追加 | `delegate_task(entity_id: integer, plan_json: string)` | 同じ条件の仲間へ有限TaskPlanを割り当てる。plan_jsonはJSON文字列で8192文字以内。入れ子委任・plan_nextは禁止。探索・次元往復・受け渡し等を明記する。 |
@@ -32,11 +36,13 @@
 | 既存 | `forget_location(name: string)` | nameに一致する記憶を削除して枠を空ける。 |
 | 追加 | `furnace_put(x: integer, y: integer, z: integer, slot: integer, furnace_slot: integer, count: integer)` | 5ブロック以内の通常かまどへバッグslotからcount=1〜64個を入れる。furnace_slot=0は原料、1は燃料。出力枠への投入と別NPCのバッチへの干渉は拒否する。 |
 | 追加 | `furnace_take(x: integer, y: integer, z: integer, furnace_slot: integer, count: integer)` | 同条件の通常かまどのfurnace_slot=0〜2からcount=1〜64個を取り出す。2は実出力。別NPCの担当バッチは操作しない。 |
+| 追加 | `gather_blueprint(blueprint_id: string)` | 近くのチェストからの検索・移動・取り出しを優先し、不足分だけ既存のacquire・craft・smelt経路で調達する。施工前に設計分と仮足場の実物資材をNPCのインベントリへ確保する。入らない／取得できない場合は理由を返す。 |
 | 既存 | `give_item(entity_id: integer, slot: integer, count: integer)` | 4ブロック以内かつ見えるNPC／プレイヤーへバッグslotからcount=1〜64個を渡す。実際に受け取った数だけ減らす。 |
 | 追加 | `guard(x: number, y: number, z: number, mob: string, radius: integer, seconds: integer)` | 指定x/y/zを固定した持ち場とし、mobで指定した敵対Mobをseconds=1〜60の間監視する。追撃経路はradius=1〜16の内側に制限し、範囲外へ追い続けない。携帯した実物の弓と矢を使って射撃し、必要なら食事する。被弾による物理的なノックバック後は持ち場へ戻る。継続監視はplan_nextで元の持ち場を引き継ぐ。矢・弓・食料は生成しない。 |
 | 追加 | `guard_post(x: number, y: number, z: number, mob: string, radius: integer)` | 固定したx/y/z・対象mob・追撃radiusをローカルで保持し、所有者の停止／変更指示まで継続監視する。射撃・食事・帰還はguardと同じ。60秒ごとの再計画や敵ごとの外部AI呼出しで監視を中断しない。有限の時間指定にはguardを使う。 |
 | 追加 | `hunt(entity_id: integer)` | プレイヤー・ペット等を除く生物／ボスを1回攻撃する。食料や素材の狩猟用。討伐・ドロップは別途観察する。 |
 | 追加 | `inspect_block(x: integer, y: integer, z: integer)` | 32ブロック以内のロード済みブロック・状態・硬さ・視線等を観察する。中身の参照には別にコンテナへの距離・利用権限が必要。 |
+| 追加 | `inspect_blueprint(blueprint_id: string)` | NPCに紐づく設計のID・位置・必要量・不足量・状態と描画用の配置を確認する。blueprint_id=currentまたは返された正確なID。 |
 | 追加 | `inspect_entities(radius: integer)` | 半径1〜64の実在する対象を最大64件観察する。位置・速度・生存・可視・体力とドラゴン部位IDを返す。エンダーアイ・投射物を優先する。 |
 | 追加 | `inspect_entity(entity_id: integer)` | 128ブロック以内の指定対象／ドラゴン部位1件の実位置・速度・可視・生存・体力を調べる。古いIDが消えた場合は失敗。 |
 | 追加 | `inspect_structures(radius: integer)` | radius=0〜1チャンクのロード済み構造物参照を調べる。未ロード遠方の/locateは行わない。参照の存在は内部を踏破した証明ではない。 |
@@ -81,6 +87,11 @@
 | dig ＋ craft | acquire |
 | craft ＋ place | smelt, furnace_put, furnace_take |
 | move_to ＋ dig ＋ place ＋ observe | work_route |
+| move_to ＋ observe ＋ 実行する子ツールの権限 | area_work |
+| observe ＋ place | create_blueprint |
+| observe | inspect_blueprint, cancel_blueprint |
+| observe ＋ move_to ＋ withdraw ＋ dig ＋ craft | gather_blueprint |
+| observe ＋ move_to ＋ place | build_blueprint |
 | give_item ＋ observe ＋ craft | delegate, delegate_task, team_status, await_teammate |
 | equip ＋ attack | equip_armor, use_item, release_item |
 | place ＋ observe | use_on_block, interact_block, interact_entity |

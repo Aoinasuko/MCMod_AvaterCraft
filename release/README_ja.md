@@ -1,24 +1,26 @@
-# AvatarCraft 0.7.0
+# AvatarCraft 0.7.1
 
 VRChat向けの人型アバターを専用ファイルへ変換し、MinecraftのプレイヤーやNPCとして表示するMODです。プレビュー付きアバター選択、ゲーム内の表情設定、人型モーション、PhysBoneの角度・伸縮制限、一人称の手と袖に対応します。
+
+0.7.1では、既存ツールを優先度・依存関係に従って呼び出す範囲作業、AIによる建築設計、半透明プレビュー、資材調達と施工を追加しました。作業台設置・精錬を既存ツールへ統合し、連続作業の固定待ち時間を減らして移動も高速化しています。範囲・材料・建築ブロックの対応条件は `Docs/NPC_Guide_ja.md` を参照してください。
 
 0.7.0では、場所のIDをすべてのNPCで共有する「アバターアンカー」を追加しました。設置して右クリックからIDを保存し、「拠点の倉庫のチェストに収納して」のように指示できます。記録帳は中央の本を鉄インゴット8個で囲うレシピへ変更しました。
 
 0.6.0以降、本人だけが装着できるプレイヤーアバターの暗号化同期に対応します。読込中は通常スキンを表示します。導入条件・表示専用キャッシュ・利用規約上の確認点は `Docs/Multiplayer_ja.md` を参照してください。0.5.xのアバターは再変換不要です。
 
-NPCは指示理解・ローカルでの行動判断・定期発言を分離し、約20MiBの学習済み行動モデルを同梱します。協力作業、道具の準備、精錬、ロケーション記憶、57種の行動ツールに対応します。死亡時の復帰、召喚数制限、次元を越えた呼び戻し、周囲チャンクの読み込みも追加しました。コンテナと木製ドアの開閉を行い、遠距離の移動では状況に応じてダッシュします。原木は樹種をまたいで採集・収納できます。導入と設定は `Docs/NPC_Guide_ja.md`、日英データ・曖昧な指示・動作範囲と制限は `Docs/NPC_LocalAI_ja.md` を参照してください。
+NPCは指示理解・ローカルでの行動判断・定期発言を分離し、約20MiBの学習済み行動モデルを同梱します。協力作業、道具の準備、精錬、ロケーション記憶、63種の行動ツールに対応します。死亡時の復帰、召喚数制限、次元を越えた呼び戻し、周囲チャンクの読み込みも追加しました。コンテナと木製ドアの開閉を行い、遠距離の移動では状況に応じてダッシュします。原木は樹種をまたいで採集・収納できます。導入と設定は `Docs/NPC_Guide_ja.md`、日英データ・曖昧な指示・動作範囲と制限は `Docs/NPC_LocalAI_ja.md` を参照してください。
 
 ## 内容
 
-- `Minecraft/mods/avatarcraft-0.7.0.jar`：共通のFramework MOD。
-- `Minecraft/mods/avatarcraft-npc-0.7.0.jar`：AIアバターNPC用の追加MOD。
-- `Unity/dev.avatarcraft.exporter-0.7.0.tgz`：Unityのアバター変換ツール。標準モーションを同梱。
+- `Minecraft/mods/avatarcraft-0.7.1.jar`：共通のFramework MOD。
+- `Minecraft/mods/avatarcraft-npc-0.7.1.jar`：AIアバターNPC用の追加MOD。
+- `Unity/dev.avatarcraft.exporter-0.7.1.tgz`：Unityのアバター変換ツール。標準モーションを同梱。
 - `Docs/Guide_ja.md`：モーション・表情・物理設定と制限事項。
 - `Docs/Multiplayer_ja.md`：本人専用アバターのオンライン同期・制限・キャッシュ。
 - `Docs/LilToon_ja.md`：素材・各種マスクの対応範囲と再変換手順。
 - `Docs/NPC_Guide_ja.md`：NPCの導入、Codex OAuth認証、クラフトと操作方法。
 - `Docs/NPC_LocalAI_ja.md`：ローカル行動モデル、協力作業、学習手順と制限事項。
-- `Docs/NPC_Tools_ja.md`：既存・追加を含む全57種の行動ツールと引数。
+- `Docs/NPC_Tools_ja.md`：既存・追加を含む全63種の行動ツールと引数。
 - `CHANGELOG_ja.md`：この版の主な機能。
 - `LICENSE.txt`：ライセンス表記。
 - `Tortobu_Notice_ja.md`：同梱モデル「タートブ」の作者・権利表記。
@@ -41,14 +43,14 @@ NPC用JARに標準モデル「タートブ」（作者：aoi_nasuko）の変換�
 ## 1. MinecraftへMODを導入
 
 1. Minecraft 26.3用のNeoForge環境を用意します。
-2. Minecraftを終了し、`Minecraft/mods/avatarcraft-0.7.0.jar` を、使用するゲームディレクトリの `mods/` にコピーします。同じMODの旧JARがある場合は入れ替えてください。
-3. NPCも利用する場合は追加の `avatarcraft-npc-0.7.0.jar` をクライアントとサーバーの両方へ導入します。プレイヤーの表示だけを使う場合はFrameworkだけで利用できます。
+2. Minecraftを終了し、`Minecraft/mods/avatarcraft-0.7.1.jar` を、使用するゲームディレクトリの `mods/` にコピーします。同じMODの旧JARがある場合は入れ替えてください。
+3. NPCも利用する場合は追加の `avatarcraft-npc-0.7.1.jar` をクライアントとサーバーの両方へ導入します。プレイヤーの表示だけを使う場合はFrameworkだけで利用できます。
 4. そのNeoForge環境でMinecraftを起動します。NPC用MODはタートブを自動で配置するため、標準モデルだけを使う場合はUnityでの変換は不要です。NPCの認証と召喚は `Docs/NPC_Guide_ja.md` を参照してください。
 
 ## 2. Unityでアバターを変換
 
 1. この配布ZIPを展開し、アバターのUnityプロジェクトを開きます。プロジェクト内のアバターのルートにはHumanoidとして有効なAnimatorが必要です。
-2. `Window > Package Manager` の `+` から `Add package from tarball...` を選び、`Unity/dev.avatarcraft.exporter-0.7.0.tgz` を指定します。
+2. `Window > Package Manager` の `+` から `Add package from tarball...` を選び、`Unity/dev.avatarcraft.exporter-0.7.1.tgz` を指定します。
 3. アバターのルートを選択し、`Tools > AvatarCraft > Avatar export and motions` を開きます。
 4. 動作ごとのモーションを確認・選択し、「設定を保存」からプロファイルを保存します。独自のAnimationClipへの差し替えもできます。
 5. 「この設定で .avc を変換」でファイルを保存します。Modular Avatarを使用する場合は、元プロジェクトにNDMFを導入して複製上の適用を有効にしてください。

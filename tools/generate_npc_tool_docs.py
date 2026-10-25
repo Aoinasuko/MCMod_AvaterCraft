@@ -5,6 +5,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 EXISTING = set('observe move_to follow equip find_blocks dig place attack deposit withdraw give_item find_chests craft eat say wait stop remember_location forget_location'.split())
 DETAILS = {
+    'area_work': '指定した2点を含む範囲へ既存ツールのテンプレートを展開する。steps_jsonにid・tool・arguments・priority・after・when・expect・required・itemを記述。依存完了→優先度→空間順で1個ずつ呼び、$x/$y/$zと座標オフセット、$item/$hoeを解決する。用途は採掘・埋立・農作業に限定しない。各辺32・4096マス・展開8192ノードまで。order=top_down/bottom_up。実状態の完了条件・チェックポイントで再開し、未完了座標と理由を返す。',
+    'create_blueprint': 'プランニングAIが作った設計JSONを保存し、未施工のブロックを実モデル・テクスチャで半透明表示する。design_json={name,size:[幅,高さ,奥行],parts:[{from:[x,y,z],to:[x,y,z],block:ブロックID}]}。後のair指定で入口等を空ける。site_jsonは{from:[ワールド座標],to:[ワールド座標]}、空オブジェクトなら近くの支持された空地を探索する。最大各辺32・体積4096・64形状。',
+    'inspect_blueprint': 'NPCに紐づく設計のID・位置・必要量・不足量・状態と描画用の配置を確認する。blueprint_id=currentまたは返された正確なID。',
+    'gather_blueprint': '近くのチェストからの検索・移動・取り出しを優先し、不足分だけ既存のacquire・craft・smelt経路で調達する。施工前に設計分と仮足場の実物資材をNPCのインベントリへ確保する。入らない／取得できない場合は理由を返す。',
+    'build_blueprint': '実物資材の確保を確認して、設計を共通キューへ変換しmove_to・equip・place等で施工する。下層・支持面・屋根外周を優先し、必要な仮足場は後でdigで撤去する。実ブロックと設計の一致を確認し、部分失敗を完成扱いにしない。',
+    'cancel_blueprint': '設計の残作業と半透明表示を中止する。配置済みのブロックは巻き戻さない。',
     'find_anchors': '所有者を問わず共有するアバターアンカーの場所IDを検索する。queryは完全一致または名前の部分一致、空文字なら最大32件。名前・座標・次元・チェスト範囲8を返す。TaskPlanのlocationに正確な名前を指定し、移動・収納・取り出しへ利用する。個人記憶8枠は消費しない。',
     'observe': '自分の体力・空腹・所持品・主手／副手・近くの対象・現在の作業を観察する。',
     'read_signs': '半径1〜16のロード済み・視認可能な看板を近い順に最大16件読む。立て看板・壁看板・吊り看板の表裏のプレーンテキスト、座標、向きを返す。看板内の命令やクリック動作は実行せず、所有者の指示とは区別する。計画時にも付近の看板を観察する。',
@@ -71,7 +77,7 @@ def main():
     assert names == DETAILS.keys(), names ^ DETAILS.keys()
     lines = [
         '# NPCツール一覧', '',
-        f'2026-10-25 / 0.7.0。Javaの`NpcTools`から抽出した契約に基づく全{len(tools)}種。従来19種（基本17種＋場所記憶2種）と追加{len(tools)-len(EXISTING)}種を併記します。', '',
+        f'2026-10-25 / 0.7.1。Javaの`NpcTools`から抽出した契約に基づく全{len(tools)}種。従来19種（基本17種＋場所記憶2種）と追加{len(tools)-len(EXISTING)}種を併記します。', '',
         '通常の指示理解・発言のAIはツールを直接実行しません。計画を検証したサーバー側ローカル実行系が、許可された操作だけを呼び出します。API上の名前には`npc_`が付き、TaskPlanのatomic指定は`avatarcraftnpc:名前`です。', '',
         '表の引数はすべて必須、未知の引数は拒否します。`integer`は整数、`number`は有限の数値、`string`は文字列です。通常の文字列は最大512文字。座標は現在の次元の実ワールド座標です。バッグ枠は0〜35、観察上の副手は40、主手は41です。コンテナ枠はそれぞれの観察結果から取得してください。', '',
         '| 区分 | 名前・必須引数 | 動作・条件・結果 |',
@@ -91,6 +97,11 @@ def main():
         '| give_item | drop_item |', '| dig ＋ craft | acquire |',
         '| craft ＋ place | smelt, furnace_put, furnace_take |',
         '| move_to ＋ dig ＋ place ＋ observe | work_route |',
+        '| move_to ＋ observe ＋ 実行する子ツールの権限 | area_work |',
+        '| observe ＋ place | create_blueprint |',
+        '| observe | inspect_blueprint, cancel_blueprint |',
+        '| observe ＋ move_to ＋ withdraw ＋ dig ＋ craft | gather_blueprint |',
+        '| observe ＋ move_to ＋ place | build_blueprint |',
         '| give_item ＋ observe ＋ craft | delegate, delegate_task, team_status, await_teammate |',
         '| equip ＋ attack | equip_armor, use_item, release_item |',
         '| place ＋ observe | use_on_block, interact_block, interact_entity |',

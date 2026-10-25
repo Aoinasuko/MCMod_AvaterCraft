@@ -104,7 +104,7 @@ final class NpcSurvival implements AutoCloseable {
         local.close();
         local = null;
         operations++;
-        nextTick = now + 4;
+        nextTick = now;
         return;
       }
       local.tick(now);
@@ -126,7 +126,7 @@ final class NpcSurvival implements AutoCloseable {
           local.close();
           local = null;
           operations++;
-          nextTick = now + 4;
+          nextTick = now;
           return;
         }
         if (activeStep != null
@@ -156,7 +156,7 @@ final class NpcSurvival implements AutoCloseable {
           local.close();
           local = null;
           operations++;
-          nextTick = now + 4;
+          nextTick = now;
           return;
         }
         if (activeStep != null
@@ -170,7 +170,7 @@ final class NpcSurvival implements AutoCloseable {
           local.close();
           local = null;
           operations++;
-          nextTick = now + 4;
+          nextTick = now;
           return;
         }
         fail(local.problem());
@@ -183,7 +183,7 @@ final class NpcSurvival implements AutoCloseable {
       nextTick = now + 2;
     }
     if (now < nextTick) return;
-    nextTick = now + 4;
+    nextTick = now;
     try {
       if (targetAmount() >= count) {
         result.complete(object("ok", true, "item", target, "count", targetAmount()));

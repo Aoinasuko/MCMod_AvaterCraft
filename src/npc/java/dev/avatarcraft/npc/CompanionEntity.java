@@ -48,6 +48,17 @@ public final class CompanionEntity extends PathfinderMob
   private final NpcGateController gateController = new NpcGateController(this);
   private final NpcChunkLoading chunkLoading = new NpcChunkLoading();
   private String localTaskState = "";
+  private String workSequenceState = "{}";
+
+  public String workSequenceState() {
+    return workSequenceState;
+  }
+
+  public void workSequenceState(String state) {
+    if (state.length() > 16384) throw new IllegalArgumentException("Queue checkpoint too large");
+    workSequenceState = state;
+  }
+
   private String expeditionState = "{}";
   private com.google.gson.JsonArray recentResults = new com.google.gson.JsonArray();
   public final dev.avatarcraft.npc.ai.NpcExecutionMemory executionMemory =
@@ -237,6 +248,7 @@ public final class CompanionEntity extends PathfinderMob
   public void setInstruction(String value) {
     if (value == null || value.length() > 2048)
       throw new IllegalArgumentException("Instruction exceeds 2048 characters");
+    workSequenceState = "{}";
     entityData.set(INSTRUCTION, value.strip());
     mind().instructionChanged(instruction());
   }
@@ -341,6 +353,7 @@ public final class CompanionEntity extends PathfinderMob
     output.putString("RememberedLocations", locations.json());
     output.putString("LocalTaskState", mind == null ? localTaskState : mind.saveState());
     output.putString("ExpeditionState", expeditionState);
+    output.putString("WorkSequenceState", workSequenceState);
     output.putString("RecentActionResults", recentResults.toString());
     output.putString("ExecutionMemory", executionMemory.save());
     output.putBoolean("Recovering", recovering);
@@ -399,6 +412,8 @@ public final class CompanionEntity extends PathfinderMob
     localTaskState = input.getStringOr("LocalTaskState", "");
     executionMemory.restore(input.getStringOr("ExecutionMemory", ""));
     expeditionState = input.getStringOr("ExpeditionState", "{}");
+    workSequenceState = input.getStringOr("WorkSequenceState", "{}");
+    if (workSequenceState.length() > 16384) workSequenceState = "{}";
     if (expeditionState.length() > 65536) expeditionState = "{}";
     try {
       String results = input.getStringOr("RecentActionResults", "[]");

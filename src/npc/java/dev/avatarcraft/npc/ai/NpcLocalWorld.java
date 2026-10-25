@@ -103,6 +103,11 @@ public final class NpcLocalWorld implements LocalTaskRunner.World {
     return entry == null ? null : entry.observation();
   }
 
+  @Override
+  public void continuousWork(boolean enabled) {
+    skills.continuousWork(enabled);
+  }
+
   private net.minecraft.world.entity.Entity levelEntity(java.util.UUID id) {
     return ((ServerLevel) npc.level()).getEntity(id);
   }
@@ -250,7 +255,21 @@ public final class NpcLocalWorld implements LocalTaskRunner.World {
   public JsonObject planningObservation() {
     var o = observe();
     var nearby = new JsonArray();
-    for (var entry : skills.nearbyChests().getAsJsonArray("chests")) {
+    var buildingMaterials = new java.util.TreeMap<String, Integer>();
+    for (int slot = 0; slot < 42; slot++) {
+      var stack = npc.inventory.getItem(slot);
+      if (stack.getItem() instanceof net.minecraft.world.item.BlockItem && !stack.isEmpty())
+        buildingMaterials.merge(NpcRecipes.id(stack.getItem()), stack.getCount(), Integer::sum);
+    }
+    var allChests = skills.nearbyChests().getAsJsonArray("chests");
+    for (var entry : allChests)
+      for (var element : entry.getAsJsonObject().getAsJsonArray("items")) {
+        var stack = element.getAsJsonObject();
+        String id = stack.get("item").getAsString();
+        if (NpcRecipes.item(id) instanceof net.minecraft.world.item.BlockItem)
+          buildingMaterials.merge(id, stack.get("count").getAsInt(), Integer::sum);
+      }
+    for (var entry : allChests) {
       if (nearby.size() >= 6) break;
       var chest = entry.getAsJsonObject().deepCopy();
       var items = chest.getAsJsonArray("items");
@@ -322,6 +341,22 @@ public final class NpcLocalWorld implements LocalTaskRunner.World {
               3000));
     }
     bounded.add("peer_findings", peerFindings);
+    bounded.add("building_materials", new Gson().toJsonTree(buildingMaterials));
+    var blueprint = NpcBlueprints.get(npc.level().getServer()).plans.get(npc.getUUID().toString());
+    if (blueprint != null)
+      bounded.add(
+          "blueprint",
+          object(
+              "id",
+              blueprint.id,
+              "status",
+              blueprint.status,
+              "origin",
+              new Gson().toJsonTree(List.of(blueprint.x, blueprint.y, blueprint.z)),
+              "name",
+              blueprint.spec().name(),
+              "missing",
+              new Gson().toJsonTree(NpcConstruction.missing(npc, blueprint))));
     bounded.add(
         "shared_anchors",
         NpcAnchors.get(npc.level().getServer())

@@ -107,6 +107,7 @@ final class NpcWorkRoute implements AutoCloseable {
       throw new IllegalArgumentException(
           "VERTICAL_LIMIT: use recorded return path or intermediate waypoints (+20/-24)");
     skills = new NpcSkills(npc, (s, id) -> {}, depth, resourceChain);
+    skills.continuousWork(true);
     world = new NpcLocalWorld(npc, skills);
     deadline = level.getGameTime() + 20L * 60 * 10;
     movement = new NpcMoveProgress(level.getGameTime());
@@ -191,7 +192,7 @@ final class NpcWorkRoute implements AutoCloseable {
       nextTick = now + 2;
     }
     if (now < nextTick || !npc.onGround() || npc.isUsingItem()) return;
-    nextTick = now + 4;
+    nextTick = now;
     if (ready(npc.blockPosition(), true)) {
       result.complete(
           object(

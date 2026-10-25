@@ -16,6 +16,8 @@ public final class LocalTaskRunner implements AutoCloseable {
       String kind, String tool, JsonObject args, double distance, JsonObject context) {}
 
   public interface World {
+    default void continuousWork(boolean enabled) {}
+
     JsonObject observe();
 
     CompletionStage<JsonObject> execute(String tool, JsonObject args);
@@ -103,6 +105,8 @@ public final class LocalTaskRunner implements AutoCloseable {
   private String activity = "ローカル作業中";
   private Eating eating;
   private long nextTick, eatingSince = -1;
+  private long microTick = -1, microDeadline;
+  private int microBudget;
   private long settlingSince = -1;
   private boolean pending, closed, scannedBlocks, scannedChests;
   private JsonArray blocks = new JsonArray(), chests = new JsonArray();
@@ -114,6 +118,7 @@ public final class LocalTaskRunner implements AutoCloseable {
   public LocalTaskRunner(TaskPlan plan, World world, Collection<String> allowed) {
     this.plan = plan;
     this.world = world;
+    world.continuousWork(true);
     this.allowed = Set.copyOf(allowed);
     policy = LocalActionPolicy.bundled();
     problem = plan.blocked();
@@ -231,7 +236,13 @@ public final class LocalTaskRunner implements AutoCloseable {
 
   public void tick(long now) {
     if (closed || pending || complete() || needsReplan() || now < nextTick) return;
-    nextTick = now + 4;
+    if (microTick != now) {
+      microTick = now;
+      microBudget = 8;
+      microDeadline = System.nanoTime() + 750_000;
+    }
+    if (microBudget-- <= 0) return;
+    nextTick = now;
     try {
       var observation = world.observe();
       if (observation.has("settling") && observation.get("settling").getAsBoolean()) {
@@ -372,6 +383,12 @@ public final class LocalTaskRunner implements AutoCloseable {
       } else if (selected.tag.equals("replan"))
         problem = lastFailure.isEmpty() ? "Required target or item is unavailable" : lastFailure;
       else run(selected, now);
+      if (!pending
+          && !complete()
+          && !needsReplan()
+          && now >= nextTick
+          && microBudget > 0
+          && System.nanoTime() < microDeadline) tick(now);
     } catch (RuntimeException e) {
       problem = "Invalid local world state or action candidate";
     }
@@ -921,7 +938,7 @@ public final class LocalTaskRunner implements AutoCloseable {
               (result, error) -> {
                 if (closed) return;
                 pending = false;
-                nextTick = now + 4;
+                nextTick = now;
                 if (error != null
                     || result == null
                     || !result.has("ok")
@@ -1109,6 +1126,7 @@ public final class LocalTaskRunner implements AutoCloseable {
   }
 
   public void close() {
+    world.continuousWork(false);
     closed = true;
     pending = false;
   }

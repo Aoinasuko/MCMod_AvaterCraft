@@ -94,6 +94,8 @@ public final class NpcMod {
         net.neoforged.neoforge.event.tick.ServerTickEvent.Post.class,
         event -> {
           NpcRecall.tick(event.getServer());
+          dev.avatarcraft.npc.ai.NpcBuildUiQa.tick(event.getServer());
+          dev.avatarcraft.npc.ai.NpcBlueprints.tick(event.getServer());
           if (event.getServer().getTickCount() % 20 == 0)
             AnchorEditing.expire(event.getServer().getTickCount());
         });

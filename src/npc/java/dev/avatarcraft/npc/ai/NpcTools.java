@@ -10,6 +10,13 @@ public final class NpcTools {
   private static final Map<String, Spec> SPECS = new LinkedHashMap<>();
 
   static {
+    add("create_blueprint", "Create a saved AI-authored building design and translucent preview. design_json={name,size:[w,h,d],parts:[{from:[x,y,z],to:[x,y,z],block:exact_id}]}; relative inclusive boxes, later parts override, air carves openings. Max side32/volume4096/64parts/8192chars. site_json={from:[world x,y,z],to:[world x,y,z]} constrains the building range; {} searches a nearby loaded supported clear site. Select specified materials, otherwise prefer observed inventory/chest building materials. Returns actual origin, needed/missing quantities and blueprint_id; later tools can use current.","design_json:string","site_json:string");
+    add("inspect_blueprint","Inspect this NPC's saved building plan, origin, preview, required inventory and missing blocks. blueprint_id=current or exact returned ID.","blueprint_id:string");
+    add("gather_blueprint","Secure all remaining blueprint block items in this NPC's inventory before construction, preferring nearby accessible chests via find_chests/move_to/withdraw, then existing acquire/craft/smelt chains. No item creation. Returns actual missing quantities or a concrete supply failure. blueprint_id=current or exact ID.","blueprint_id:string");
+    add("build_blueprint","Build a saved design only after actual inventory supplies are secured. Uses shared ordered queue -> move_to/equip/place with support/lower layers first; no direct world edits. Preserves occupied/protected cells, verifies all desired blocks, keeps preview for incomplete work. blueprint_id=current or exact ID.","blueprint_id:string");
+    add("cancel_blueprint","Cancel this NPC's current saved design and hide preview; keep already placed real blocks. blueprint_id=current or exact ID.","blueprint_id:string");
+    add("area_work", "Expand reusable tool templates over an inclusive integer cuboid. Each side <=32, cells <=4096, expanded nodes <=8192. order=top_down/bottom_up. steps_json is an array of {id,tool,arguments,priority,after,when,expect,required,item}. Coordinate variables $x/$y/$z with integer +/- offsets, slot=$item or $hoe. when/expect support block/above registry IDs or tags. after refers to template IDs in the same cell. Higher priority first among ready dependencies; stable spatial order. Actual effects use existing tools with their permissions and real inventory. No scheduler recursion. Required precondition failures remain unfinished; required=false skips unmatched cells. State expectations make restart safe. If bounds/floor height are ambiguous, ask instead of guessing. No automatic extra block edits for access.",
+        "x1:integer","y1:integer","z1:integer","x2:integer","y2:integer","z2:integer","order:string","steps_json:string");
     add(
         "observe",
         "Inspect own health, inventory, equipped items, nearby actors and current task.");
@@ -400,6 +407,10 @@ public final class NpcTools {
                       "enum",
                       new Gson()
                           .toJsonTree(List.of("up", "down", "north", "south", "east", "west")));
+                if (name.equals("area_work") && key.equals("order"))
+                  property.add(
+                      "enum",
+                      new Gson().toJsonTree(ToolProgram.ORDERS.stream().sorted().toList()));
                 if (key.equals("slot") && Set.of("use_item", "use_on_block").contains(name)) {
                   var slots = new JsonArray();
                   for (int i = 0; i < 36; i++) slots.add(i);
@@ -441,7 +452,7 @@ public final class NpcTools {
               if (type.equals("string")) {
                 if (!primitive.isString()
                     || value.getAsString().length()
-                        > (name.equals("delegate_task") && key.equals("plan_json") ? 8192 : 512))
+                    > ((name.equals("delegate_task") && key.equals("plan_json") || name.equals("area_work") && key.equals("steps_json") || name.equals("create_blueprint") && key.equals("design_json")) ? 8192 : 512))
                   throw new IllegalArgumentException("Invalid skill text");
               } else {
                 if (!primitive.isNumber()
@@ -457,6 +468,12 @@ public final class NpcTools {
                 throw new IllegalArgumentException(
                     name + "." + key + " must be " + limits[0] + ".." + limits[1]);
             });
+    if (name.equals("area_work")) {
+      var nodes = ToolProgram.expand(AreaWorkRegion.bounds(args), args.get("order").getAsString(), args.get("steps_json").getAsString());
+      for (var node : nodes) {
+        if (!NpcTools.permitted(node.tool(), allowed)) throw new IllegalArgumentException("Program contains an unpermitted child tool");
+      }
+    }
     if (name.equals("work_route")
         && (!Set.of("reach", "mine", "bridge", "pickup").contains(args.get("goal").getAsString())
             || !Set.of("dig", "build", "both").contains(args.get("mode").getAsString())))
@@ -516,6 +533,14 @@ public final class NpcTools {
   /** Local observation memory inherits observe; it cannot modify blocks, inventory or ownership. */
   public static boolean permitted(String name, Collection<String> allowed) {
     return allowed.contains(name)
+        || name.equals("create_blueprint") && allowed.containsAll(List.of("observe","place"))
+        || name.equals("inspect_blueprint") && allowed.contains("observe")
+        || name.equals("gather_blueprint") && allowed.containsAll(List.of("observe","move_to","withdraw","dig","craft"))
+        || name.equals("build_blueprint") && allowed.containsAll(List.of("observe","move_to","place"))
+        || name.equals("cancel_blueprint") && allowed.contains("observe")
+        || name.equals("area_work")
+            && allowed.containsAll(List.of("move_to", "observe"))
+            && (allowed.contains("dig") || allowed.contains("place"))
         || name.equals("work_route")
             && allowed.containsAll(List.of("move_to", "dig", "place", "observe"))
         || name.equals("inspect_entity") && allowed.contains("observe")

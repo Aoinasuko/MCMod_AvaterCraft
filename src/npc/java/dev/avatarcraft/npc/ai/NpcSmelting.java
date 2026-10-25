@@ -80,6 +80,10 @@ final class NpcSmelting implements AutoCloseable {
 
   private final CompanionEntity npc;
   private final NpcSkills skills;
+  private final NpcSkills transfers;
+  private CompletableFuture<JsonObject> pendingTransfer;
+  private String transferKind;
+  private boolean refunded, immediateFuelCheck = true;
   private final BlockPos position;
   private final Item output;
   private final int requested;
@@ -94,6 +98,7 @@ final class NpcSmelting implements AutoCloseable {
   NpcSmelting(CompanionEntity npc, NpcSkills skills, BlockPos p, String item, int count) {
     this.npc = npc;
     this.skills = skills;
+    transfers = new NpcSkills(npc, (text, id) -> {});
     position = p.immutable();
     output = NpcRecipes.item(item);
     requested = count;
@@ -143,27 +148,39 @@ final class NpcSmelting implements AutoCloseable {
         throw new IllegalArgumentException("Too many furnace leases");
       data.furnaces.put(key, npc.getUUID());
       data.setDirty();
-      furnace.setItem(0, npc.inventory.removeItem(slot, count));
-      refill(level, furnace);
-      furnace.setChanged();
+      transfer("furnace_put", slot, 0, count, "input");
     }
     deadline = level.getGameTime() + count * 400L + 1200;
   }
 
   void tick() {
     if (result.isDone()) return;
+    transfers.tick();
+    if (pendingTransfer != null) {
+      if (!pendingTransfer.isDone()) return;
+      var outcome = pendingTransfer.getNow(null);
+      pendingTransfer = null;
+      if (!outcome.get("ok").getAsBoolean() && !transferKind.equals("refund")) {
+        finish(false, "Furnace transfer failed: " + outcome);
+        return;
+      }
+      if (transferKind.equals("output")) moved += outcome.get("moved").getAsInt();
+      if (transferKind.equals("input") || transferKind.equals("setup")) immediateFuelCheck = true;
+    }
     var level = (ServerLevel) npc.level();
     var furnace = skills.furnace(position);
     if (furnace == null) {
       finish(false, "Furnace removed, protected or out of reach");
       return;
     }
-    if (level.getGameTime() % 20 == 0
+    if ((immediateFuelCheck || level.getGameTime() % 20 == 0)
         && !furnace.getItem(0).isEmpty()
         && (!furnace.getItem(2).is(output) || furnace.getItem(2).getCount() < requested - moved)) {
       try {
+        immediateFuelCheck = false;
         requireFuel(level, furnace, furnace.getItem(0), -1, 0);
         refill(level, furnace);
+        if (pendingTransfer != null) return;
       } catch (IllegalArgumentException e) {
         finish(false, e.getMessage() + "; partial batch remains reserved in furnace");
         return;
@@ -186,20 +203,16 @@ final class NpcSmelting implements AutoCloseable {
     if (stack.is(output)
         && stack.getCount() >= requested - moved
         && capacity >= requested - moved) {
-      var inserted = stack.copyWithCount(Math.min(stack.getCount(), requested - moved));
-      int n = inserted.getCount() - npc.inventory.insert(inserted).getCount();
-      if (n > 0) {
-        furnace.removeItem(2, n);
-        moved += n;
-        furnace.setChanged();
-      }
+      transfer("furnace_take", -1, 2, Math.min(stack.getCount(), requested - moved), "output");
+      return;
     }
     if (moved >= requested) {
-      // Return unused fuel, preserving real overflow inside the furnace.
-      var fuel = furnace.getItem(1);
-      int before = fuel.getCount();
-      var remaining = npc.inventory.insert(fuel.copy());
-      if (before > remaining.getCount()) furnace.removeItem(1, before - remaining.getCount());
+      // Reuse the public single-slot tool; overflow may remain in the furnace.
+      if (!refunded && !furnace.getItem(1).isEmpty()) {
+        refunded = true;
+        transfer("furnace_take", -1, 1, Math.min(64, furnace.getItem(1).getCount()), "refund");
+        return;
+      }
       if (furnace.getItem(0).isEmpty() && furnace.getItem(2).isEmpty()) {
         var data = NpcWorkData.get(level);
         data.furnaces.remove(key(level, position));
@@ -310,9 +323,38 @@ final class NpcSmelting implements AutoCloseable {
           (int)
               Math.min(
                   npc.inventory.getItem(best).getCount(), (required + duration - 1) / duration);
-      furnace.setItem(1, npc.inventory.removeItem(best, count));
-      furnace.setChanged();
+      if (best >= 36) {
+        for (int bag = 0; bag < 36; bag++)
+          if (npc.inventory.getItem(bag).isEmpty()) {
+            transferKind = "setup";
+            pendingTransfer =
+                transfers
+                    .execute("equip", object("slot", bag, "hand", best == 40 ? "off" : "main"))
+                    .toCompletableFuture();
+            return;
+          }
+        throw new IllegalArgumentException("Empty bag slot required to transfer held fuel");
+      }
+      transfer("furnace_put", best, 1, Math.min(64, count), "fuel");
     }
+  }
+
+  private void transfer(String tool, int bag, int furnaceSlot, int count, String kind) {
+    var args =
+        object(
+            "x",
+            position.getX(),
+            "y",
+            position.getY(),
+            "z",
+            position.getZ(),
+            "furnace_slot",
+            furnaceSlot,
+            "count",
+            count);
+    if (tool.equals("furnace_put")) args.addProperty("slot", bag);
+    transferKind = kind;
+    pendingTransfer = transfers.execute(tool, args).toCompletableFuture();
   }
 
   private void finish(boolean ok, String problem) {
@@ -320,6 +362,7 @@ final class NpcSmelting implements AutoCloseable {
   }
 
   public void close() {
+    transfers.cancel("Smelting transfers stopped");
     if (!result.isDone())
       finish(false, "Smelting interrupted; real batch remains reserved in furnace");
   }

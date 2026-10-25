@@ -38,14 +38,26 @@ public final class NpcSkills {
   private NpcSmelting smelting;
   private NpcExpedition expedition;
   private NpcWorkRoute workRoute;
+  private NpcToolQueue areaWork;
+  private NpcConstruction construction;
   private NpcLongTravel longTravel;
   private final int acquisitionDepth;
   private final Set<String> resourceChain;
   private final NpcInteractions interactions;
   private final NpcFollowing following;
   private final TravelPace travelPace = new TravelPace();
+  private boolean continuousWork;
+
+  void continuousWork(boolean enabled) {
+    continuousWork = enabled;
+  }
 
   private double movementSpeed(double distanceSquared, boolean precise) {
+    if (continuousWork && !precise && distanceSquared > 2.25 && canSprint(npc)) {
+      npc.setSprinting(true);
+      npc.getNavigation().setSpeedModifier(2.2);
+      return 2.2;
+    }
     travelPace.update(distanceSquared, canSprint(npc), precise);
     npc.setSprinting(travelPace.sprinting());
     npc.getNavigation().setSpeedModifier(travelPace.speed());
@@ -202,6 +214,24 @@ public final class NpcSkills {
 
   private JsonObject failureSignature(String name, JsonObject args) {
     var signature = args.deepCopy();
+    if (name.equals("area_work")) {
+      var supply = new StringBuilder();
+      for (int i = 0; i < 42; i++) {
+        var stack = npc.inventory.getItem(i);
+        if (!stack.isEmpty())
+          supply
+              .append(i)
+              .append(':')
+              .append(NpcRecipes.id(stack.getItem()))
+              .append(':')
+              .append(stack.getCount())
+              .append(':')
+              .append(stack.getDamageValue())
+              .append(';');
+      }
+      signature.addProperty("supplyState", supply.toString().hashCode());
+      signature.addProperty("actorCell", npc.blockPosition().toShortString());
+    }
     if (Set.of("dig", "place", "deposit", "withdraw", "give_item").contains(name)) {
       if (args.has("x") && level().hasChunkAt(pos(args)))
         signature.addProperty("targetState", level().getBlockState(pos(args)).toString());
@@ -288,7 +318,7 @@ public final class NpcSkills {
     return visibleHitFrom(npc.getEyePosition(), point, target);
   }
 
-  private boolean visibleHitFrom(Vec3 eye, Vec3 point, BlockPos target) {
+  boolean visibleHitFrom(Vec3 eye, Vec3 point, BlockPos target) {
     var hit =
         level()
             .clip(
@@ -356,8 +386,35 @@ public final class NpcSkills {
       cancel("Stopped");
       return immediate(object("ok", true));
     }
+    if (name.equals("inspect_blueprint"))
+      return immediate(NpcConstruction.inspect(npc, args.get("blueprint_id").getAsString()));
+    if (name.equals("cancel_blueprint")) {
+      var p =
+          NpcBlueprints.get(level().getServer())
+              .current(npc, args.get("blueprint_id").getAsString());
+      cancel("Blueprint cancelled");
+      p.status = "cancelled";
+      NpcBlueprints.get(level().getServer()).setDirty();
+      return immediate(object("ok", true, "blueprint_id", p.id));
+    }
     if (name.equals("release_item")) return interactions.execute(name, args);
     if (busy()) return immediate(error("Another game action is still in progress"));
+    if (Set.of("create_blueprint", "gather_blueprint", "build_blueprint").contains(name)) {
+      construction = new NpcConstruction(npc, name, args, acquisitionDepth + 1, resourceChain);
+      return construction.result;
+    }
+    if (name.equals("area_work")) {
+      areaWork =
+          new NpcToolQueue(
+              npc,
+              ToolProgram.expand(
+                  AreaWorkRegion.bounds(args),
+                  args.get("order").getAsString(),
+                  args.get("steps_json").getAsString()),
+              acquisitionDepth + 1,
+              resourceChain);
+      return areaWork.result;
+    }
     if (name.equals("work_route")) {
       var target = pos(args);
       if (args.get("goal").getAsString().equals("reach")
@@ -392,8 +449,7 @@ public final class NpcSkills {
       return immediate(
           NpcTeams.delegatePlan(
               npc, args.get("entity_id").getAsInt(), args.get("plan_json").getAsString()));
-    if (name.equals("place_workstation"))
-      return immediate(placeWorkstation(args.get("item").getAsString()));
+    if (name.equals("place_workstation")) return placeWorkstation(args.get("item").getAsString());
     if (name.equals("acquire")) {
       String item = NpcResources.normalize(args.get("item").getAsString());
       if (resourceChain.contains(item))
@@ -601,6 +657,22 @@ public final class NpcSkills {
     if (longTravel != null) {
       longTravel.tick();
       if (longTravel.result.isDone()) longTravel = null;
+      return;
+    }
+    if (construction != null) {
+      construction.tick();
+      if (construction.result.isDone()) {
+        construction.close();
+        construction = null;
+      }
+      return;
+    }
+    if (areaWork != null) {
+      areaWork.tick();
+      if (areaWork.result.isDone()) {
+        areaWork.close();
+        areaWork = null;
+      }
       return;
     }
     if (workRoute != null) {
@@ -1498,17 +1570,9 @@ public final class NpcSkills {
     return ChestBlock.getContainer(block, state, level(), target, false);
   }
 
-  private JsonObject placeWorkstation(String item) {
+  private CompletionStage<JsonObject> placeWorkstation(String item) {
     if (!Set.of("minecraft:chest", "minecraft:crafting_table", "minecraft:furnace").contains(item))
-      return error("Supported workstation: chest, crafting_table or furnace");
-    int slot = -1;
-    for (int i = 0; i < 36; i++)
-      if (NpcRecipes.id(npc.inventory.getItem(i).getItem()).equals(item)
-          && !npc.inventory.getItem(i).isEmpty()) {
-        slot = i;
-        break;
-      }
-    if (slot < 0) return error("Acquire the actual workstation item first");
+      return immediate(error("Supported workstation: chest, crafting_table or furnace"));
     var sites = new ArrayList<BlockPos>();
     for (var p :
         BlockPos.betweenClosed(
@@ -1519,31 +1583,44 @@ public final class NpcSkills {
           && !npc.getBoundingBox().intersects(new AABB(p))
           && level().getEntities(npc, new AABB(p)).isEmpty()) sites.add(p.immutable());
     sites.sort(Comparator.comparingDouble(p -> npc.distanceToSqr(Vec3.atCenterOf(p))));
-    for (var p : sites) {
-      var outcome = place(object("x", p.getX(), "y", p.getY(), "z", p.getZ(), "slot", slot));
-      if (outcome.get("ok").getAsBoolean()) {
-        var result =
-            object(
-                "ok",
-                true,
-                "x",
-                p.getX(),
-                "y",
-                p.getY(),
-                "z",
-                p.getZ(),
-                "dimension",
-                level().dimension().identifier().toString());
-        if (item.equals("minecraft:chest")) {
-          var memory =
-              npc.locations.chest(
-                  level().dimension().identifier().toString(), p.getX(), p.getY(), p.getZ());
-          if (memory != null) result.addProperty("location", memory.name());
-        }
-        return result;
-      }
-    }
-    return error("No accessible empty supported workstation site");
+    if (sites.isEmpty()) return immediate(error("No accessible empty supported workstation site"));
+    var p = sites.getFirst();
+    var node =
+        new ToolProgram.Node(
+            "workstation:" + item + ":" + p.toShortString(),
+            "place",
+            object("x", p.getX(), "y", p.getY(), "z", p.getZ(), "slot", "$item"),
+            0,
+            List.of(),
+            new JsonObject(),
+            object("block", item),
+            true,
+            item,
+            new AreaWorkRegion.Cell(p.getX(), p.getY(), p.getZ()));
+    areaWork = new NpcToolQueue(npc, List.of(node), acquisitionDepth + 1, resourceChain);
+    return areaWork.result.thenApply(
+        outcome -> {
+          if (!outcome.get("ok").getAsBoolean()) return outcome;
+          var response =
+              object(
+                  "ok",
+                  true,
+                  "x",
+                  p.getX(),
+                  "y",
+                  p.getY(),
+                  "z",
+                  p.getZ(),
+                  "dimension",
+                  level().dimension().identifier().toString());
+          if (item.equals("minecraft:chest")) {
+            var memory =
+                npc.locations.chest(
+                    level().dimension().identifier().toString(), p.getX(), p.getY(), p.getZ());
+            if (memory != null) response.addProperty("location", memory.name());
+          }
+          return response;
+        });
   }
 
   net.minecraft.world.level.block.entity.FurnaceBlockEntity furnace(BlockPos p) {
@@ -1935,13 +2012,21 @@ public final class NpcSkills {
         "dimension",
         level().dimension().identifier().toString(),
         "action",
-        longTravel != null
-            ? "long_travel"
-            : workRoute != null ? "work_route" : action == null ? "idle" : action.name,
+        construction != null
+            ? "construction"
+            : areaWork != null
+                ? "area_work"
+                : longTravel != null
+                    ? "long_travel"
+                    : workRoute != null ? "work_route" : action == null ? "idle" : action.name,
         "work_route",
-        longTravel != null
-            ? longTravel.progress()
-            : workRoute == null ? JsonNull.INSTANCE : workRoute.progress());
+        construction != null
+            ? construction.progress()
+            : areaWork != null
+                ? areaWork.progress()
+                : longTravel != null
+                    ? longTravel.progress()
+                    : workRoute == null ? JsonNull.INSTANCE : workRoute.progress());
   }
 
   static JsonArray itemTags(ItemStack stack) {
@@ -2029,6 +2114,12 @@ public final class NpcSkills {
     var routing = workRoute;
     workRoute = null;
     if (routing != null) routing.close();
+    var area = areaWork;
+    areaWork = null;
+    if (area != null) area.close();
+    var building = construction;
+    construction = null;
+    if (building != null) building.close();
     var acquiring = acquisition;
     acquisition = null;
     if (acquiring != null) acquiring.close();
@@ -2045,6 +2136,8 @@ public final class NpcSkills {
     return action != null
         || longTravel != null
         || workRoute != null
+        || areaWork != null
+        || construction != null
         || acquisition != null
         || smelting != null
         || expedition != null

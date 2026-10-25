@@ -13,13 +13,17 @@ public final class NpcClient {
   private AvatarActorRenderer<CompanionEntity> renderer;
 
   public NpcClient(IEventBus bus, net.neoforged.fml.ModContainer container) {
+    BlueprintPreview.install();
     if (Boolean.getBoolean("avatarcraft.anchorUiQa"))
       NeoForge.EVENT_BUS.addListener(
           net.neoforged.neoforge.client.event.ClientTickEvent.Post.class,
           event ->
               net.minecraft.client.Minecraft.getInstance()
                   .getWindow()
-                  .setTitle("AvatarCraft 0.7.0 Anchor QA"));
+                  .setTitle(
+                      Boolean.getBoolean("avatarcraft.blueprintUiQa")
+                          ? "AvatarCraft Blueprint QA"
+                          : "AvatarCraft 0.7.0 Anchor QA"));
     java.util.concurrent.CompletableFuture.runAsync(
         () -> {
           try {
@@ -40,6 +44,10 @@ public final class NpcClient {
                 NpcNetwork.Response.TYPE,
                 (response, context) -> {
                   var minecraft = net.minecraft.client.Minecraft.getInstance();
+                  if (response.action().equals("blueprint")) {
+                    BlueprintPreview.receive(response.data());
+                    return;
+                  }
                   if (response.action().equals("anchor_open")) {
                     if (minecraft.gui.screen() != null
                         && !(minecraft.gui.screen() instanceof AnchorScreen)) return;

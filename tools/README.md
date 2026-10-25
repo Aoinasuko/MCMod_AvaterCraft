@@ -81,7 +81,7 @@ NPCのHTTPプロバイダーはJUnitの模擬APIで検証します（外部API�
 
 `tools/NpcPolicyBenchmark.java` はJava 25のソースファイル実行で、コンパイル済みNPCクラス・NPCリソース・Gsonをクラスパスに指定して動かします。24候補の評価だけを測り、ワールド探索・経路探索・API応答時間は含みません。
 
-`tools/NpcToolCatalog.java` は同じクラスパスで実際の`NpcTools`定義をJSONへ抽出します。出力を`build/npc-tools.json`へ保存し、`python tools/generate_npc_tool_docs.py`で`Docs/NpcTools.md`と配布用`release/NPC_Tools_ja.md`を生成します。全57種の引数名・型と日本語の実行条件を同期し、説明のないツールがあれば失敗します。
+`tools/NpcToolCatalog.java` は同じクラスパスで実際の`NpcTools`定義をJSONへ抽出します。出力を`build/npc-tools.json`へ保存し、`python tools/generate_npc_tool_docs.py`で`Docs/NpcTools.md`と配布用`release/NPC_Tools_ja.md`を生成します。全63種の引数名・型と日本語の実行条件を同期し、説明のないツールがあれば失敗します。
 
 ## アバターアンカーの検証
 
@@ -90,3 +90,9 @@ NPCのHTTPプロバイダーはJUnitの模擬APIで検証します（外部API�
 実AIの計画生成から収納完了まで試す場合だけ、`AVATARCRAFT_ANCHOR_LIVE=true`を設定して`runAnchorGameTest`を実行します。設定済みのCodex OAuthを使い、外部AIへ実際に要求します。結果は`build/anchor-live-result.json`へ出力し、通常の回帰試験では外部AIを呼びません。
 
 `runAnchorClient`は`run-anchor-ui-qa/`の`Anchor UI QA`ワールドを開きます。画面上のID入力・保存・再表示を確認するための独立した開発実行です。配布JARでは開発用GameTestを登録しません。配布パッケージの作成時にはアンカーのクラス・提供画像と同一のテクスチャ・新しい2レシピも検証します。
+
+## 範囲キュー・建築の検証
+
+`tools/dev.ps1 -Task runAreaGameTest`は独立した`run-area-qa/`で矩形掘削・埋立・耕作・種まき、混合テンプレートの依存、設計図保存、チェストからの資材確保、実建築と仮足場の撤去を検証します。通常の`runNpcGameTest`にも含めています。`AVATARCRAFT_AREA_LIVE=true`を設定した場合だけ、Codex OAuthで実際の指示理解／設計から範囲作業・建築完了までを検証し、`build/area-live-result.json`と`build/construction-live-result.json`へ結果を記録します。
+
+`AVATARCRAFT_BLUEPRINT_UI_QA=true`で`runAnchorClient`を実行すると、既存の独立したAnchor UI QAワールドで建築画面確認用の開発フックを有効にできます。開発ワールドのプレイヤーに`avatarcraft_blueprint_preview_qa`タグがある場合のみ、実際の設計図作成ツールを実行します。`avatarcraft_blueprint_build_qa`タグで実際の資材確保／施工ツールを実行します。結果は`build/blueprint-ui-qa.json`、画像はその実行ディレクトリの`screenshots/`に保存します。製品環境ではこのフックを実行しません。

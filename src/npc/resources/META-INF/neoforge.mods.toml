@@ -3,13 +3,13 @@ loaderVersion="[1,)"
 license="All Rights Reserved"
 [[mods]]
 modId="avatarcraftnpc"
-version="0.7.0"
+version="0.7.1"
 displayName="AvatarCraft AI Companions"
 description='''AI-driven avatar companions with equipment, personalities and persistent memories.'''
 [[dependencies.avatarcraftnpc]]
 modId="avatarcraft"
 type="required"
-versionRange="[0.7.0,)"
+versionRange="[0.7.1,)"
 ordering="AFTER"
 side="BOTH"
 [[dependencies.avatarcraftnpc]]

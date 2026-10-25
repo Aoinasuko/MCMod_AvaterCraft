@@ -40,6 +40,9 @@ def verify_jar(data, npc=False):
             for component in ("AvatarAnchorBlock", "AvatarAnchorBlockEntity", "NpcAnchors", "AnchorEditing"):
                 assert f"dev/avatarcraft/npc/{component}.class" in jar.namelist()
             assert "dev/avatarcraft/npc/client/AnchorScreen.class" in jar.namelist()
+            for component in ("ToolProgram", "ToolSchedule", "NpcToolQueue", "BlueprintSpec", "NpcConstruction", "NpcBlueprints"):
+                assert f"dev/avatarcraft/npc/ai/{component}.class" in jar.namelist()
+            assert "dev/avatarcraft/npc/client/BlueprintPreview.class" in jar.namelist()
             anchor_texture = "assets/avatarcraftnpc/textures/block/avatar_anchor.png"
             assert jar.read(anchor_texture) == (ROOT / "src/npc/resources" / anchor_texture).read_bytes()
             for recipe, center in (("avatar_anchor", "#minecraft:planks"), ("memory_journal", "minecraft:book")):

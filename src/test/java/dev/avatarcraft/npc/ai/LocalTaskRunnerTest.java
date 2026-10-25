@@ -48,6 +48,7 @@ class LocalTaskRunnerTest {
     CompletableFuture<JsonObject> held;
     boolean failTransfers, equipped, consumeFood = true, produceMiningDrops = true;
     int moved, mining, foodSlot = -1;
+    int transferBudget = -1;
 
     void stack(int slot, String item, int count) {
       var inv = state.getAsJsonArray("inventory");
@@ -106,6 +107,11 @@ class LocalTaskRunnerTest {
                   JsonParser.parseString(
                       "[{\"x\":1,\"y\":1,\"z\":0,\"items\":[{\"slot\":0,\"item\":\"minecraft:cobblestone\",\"count\":64}]}]")));
         case "deposit", "withdraw", "give_item":
+          if (transferBudget == 0) {
+            held = new CompletableFuture<>();
+            return held;
+          }
+          if (transferBudget > 0) transferBudget--;
           if (failTransfers)
             return CompletableFuture.completedFuture(object("ok", false, "moved", 0));
           int amount = Math.min(2, args.get("count").getAsInt());
@@ -217,12 +223,15 @@ class LocalTaskRunnerTest {
   void checkpointPreservesPartialTransferAndNeverReplaysCompletedSteps() {
     var w = new World();
     w.stack(2, "minecraft:cobblestone", 8);
+    w.transferBudget = 1;
     var r = runner(w, step("deposit", "minecraft:cobblestone", 5), step("wait", "", 1));
     for (int tick = 0; tick < 5; tick++) r.tick(tick);
     assertEquals(2, w.moved);
     var saved = r.checkpoint();
     assertEquals(3, saved.steps().getFirst().count());
     r.close();
+    w.held = null;
+    w.transferBudget = -1;
     var resumed = new LocalTaskRunner(saved, w, Personality.preset("tortobu").allowedSkills);
     finish(resumed);
     assertTrue(resumed.complete());

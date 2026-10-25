@@ -2,7 +2,7 @@ plugins {
     id 'java-library'
     id 'net.neoforged.moddev' version '2.0.148'
 }
-version = '0.7.0'
+version = '0.7.1'
 group = 'dev.avatarcraft'
 base { archivesName = 'avatarcraft' }
 java.toolchain.languageVersion = JavaLanguageVersion.of(25)
@@ -33,8 +33,17 @@ neoForge {
             gameDirectory = file('run-anchor-ui-qa')
             systemProperty 'avatarcraft.qa', 'true'
             systemProperty 'avatarcraft.anchorUiQa', 'true'
+            systemProperty 'avatarcraft.blueprintUiQa', providers.environmentVariable('AVATARCRAFT_BLUEPRINT_UI_QA').getOrElse('false')
             programArgument '--quickPlaySingleplayer'
             programArgument 'Anchor UI QA'
+        }
+        areaGameTest {
+            type = 'gameTestServer'
+            gameDirectory = file('run-area-qa')
+            systemProperty 'avatarcraft.npcGameTest', 'true'
+            systemProperty 'avatarcraft.areaQa', 'true'
+            systemProperty 'avatarcraft.areaLive', providers.environmentVariable('AVATARCRAFT_AREA_LIVE').getOrElse('false')
+            systemProperty 'neoforge.enabledGameTestNamespaces', 'avatarcraftnpc'
         }
         anchorGameTest {
             type = 'gameTestServer'

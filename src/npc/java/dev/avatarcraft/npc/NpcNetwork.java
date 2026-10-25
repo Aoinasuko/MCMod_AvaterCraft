@@ -60,6 +60,8 @@ public final class NpcNetwork {
   public static void clear() {
     LIMITS.clear();
     AnchorEditing.clear();
+    dev.avatarcraft.npc.ai.NpcBlueprints.clearClientCache();
+    dev.avatarcraft.npc.ai.NpcBuildUiQa.clear();
   }
 
   private static void handle(Request request, IPayloadContext context) {

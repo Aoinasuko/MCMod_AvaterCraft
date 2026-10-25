@@ -25,6 +25,12 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 /** Opt-in development GameTest; uses an isolated world and the actual server game operations. */
 public final class NpcGameTests {
   public static void register(RegisterGameTestsEvent event) {
+    if (Boolean.getBoolean("avatarcraft.areaQa")) {
+      NpcAreaWorkGameTests.register(event);
+      if (!Boolean.getBoolean("avatarcraft.areaLive")) NpcConstructionGameTests.register(event);
+      else NpcConstructionGameTests.registerLive(event);
+      return;
+    }
     if (Boolean.getBoolean("avatarcraft.anchorQa")) {
       NpcAnchorGameTests.register(event);
       return;
@@ -44,6 +50,8 @@ public final class NpcGameTests {
     NpcExpeditionScenarioGameTests.register(event);
     NpcSurfaceGameTests.register(event);
     NpcAnchorGameTests.register(event);
+    NpcAreaWorkGameTests.register(event);
+    NpcConstructionGameTests.register(event);
     var environment =
         event.registerEnvironment(NpcMod.id("qa"), new TestEnvironmentDefinition.AllOf());
     event.registerTest(
