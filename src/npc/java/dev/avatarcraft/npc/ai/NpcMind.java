@@ -23,6 +23,7 @@ public final class NpcMind implements AutoCloseable {
   private long speechEpoch;
   private long completionTicket, completionDeadline;
   private boolean completionPending;
+  private boolean blockedNotice;
   private dev.avatarcraft.npc.Personality completionProfile;
   private com.google.gson.JsonObject completionOutcome;
   private CompletableFuture<String> completionReply;
@@ -33,12 +34,14 @@ public final class NpcMind implements AutoCloseable {
   private boolean openingPlayerChat;
   private long nextPlayerChat, chatSequence, latestOwnerChat;
 
-  private record HumanChat(UUID speaker, String name, String text, boolean owner, long sequence) {}
+  private record HumanChat(UUID speaker, String name, String text, boolean owner, long sequence,
+      com.google.gson.JsonObject commandContext) {}
 
   private final Deque<HumanChat> playerChats = new ArrayDeque<>();
   private boolean openingWork, openingSpeech, heard;
   private long epoch, nextThink, nextConversation;
   private long nextSpeechOpen;
+  private long nextTeamCheck;
   private boolean announcedBlock;
   private boolean advancedPlanning;
   private boolean planningRetryPending;
@@ -198,13 +201,30 @@ public final class NpcMind implements AutoCloseable {
       return;
     }
     if (local != null) {
+      var assistance = now >= nextTeamCheck && local.activity().endsWith("await_teammate")
+          ? NpcTeams.assistance(npc, local.checkpoint()) : null;
+      if (now >= nextTeamCheck) nextTeamCheck = now + 100;
+      if (assistance != null) {
+        var navigation = local.navigation();
+        local.close();
+        skills.cancel("Team work redistributed");
+        local = new LocalTaskRunner(assistance, new NpcLocalWorld(npc, skills), npc.personality().allowedSkills);
+        local.restoreNavigation(navigation);
+      }
       local.tick(now);
-      if (local.complete()) {
+      boolean goalVerified=npc.mission.active()&&npc.mission.verified()
+          &&(!npc.mission.observation().getAsJsonObject("goal").get("type").getAsString().equals("farm")||!skills.busy());
+      if(local.complete()&&!npc.mission.verified())
+        local.rejectCompletion("MISSION_UNFINISHED: "+npc.mission.observation());
+      if (local.complete()||goalVerified) {
+        npc.mission.completed();
         NpcTeams.finished(npc, "");
         NpcTeams.changed(npc);
         planningContext = local.progress().toString();
         service.record(npc, "local_complete", "Verified task completed", null, local.progress());
         npc.executionMemory.completed(npc.instruction(), local.progress());
+        service.record(npc, "location_memory_clear", "Mission completed; clearing personal locations",
+            null, object("removed", npc.locations.snapshot()));
         local.close();
         local = null;
         closeWork();
@@ -233,6 +253,7 @@ public final class NpcMind implements AutoCloseable {
                 .getAsJsonObject("lastVerifiedOutcome")
                 .deepCopy();
         completionPending = true;
+        blockedNotice = false;
         completionDeadline = now + 400;
         completionTicket++;
         tickCompletion(now);
@@ -497,6 +518,8 @@ public final class NpcMind implements AutoCloseable {
                             }
                             var boundPlan =
                                 new NpcLocalWorld(npc, skills).bindLocations(executable);
+                            npc.mission.adopt(plan.goal());
+                            skills.cancel("Previous execution ended for a new plan");
                             local =
                                 new LocalTaskRunner(
                                     boundPlan,
@@ -585,7 +608,8 @@ public final class NpcMind implements AutoCloseable {
     boolean owner = npc.ownedBy(speaker);
     var chat =
         new HumanChat(
-            speaker.getUUID(), speaker.getName().getString(), text, owner, ++chatSequence);
+            speaker.getUUID(), speaker.getName().getString(), text, owner, ++chatSequence,
+            NpcCommandContext.capture(npc, speaker));
     if (owner) latestOwnerChat = chat.sequence;
     playerChats.addLast(chat);
     while (playerChats.size() > 4) playerChats.removeFirst();
@@ -595,6 +619,7 @@ public final class NpcMind implements AutoCloseable {
   }
 
   public void acceptDelegatedPlan(TaskPlan plan) {
+    npc.mission.adopt(plan.goal());
     if (local != null) local.close();
     local =
         new LocalTaskRunner(
@@ -672,6 +697,8 @@ public final class NpcMind implements AutoCloseable {
             + "新しい依頼への返事は『取り組む』等にし、記憶・回収・収納等をまだ実行していない段階で完了したと言わないでください。\n"
             + "現在の作業: "
             + npc.instruction()
+            + "\n発言時にサーバーが確定した場所（『ここ』を現在位置で上書きしない）: "
+            + batch.getLast().commandContext
             + "\n観察: "
             + NpcObservations.planning(skills.observe(), 8000)
             + "\n確定済みの前回の目標結果（SUCCEEDEDなら完了確認済み）: "
@@ -712,7 +739,7 @@ public final class NpcMind implements AutoCloseable {
                               latestOwnerChat > last,
                               reply.instruction())) {
                             String task = reply.instruction().strip();
-                            npc.setInstruction(task.equals("__stop__") ? "" : task);
+                            npc.setInstruction(task.equals("__stop__") ? "" : task, batch.getLast().commandContext);
                           }
                         }));
   }
@@ -778,18 +805,21 @@ public final class NpcMind implements AutoCloseable {
 
   private void tickCompletion(long now) {
     if (!completionPending) return;
-    if (!completionProfile.completionMessage.isBlank()
+    if (!(blockedNotice ? completionProfile.blockedMessage : completionProfile.completionMessage).isBlank()
         || !service.config.enabled && testBrain == null
         || now >= completionDeadline) {
       completionPending = false;
       if (completionReply != null) completionReply.cancel(false);
       completionReply = null;
-      service.notice(npc, NpcCompletionSpeech.fallback(completionProfile));
+      service.notice(npc, blockedNotice ? NpcBlockedSpeech.fallback(completionProfile)
+          : NpcCompletionSpeech.fallback(completionProfile));
       return;
     }
     if (completionReply != null || !service.requestSlot(now)) return;
     long ticket = completionTicket;
-    completionReply = NpcCompletionSpeech.generate(brain(), completionProfile, completionOutcome);
+    completionReply = blockedNotice
+        ? NpcBlockedSpeech.generate(brain(), completionProfile, completionOutcome)
+        : NpcCompletionSpeech.generate(brain(), completionProfile, completionOutcome);
     completionReply.whenComplete(
         (text, error) ->
             level
@@ -802,7 +832,10 @@ public final class NpcMind implements AutoCloseable {
                       completionReply = null;
                       service.notice(
                           npc,
-                          error == null
+                          blockedNotice ? error == null
+                              ? NpcBlockedSpeech.accepted(text, completionProfile)
+                              : NpcBlockedSpeech.fallback(completionProfile)
+                          : error == null
                               ? NpcCompletionSpeech.accepted(text, completionProfile)
                               : NpcCompletionSpeech.fallback(completionProfile));
                     }));
@@ -819,7 +852,16 @@ public final class NpcMind implements AutoCloseable {
         blockedReason,
         null,
         object("replans", replans, "hasPriorProgress", !planningContext.isEmpty()));
-    service.notice(npc, "作業を保留しています。" + blockedReason);
+    completionTicket++;
+    if (completionReply != null) completionReply.cancel(false);
+    completionReply = null;
+    completionProfile = npc.personality();
+    completionOutcome = object("instruction", npc.instruction(), "reason", blockedReason,
+        "verifiedProgress", planningContext);
+    blockedNotice = true;
+    completionPending = true;
+    completionDeadline = level.getGameTime() + 400;
+    tickCompletion(level.getGameTime());
   }
 
   /** Log the stage and exception type, never provider payloads, headers or credentials. */

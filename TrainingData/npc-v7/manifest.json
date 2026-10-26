@@ -1,0 +1,326 @@
+{
+  "seed": 20261026,
+  "features": [
+    "urgent",
+    "goal",
+    "ready",
+    "setup",
+    "verify",
+    "scan",
+    "approach",
+    "work",
+    "distance",
+    "failures",
+    "blocked",
+    "replan",
+    "idle",
+    "food_need",
+    "progress",
+    "repeat",
+    "target_missing",
+    "tool_missing",
+    "bag_free",
+    "candidate_reachable",
+    "candidate_loaded",
+    "unvisited",
+    "depth_gain",
+    "exploration_fraction",
+    "owner_distance",
+    "health",
+    "inventory_fraction",
+    "ore_target",
+    "diamond_target",
+    "ingredients_ready",
+    "chest_source",
+    "remaining_budget",
+    "combat",
+    "target_health",
+    "hostile_distance",
+    "weapon_ready",
+    "ranged",
+    "ammunition",
+    "needs_aim",
+    "use_charge",
+    "smelt_ready",
+    "fuel_available",
+    "team_waiting",
+    "delegated",
+    "dimension_travel",
+    "portal_visible",
+    "structure_observed",
+    "danger",
+    "height_delta",
+    "path_known",
+    "edit_fraction",
+    "target_failed",
+    "station_distance",
+    "team_stalled",
+    "supply_shortfall",
+    "travel_cost"
+  ],
+  "worldSplits": {
+    "61279": "train",
+    "61280": "train",
+    "61281": "train",
+    "61282": "validation",
+    "61283": "test"
+  },
+  "rawJournals": [
+    {
+      "seed": 61279,
+      "mission": "coal",
+      "path": "61279\\coal\\journal\\e5ae1fdb-702c-4769-8b5e-6e1f67533cda\\33fcb219-ef90-4bd2-8dae-d7e6f593a12d\\2026-10-26-00000.jsonl",
+      "sha256": "dfa4dcd30d172137a4ffe752ce3470e22d9e38e6c28869d6d024fc276b093791"
+    },
+    {
+      "seed": 61279,
+      "mission": "diamond",
+      "path": "61279\\diamond\\journal\\dae33f44-a001-4c18-a7c0-8680605384cb\\23159c7c-c236-43a1-84a7-288a22c0df15\\2026-10-26-00000.jsonl",
+      "sha256": "edbceea76fef6c2c9fe37571fdc763f03dec5646d66724fd298ca41cd3cd0166"
+    },
+    {
+      "seed": 61279,
+      "mission": "diamond",
+      "path": "61279\\diamond\\journal\\dae33f44-a001-4c18-a7c0-8680605384cb\\904a2665-dca7-4a5b-a929-704d1de76d3c\\2026-10-26-00000.jsonl",
+      "sha256": "c0b4e881628de312349085d8e81aff9871cc2959064f84a1203e4cdbda6676fa"
+    },
+    {
+      "seed": 61279,
+      "mission": "farm",
+      "path": "61279\\farm\\journal\\53dfddd4-3a83-4616-b4f9-64798d2aa1d9\\ad8e383f-3f19-4a37-9928-b32ccd5ec6e9\\2026-10-25-00000.jsonl",
+      "sha256": "1de231475c856776f8977ed0420ce4c70b90b38400b257dc0eb7e57f47d1bce1"
+    },
+    {
+      "seed": 61279,
+      "mission": "farm",
+      "path": "61279\\farm\\journal\\53dfddd4-3a83-4616-b4f9-64798d2aa1d9\\ad8e383f-3f19-4a37-9928-b32ccd5ec6e9\\2026-10-26-00000.jsonl",
+      "sha256": "3eeb73841a2c9717f204546b63ae1138ec86eda55965cbe36dfc471488a0a27a"
+    },
+    {
+      "seed": 61279,
+      "mission": "skeleton",
+      "path": "61279\\skeleton\\journal\\abf47780-7e42-4722-ad3b-8db675a4922e\\2ad067ec-839c-4227-a2c0-8404a6bb2263\\2026-10-26-00000.jsonl",
+      "sha256": "018a07d58b26ec3a7b22f531301ddacf44d22882da99e42712a183ef3f564048"
+    },
+    {
+      "seed": 61279,
+      "mission": "skeleton",
+      "path": "61279\\skeleton\\journal\\abf47780-7e42-4722-ad3b-8db675a4922e\\3ee636e0-bc07-4ab0-9400-ae82c713672f\\2026-10-26-00000.jsonl",
+      "sha256": "f621050f57eaed5c40b6bf398cc4c9950f93ab54582c860d20cf3b91488041b4"
+    },
+    {
+      "seed": 61280,
+      "mission": "coal",
+      "path": "61280\\coal\\journal\\c8eba936-1cc6-44c7-b8d7-68e8f7526a2c\\0a9ad478-7584-4c0d-97e8-de012f6d7ed6\\2026-10-26-00000.jsonl",
+      "sha256": "6678aaecb0d1b73ef3d550e487ce6454e74828ed2a13c6bb3a408a4491d34411"
+    },
+    {
+      "seed": 61280,
+      "mission": "diamond",
+      "path": "61280\\diamond\\journal\\dd57accd-6b0d-46b7-8e2c-f208d460d224\\1f4a7b97-b846-41db-b265-7e67af413ee9\\2026-10-26-00000.jsonl",
+      "sha256": "f1d3f3b3dffa65293b5ae051279b9bbddfab8737e3b87a6ef48cbad1431afd47"
+    },
+    {
+      "seed": 61280,
+      "mission": "diamond",
+      "path": "61280\\diamond\\journal\\dd57accd-6b0d-46b7-8e2c-f208d460d224\\7949ed39-4617-45f0-b9fc-11d13e96b3c3\\2026-10-26-00000.jsonl",
+      "sha256": "dd133d0f716a25a9061fcbeb83d65787fcd80d5c18ed18b99dc4feaa9b6869de"
+    },
+    {
+      "seed": 61280,
+      "mission": "farm",
+      "path": "61280\\farm\\journal\\39d8370d-765b-4532-9484-4b65ffa59588\\562c73ce-f5df-4c89-aeae-cc8f613caef3\\2026-10-25-00000.jsonl",
+      "sha256": "191278d2997ad58a0468a720a990b676f92fa0df826243a471e63b151709a52c"
+    },
+    {
+      "seed": 61280,
+      "mission": "farm",
+      "path": "61280\\farm\\journal\\39d8370d-765b-4532-9484-4b65ffa59588\\562c73ce-f5df-4c89-aeae-cc8f613caef3\\2026-10-26-00000.jsonl",
+      "sha256": "f3dda9a5634b3b5eb402d7673109adc2e985a60f655a60144ce1e4bbbc6c158a"
+    },
+    {
+      "seed": 61280,
+      "mission": "skeleton",
+      "path": "61280\\skeleton\\journal\\8d28ceb8-415f-4f5c-a919-f2416e5aa361\\2e980ce6-5429-4cbe-8922-14be4a6e213f\\2026-10-26-00000.jsonl",
+      "sha256": "5f8a95d4545063257d7d2b598cc6e5c4725938e837374e4b0830a6468b8195b1"
+    },
+    {
+      "seed": 61280,
+      "mission": "skeleton",
+      "path": "61280\\skeleton\\journal\\8d28ceb8-415f-4f5c-a919-f2416e5aa361\\558537d0-580a-4d00-9977-511844d78163\\2026-10-26-00000.jsonl",
+      "sha256": "bbd775a43161d788a01da8204e6b3353700a38910ff6f35946728f9ef1758a1b"
+    },
+    {
+      "seed": 61281,
+      "mission": "coal",
+      "path": "61281\\coal\\journal\\03864228-9229-4d5b-88a7-5bf3b7ee819a\\e5f74ced-cb2d-487a-96f7-c2bfe3e6668d\\2026-10-26-00000.jsonl",
+      "sha256": "d77a5b504aec0faffff1a3b4f9ccefe1f3efe0620f5cc2810c94c7574df7f186"
+    },
+    {
+      "seed": 61281,
+      "mission": "diamond",
+      "path": "61281\\diamond\\journal\\681d9733-9fb1-4bc7-a9c3-33bfcf6d729b\\14cf34bd-6480-487e-b496-e487838633b2\\2026-10-26-00000.jsonl",
+      "sha256": "4772799146cbe6da2ab84d87aa945dc7b3d79b25da6d46d5cb3f2d9c171e69d7"
+    },
+    {
+      "seed": 61281,
+      "mission": "diamond",
+      "path": "61281\\diamond\\journal\\681d9733-9fb1-4bc7-a9c3-33bfcf6d729b\\4af8c0e0-848e-49c7-825f-cd99adbfe052\\2026-10-26-00000.jsonl",
+      "sha256": "5c856d5ef8c734c2cccb2e02a0a7081483fb76a46c5cdffa1bc6a9329085df75"
+    },
+    {
+      "seed": 61281,
+      "mission": "farm",
+      "path": "61281\\farm\\journal\\75c135fd-28d3-4b9d-876e-60f3049a276c\\bc0ca74a-1f48-46b0-b5f2-1a5eb0685692\\2026-10-25-00000.jsonl",
+      "sha256": "5286927821fb18929be3b8030c98e10391fc76a541e5b4c32227c32a3170fc8f"
+    },
+    {
+      "seed": 61281,
+      "mission": "skeleton",
+      "path": "61281\\skeleton\\journal\\2ec0e847-4aa9-442c-9b81-8c4546fd5d08\\3a7080fc-919e-4487-8f00-b2fa0a99a3ad\\2026-10-26-00000.jsonl",
+      "sha256": "c10200b6729d50c512b11834f6dece52f09a8d59abd019258f9f452aadc89248"
+    },
+    {
+      "seed": 61281,
+      "mission": "skeleton",
+      "path": "61281\\skeleton\\journal\\2ec0e847-4aa9-442c-9b81-8c4546fd5d08\\d036da69-5449-4b32-b986-dc979ca04884\\2026-10-25-00000.jsonl",
+      "sha256": "8227b0e270f91d32129c28939b45f6c2c4ae5fd40c2cf7292d47a083eaf9fd08"
+    },
+    {
+      "seed": 61281,
+      "mission": "skeleton",
+      "path": "61281\\skeleton\\journal\\2ec0e847-4aa9-442c-9b81-8c4546fd5d08\\d036da69-5449-4b32-b986-dc979ca04884\\2026-10-26-00000.jsonl",
+      "sha256": "701b9bcfba82cbedd27919ed1d9afe33ed38ffa702ec54031724a1651abc82e6"
+    },
+    {
+      "seed": 61282,
+      "mission": "coal",
+      "path": "61282\\coal\\journal\\47fe2baf-f6ff-4bc1-8c3e-2ac6ab1ccc3b\\1c7b2a04-6005-434e-9419-f1d4cc42b182\\2026-10-26-00000.jsonl",
+      "sha256": "1d2293602c43003f968ba6740add7142cdad4a05b57956630b5eaeb46777ebf2"
+    },
+    {
+      "seed": 61282,
+      "mission": "diamond",
+      "path": "61282\\diamond\\journal\\fb33c586-d666-4be7-ba09-467eb2e02999\\22378c7a-da51-4401-aa77-1c8a7c5e1fba\\2026-10-26-00000.jsonl",
+      "sha256": "df0f255cc0a38d7de2a2173ecfe9f56c2cb4043aafb43363aba991b63cb61cf7"
+    },
+    {
+      "seed": 61282,
+      "mission": "diamond",
+      "path": "61282\\diamond\\journal\\fb33c586-d666-4be7-ba09-467eb2e02999\\9e79be45-5b5f-4325-bf27-23cf500805c3\\2026-10-26-00000.jsonl",
+      "sha256": "c10a39bdca7fd551397ed0bb9a270bdec0a5e418381fe45fb083ccff9ad684f3"
+    },
+    {
+      "seed": 61282,
+      "mission": "farm",
+      "path": "61282\\farm\\journal\\7541c9f3-e632-4706-8b50-265b867f7e10\\5ed330d0-a236-424e-97f9-d0edfbf0bf27\\2026-10-25-00000.jsonl",
+      "sha256": "97c527d58de12558c53aacf2fea5cc38e22284c0d6b02a5202702e3beefd8dd7"
+    },
+    {
+      "seed": 61282,
+      "mission": "farm",
+      "path": "61282\\farm\\journal\\7541c9f3-e632-4706-8b50-265b867f7e10\\5ed330d0-a236-424e-97f9-d0edfbf0bf27\\2026-10-26-00000.jsonl",
+      "sha256": "845275714b777b0bffefbecf66e34c6330b39580020843e5ba06c761a613b8e7"
+    },
+    {
+      "seed": 61282,
+      "mission": "skeleton",
+      "path": "61282\\skeleton\\journal\\026c2a21-12ac-4743-ae7e-176d0638092c\\1488f82d-6af0-44b4-b7b1-151be4796966\\2026-10-26-00000.jsonl",
+      "sha256": "6c2c8a316665e9de052539db53c247719f85bde56dee7e3ca237a5e9e970dc8b"
+    },
+    {
+      "seed": 61282,
+      "mission": "skeleton",
+      "path": "61282\\skeleton\\journal\\026c2a21-12ac-4743-ae7e-176d0638092c\\cbe76e98-2709-41ac-9393-7b3fdbf454db\\2026-10-26-00000.jsonl",
+      "sha256": "87792acd268b1b33fbf82eb4a0b1178f7633acfad25b6c8b714ba5cd27684ef9"
+    },
+    {
+      "seed": 61283,
+      "mission": "coal",
+      "path": "61283\\coal\\journal\\474c29d8-b02f-4395-ac2e-25760d484012\\d5cb50be-274f-4e06-b0f9-569100f49bc9\\2026-10-26-00000.jsonl",
+      "sha256": "10d7d2b8a9948cb51ba2ede2f3825bf042511521a4d69a69576e1e9408735dc3"
+    },
+    {
+      "seed": 61283,
+      "mission": "diamond",
+      "path": "61283\\diamond\\journal\\fd0b757a-9dbb-4c0c-abb6-cc14f05deed8\\4a49c5c3-f138-419e-b236-45651e97c308\\2026-10-26-00000.jsonl",
+      "sha256": "347af4c46031f40b166af8e9bdb5c0e08c28c5931b384e52a393ef435d9e6d8d"
+    },
+    {
+      "seed": 61283,
+      "mission": "diamond",
+      "path": "61283\\diamond\\journal\\fd0b757a-9dbb-4c0c-abb6-cc14f05deed8\\9c2e5477-320a-4d35-94ad-bf530b6cd621\\2026-10-26-00000.jsonl",
+      "sha256": "0b14fb9b004383a8b89a0763593f486baa3950f70e645483638b87449536b48e"
+    },
+    {
+      "seed": 61283,
+      "mission": "farm",
+      "path": "61283\\farm\\journal\\d0497d75-7e96-435b-9295-d83ffe34bd7b\\8b02dd26-08a5-4643-aa87-d11ae75005b2\\2026-10-25-00000.jsonl",
+      "sha256": "a0e7b9db981a096eaf1fb67803bd088b1c700ae7c2f787faa64d7063285fea12"
+    },
+    {
+      "seed": 61283,
+      "mission": "farm",
+      "path": "61283\\farm\\journal\\d0497d75-7e96-435b-9295-d83ffe34bd7b\\8b02dd26-08a5-4643-aa87-d11ae75005b2\\2026-10-26-00000.jsonl",
+      "sha256": "bf3f3823c92dd078b2f680b4021cd0df6d61fbb7be4bf59c08d44e2387575f45"
+    },
+    {
+      "seed": 61283,
+      "mission": "skeleton",
+      "path": "61283\\skeleton\\journal\\63bbf969-c201-4465-8a20-114debc1b52b\\17ddbc4e-6db0-4ee8-a25b-d229ca9cd248\\2026-10-26-00000.jsonl",
+      "sha256": "5a82daf32381ec614ee0d156c8bfc6d15e03a3b64faff71b9f8ffe577b0fe5bf"
+    }
+  ],
+  "observedActions": 10739,
+  "observedOutcomes": {
+    "False": 108,
+    "True": 10631
+  },
+  "deduplicated": {
+    "test": 398,
+    "validation": 725,
+    "train": 1835
+  },
+  "splits": {
+    "train": {
+      "examples": 65058,
+      "sha256": "5f4761f997757edae7015d7fca0242e633e0c5cb8112c3178436b0811e2496ff",
+      "sources": {
+        "synthetic-v4": 48000,
+        "synthetic-navigation-v5": 12000,
+        "observed-runtime": 5058
+      },
+      "observedOutcomes": {
+        "False": 87,
+        "True": 4971
+      }
+    },
+    "validation": {
+      "examples": 11997,
+      "sha256": "d98db154c5f8661eaa3083e80418832e954a2cb0502ead8a0e76d53247da7dc2",
+      "sources": {
+        "synthetic-v4": 6000,
+        "synthetic-navigation-v5": 1500,
+        "observed-runtime": 4497
+      },
+      "observedOutcomes": {
+        "True": 4476,
+        "False": 21
+      }
+    },
+    "test": {
+      "examples": 8723,
+      "sha256": "30935b25160a7ceb92dc864a7cfcbaedbfd464f0884648d1ab0b0476f2f64dab",
+      "sources": {
+        "synthetic-v4": 6000,
+        "synthetic-navigation-v5": 1500,
+        "observed-runtime": 1223
+      },
+      "observedOutcomes": {
+        "True": 1181,
+        "False": 42
+      }
+    }
+  },
+  "labelPolicy": "Actual chosen-operation outcomes only. Unexecuted alternatives and observed padding are masked. Failed missions do not turn every successful operation into a negative label. Worlds remain separated. Gameplay revalidation after training is a separate experiment, not synthetic accuracy."
+}

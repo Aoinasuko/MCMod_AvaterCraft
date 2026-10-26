@@ -275,7 +275,7 @@ class LocalTaskRunnerTest {
   }
 
   @Test
-  void versionFourHasRealTwentyMiBWeightsAndRejectsCorruption() throws Exception {
+  void versionFiveHasValidatedWeightsAndRejectsCorruption() throws Exception {
     byte[] weights =
         getClass().getResourceAsStream("/data/bep_3davater_companion/ai/action-policy.bin").readAllBytes();
     String json =
@@ -284,9 +284,9 @@ class LocalTaskRunnerTest {
                 .getResourceAsStream("/data/bep_3davater_companion/ai/action-policy.json")
                 .readAllBytes(),
             java.nio.charset.StandardCharsets.UTF_8);
-    assertEquals(21020020, weights.length);
-    assertEquals(5255005, LocalActionPolicy.PARAMETERS);
-    assertEquals(48, LocalActionPolicy.FEATURES.size());
+    assertEquals(41945660, weights.length);
+    assertEquals(10486415, LocalActionPolicy.PARAMETERS);
+    assertEquals(56, LocalActionPolicy.FEATURES.size());
     assertDoesNotThrow(() -> new LocalActionPolicy(json, weights));
     weights[100] ^= 1;
     assertThrows(IllegalArgumentException.class, () -> new LocalActionPolicy(json, weights));

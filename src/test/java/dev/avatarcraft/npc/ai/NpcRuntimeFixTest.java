@@ -8,6 +8,15 @@ import java.util.*;
 import org.junit.jupiter.api.Test;
 
 class NpcRuntimeFixTest {
+  @Test void spatialToolsInheritObservationOnlyAndHaveFixedRanges(){
+    for(String tool:List.of("observe_terrain","observe_entities")){
+      assertTrue(NpcTools.names().contains(tool));
+      assertTrue(NpcTools.permitted(tool,List.of("observe")));
+      assertFalse(NpcTools.permitted(tool,List.of("move_to")));
+      assertDoesNotThrow(()->NpcTools.validate(tool,object(),List.of("observe")));
+      assertThrows(IllegalArgumentException.class,()->NpcTools.validate(tool,object("radius",64),List.of("observe")));
+    }
+  }
   @Test
   void fullInventorySurvivesTagHeavyContextAndSmallOptionalBudget() {
     var inventory = new JsonArray();
@@ -38,9 +47,13 @@ class NpcRuntimeFixTest {
             inventory,
             "history",
             new Gson().toJsonTree(Collections.nCopies(100, "x".repeat(500))));
+    var reference=object("speaker",object("blockPosition",new Gson().toJsonTree(List.of(-1,64,-17)),
+        "chunk",object("x",-1,"z",-2,"minX",-16,"maxX",-1,"minZ",-32,"maxZ",-17)));
+    original.add("command_context",reference);
     for (int budget : List.of(1000, 8000, 10000)) {
       var planned = NpcObservations.planning(original, budget);
       assertEquals(42, planned.getAsJsonArray("inventory").size());
+      assertEquals(reference,planned.getAsJsonObject("command_context"));
       assertTrue(planned.get("inventory_complete").getAsBoolean());
       assertEquals(8, planned.getAsJsonObject("item_counts").get("minecraft:raw_gold").getAsInt());
       var hand = planned.getAsJsonArray("inventory").get(41).getAsJsonObject();

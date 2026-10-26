@@ -21,6 +21,7 @@ final class NpcLongTravel implements AutoCloseable {
   private final Vec3 start;
   private final long deadline;
   private int index;
+  private boolean recordedReturn, repairing;
   private CompletableFuture<JsonObject> pending;
   final CompletableFuture<JsonObject> result = new CompletableFuture<>();
 
@@ -43,6 +44,16 @@ final class NpcLongTravel implements AutoCloseable {
             target.getX(),
             target.getY(),
             target.getZ());
+    var checkpoints=npc.executionMemory.returnCheckpoints(level.dimension().identifier().toString(),
+        from.getX(),from.getY(),from.getZ(),target.getX(),target.getY(),target.getZ());
+    if (route.isEmpty() && !checkpoints.isEmpty() && Math.abs(target.getY()-from.getY())>16) {
+      recordedReturn=true;
+      for(var v:checkpoints) {
+        var p=new BlockPos(v.get(0),v.get(1),v.get(2));
+        if(p.distSqr(from)>1) reservations.add(p);
+      }
+      if (reservations.isEmpty() || !reservations.getLast().equals(target)) reservations.add(target);
+    } else
     if (!route.isEmpty()) {
       var anchor = from;
       BlockPos previous = from;
@@ -61,6 +72,7 @@ final class NpcLongTravel implements AutoCloseable {
               from.getX(), from.getY(), from.getZ(), target.getX(), target.getY(), target.getZ()))
         reservations.add(new BlockPos(v.get(0), v.get(1), v.get(2)));
     child = new NpcSkills(npc, (text, id) -> {}, depth, chain);
+    child.reservedLeg();
     deadline = level.getGameTime() + 20 * 60 * 15;
     NpcService.get(level.getServer())
         .record(npc, "travel_reserved", "Long-distance walking reservation", null, progress());
@@ -78,9 +90,19 @@ final class NpcLongTravel implements AutoCloseable {
       var outcome = pending.join();
       pending = null;
       if (!outcome.has("ok") || !outcome.get("ok").getAsBoolean()) {
+        var target=reservations.get(index);
+        if(recordedReturn && !repairing && npc.distanceToSqr(Vec3.atBottomCenterOf(target))<=24*24
+            && Math.abs(target.getY()-npc.getY())<=20
+            && NpcTools.permitted("work_route",npc.personality().allowedSkills)) {
+          repairing=true;
+          pending=child.execute("work_route",object("x",target.getX(),"y",target.getY(),"z",target.getZ(),
+              "goal","reach","mode","both","max_blocks",64)).toCompletableFuture();
+          return;
+        }
         finish(false, "Travel leg " + (index + 1) + " failed: " + outcome);
         return;
       }
+      repairing=false;
       arrived.add(object("x", npc.getX(), "y", npc.getY(), "z", npc.getZ()));
       NpcService.get(level.getServer())
           .record(npc, "travel_leg_complete", "Verified intermediate arrival", null, progress());

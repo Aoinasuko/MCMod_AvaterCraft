@@ -15,6 +15,7 @@ public final class Personality {
       instructions = "",
       speakingStyle = "",
       completionMessage = "",
+      blockedMessage = "",
       goal = "所有者を手伝う";
   public List<String> allowedSkills =
       new ArrayList<>(
@@ -51,6 +52,7 @@ public final class Personality {
         || speakingStyle.length() > 1000
         || completionMessage == null
         || completionMessage.length() > 512
+        || blockedMessage == null || blockedMessage.length() > 512
         || goal.length() > 1000)
       throw new IllegalArgumentException("Personality text exceeds its bounds");
     if (workSpeechSeconds < 30

@@ -21,7 +21,7 @@ public final class NpcRecoveryQueue {
                                 .contains(s.target())))
       throw new IllegalArgumentException("Recovery reservation requires 3 to 5 local task slots");
     steps.add(new TaskPlan.Step("plan_next", "", "", 1, -1, -1, "main", 1, List.of()));
-    return new TaskPlan(1, plan.summary(), "", steps);
+    return new TaskPlan(1, plan.summary(), "", steps,plan.goal());
   }
 
   public static String prompt(String instruction, String priorProgress) {

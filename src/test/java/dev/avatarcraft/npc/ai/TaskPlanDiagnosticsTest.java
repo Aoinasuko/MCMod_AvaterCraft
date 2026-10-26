@@ -9,6 +9,15 @@ import org.junit.jupiter.api.Test;
 
 class TaskPlanDiagnosticsTest {
   @Test
+  void fullMissionGoalSurvivesRoundtripIndependentlyOfShortPhase(){
+    var goal=TaskPlan.defaultGoal();goal.addProperty("type","deposit");goal.addProperty("target","#minecraft:logs");
+    goal.addProperty("count",64);goal.addProperty("location","依頼の収納先");
+    var plan=new TaskPlan(1,"Inspect before working","",List.of(new TaskPlan.Step("plan_next","","",1,-1,-1,"main",1,List.of())),goal);
+    assertEquals(64,TaskPlan.parse(new Gson().toJson(plan)).goal().get("count").getAsInt());
+    goal.addProperty("count",0);
+    assertThrows(IllegalArgumentException.class,()->new TaskPlan(1,"bad goal","",plan.steps(),goal));
+  }
+  @Test
   void continuationCannotHideNaturalLanguageInResourceFields() {
     var invalid =
         assertThrows(

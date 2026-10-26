@@ -22,6 +22,11 @@ public final class WalkingPathSearch {
     default boolean headroom(Cell p) {
       return true;
     }
+
+    /** Extra cost for entering a cell that is passable but better avoided. */
+    default int penalty(Cell p) {
+      return 0;
+    }
   }
 
   public enum State {
@@ -129,7 +134,17 @@ public final class WalkingPathSearch {
           if (dx == 0 && dz == 0) continue;
           var p = neighbour(n.p, dx, dz);
           if (p == null) continue;
-          int g = n.cost + (dx == 0 || dz == 0 ? 10 : 14) + 4 * Math.abs(p.y - n.p.y);
+          int g =
+              n.cost
+                  + (dx == 0 || dz == 0 ? 10 : 14)
+                  + 4 * Math.abs(p.y - n.p.y)
+                  + terrain.penalty(p)
+                  // A diagonal brushes both side cells, so it pays for them as well.
+                  + (dx != 0 && dz != 0
+                      ? Math.max(
+                          terrain.penalty(new Cell(n.p.x + dx, n.p.y, n.p.z)),
+                          terrain.penalty(new Cell(n.p.x, n.p.y, n.p.z + dz)))
+                      : 0);
           if (g >= costs.getOrDefault(p.key(), Integer.MAX_VALUE)) continue;
           costs.put(p.key(), g);
           open.add(new Node(p, n, g, g + heuristic(p)));

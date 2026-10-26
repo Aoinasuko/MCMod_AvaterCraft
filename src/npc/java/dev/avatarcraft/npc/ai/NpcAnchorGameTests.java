@@ -246,7 +246,7 @@ final class NpcAnchorGameTests {
     h.onEachTick(
         () -> {
           if (finished[0]) return;
-          if (live && brain.waiting) {
+          if (live && brain.waiting()) {
             java.util.concurrent.locks.LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(20));
             return;
           }

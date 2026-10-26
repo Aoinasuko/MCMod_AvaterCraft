@@ -108,6 +108,9 @@ final class NpcSurvival implements AutoCloseable {
         return;
       }
       local.tick(now);
+      if (activeStep != null && Set.of("collect", "pickup").contains(activeStep.action())
+          && !activeStep.target().startsWith("#"))
+        NpcTeams.resourceProgress(npc, activeStep, amount(NpcRecipes.item(activeStep.target())));
       if (local.needsReplan()) {
         if (activeStep != null && activeStep.action().equals("pickup")) {
           // A child restart must not forget which physical drops could not be reached.
@@ -433,6 +436,8 @@ final class NpcSurvival implements AutoCloseable {
                 e.isAlive()
                     && !e.hasPickUpDelay()
                     && e.getItem().is(item)
+                    && (Math.abs(e.getY() - npc.getY()) <= 2
+                        || reachableDrop(e))
                     && !npc.executionMemory.blocked(
                         level.dimension().identifier().toString(),
                         "pickup",
@@ -462,6 +467,11 @@ final class NpcSurvival implements AutoCloseable {
                 Items.NETHERRACK,
                 Items.END_STONE)
             .contains(item);
+  }
+
+  private boolean reachableDrop(net.minecraft.world.entity.item.ItemEntity drop) {
+    var path = npc.getNavigation().createPath(drop.blockPosition(), 1);
+    return path != null && path.canReach();
   }
 
   private Item choose(Ingredient ingredient, Set<Item> visited) {
@@ -505,10 +515,26 @@ final class NpcSurvival implements AutoCloseable {
   private BlockPos station(Block block) {
     BlockPos best = null;
     double bestScore = Double.POSITIVE_INFINITY;
+    var candidates = new LinkedHashSet<BlockPos>();
+    for (var entry : NpcWorkData.get(level).findings.values()) {
+      if (!entry.has("kind") || !entry.get("kind").getAsString().equals("workstation")
+          || !entry.get("owner").getAsString().equals(npc.ownerId().toString())
+          || !entry.get("dimension").getAsString().equals(level.dimension().identifier().toString())) continue;
+      var p = new BlockPos(entry.get("x").getAsInt(), entry.get("y").getAsInt(), entry.get("z").getAsInt());
+      // Reuse only a bounded return; do not turn a cheap rebuild into a remote expedition.
+      if (npc.distanceToSqr(Vec3.atCenterOf(p)) <= 48 * 48
+          && Math.abs(p.getY() - npc.blockPosition().getY()) <= 20) candidates.add(p);
+    }
     for (var p :
         BlockPos.betweenClosed(
             npc.blockPosition().offset(-16, -5, -16), npc.blockPosition().offset(16, 5, 16)))
+      if (level.hasChunkAt(p) && level.getBlockState(p).is(block)) candidates.add(p.immutable());
+    for (var p : candidates)
       if (level.hasChunkAt(p) && level.getBlockState(p).is(block)) {
+        if (rejectedApproaches.contains(p)
+            || skills.blocked("work_route", object("x", p.getX(), "y", p.getY(), "z", p.getZ(),
+                "goal", "reach", "mode", "both", "max_blocks", 64))) continue;
+        NpcTeams.rememberStation(npc, p);
         if (block == Blocks.FURNACE
             && level.getBlockEntity(p)
                 instanceof net.minecraft.world.level.block.entity.FurnaceBlockEntity furnace) {
@@ -541,8 +567,26 @@ final class NpcSurvival implements AutoCloseable {
           && level.getBlockState(p).isAir()
           && level.getEntities(npc, new net.minecraft.world.phys.AABB(p)).isEmpty()
           && !npc.getBoundingBox().intersects(new net.minecraft.world.phys.AABB(p))
-          && level.getBlockState(p.below()).isFaceSturdy(level, p.below(), Direction.UP))
+          && level.getBlockState(p.below()).isFaceSturdy(level, p.below(), Direction.UP)
+          && skills.canPlaceAt(p))
         return at("place", NpcRecipes.id(item), 1, p.getX(), p.getY(), p.getZ());
+    }
+    // A narrow mine may have no empty workstation cell. Open a single safe side alcove;
+    // raw dig deliberately permits hand breaking without pretending it yielded resources.
+    for (var direction : Direction.Plane.HORIZONTAL) {
+      var p = npc.blockPosition().relative(direction);
+      var state = level.getBlockState(p);
+      if (rejectedPlacements.contains(p) || !skills.mayChange(p,4) || !skills.visible(p)
+          || NpcWorkRoute.protectedBlock(npc,p) || state.hasBlockEntity()
+          || !(state.is(net.minecraft.tags.BlockTags.BASE_STONE_OVERWORLD)
+              || state.is(net.minecraft.tags.BlockTags.DIRT))
+          || !level.getBlockState(p.below()).isFaceSturdy(level,p.below(),Direction.UP)
+          || level.getBlockState(p.above()).getBlock() instanceof FallingBlock) continue;
+      boolean hazard = false;
+      for (var face : Direction.values())
+        hazard |= !level.hasChunkAt(p.relative(face)) || !level.getFluidState(p.relative(face)).isEmpty();
+      if (!hazard) return new TaskPlan.Step("tool", "bep_3davater_companion:dig", "", 1,-1,-1,
+          "main", 10,List.of(),"",object("x",p.getX(),"y",p.getY(),"z",p.getZ()).toString());
     }
     throw new IllegalArgumentException("設備を置ける足場がありません");
   }
@@ -572,7 +616,10 @@ final class NpcSurvival implements AutoCloseable {
                     .toJsonTree(List.of(p.getX(), p.getY(), p.getZ()))
                     .getAsJsonArray(),
                 rejectedApproaches);
-    if (approach == null) throw new IllegalArgumentException("設備に戻る経路がありません");
+    if (approach == null)
+      return new TaskPlan.Step("tool", "bep_3davater_companion:work_route", "", 1, -1, -1,
+          "main", 10, List.of(), "", object("x", p.getX(), "y", p.getY(), "z", p.getZ(),
+              "goal", "reach", "mode", "both", "max_blocks", 64).toString());
     var at =
         new Vec3(
             approach.get("x").getAsDouble(),

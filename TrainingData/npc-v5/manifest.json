@@ -1,0 +1,93 @@
+{
+  "seed": 20261026,
+  "features": [
+    "urgent",
+    "goal",
+    "ready",
+    "setup",
+    "verify",
+    "scan",
+    "approach",
+    "work",
+    "distance",
+    "failures",
+    "blocked",
+    "replan",
+    "idle",
+    "food_need",
+    "progress",
+    "repeat",
+    "target_missing",
+    "tool_missing",
+    "bag_free",
+    "candidate_reachable",
+    "candidate_loaded",
+    "unvisited",
+    "depth_gain",
+    "exploration_fraction",
+    "owner_distance",
+    "health",
+    "inventory_fraction",
+    "ore_target",
+    "diamond_target",
+    "ingredients_ready",
+    "chest_source",
+    "remaining_budget",
+    "combat",
+    "target_health",
+    "hostile_distance",
+    "weapon_ready",
+    "ranged",
+    "ammunition",
+    "needs_aim",
+    "use_charge",
+    "smelt_ready",
+    "fuel_available",
+    "team_waiting",
+    "delegated",
+    "dimension_travel",
+    "portal_visible",
+    "structure_observed",
+    "danger",
+    "height_delta",
+    "path_known",
+    "edit_fraction",
+    "target_failed",
+    "station_distance",
+    "team_stalled",
+    "supply_shortfall",
+    "travel_cost"
+  ],
+  "splits": {
+    "train": {
+      "examples": 60222,
+      "sha256": "5b3bc2b8b9470948bdad76824882d9f5c327d39355a26bba877b5eb76de22ce8",
+      "sources": {
+        "synthetic-v4": 48000,
+        "synthetic-navigation-v5": 12000,
+        "observed-runtime": 222
+      }
+    },
+    "validation": {
+      "examples": 7500,
+      "sha256": "ba260d9dda40318165994e44f2a2c146ebaf4bf044357ebee2cb478a97463d6c",
+      "sources": {
+        "synthetic-v4": 6000,
+        "synthetic-navigation-v5": 1500
+      }
+    },
+    "test": {
+      "examples": 7500,
+      "sha256": "4ba204dbea6af8dbffb3bd3ae421f7dd9472e98aa74b046f519dc4e5ea1dbe3b",
+      "sources": {
+        "synthetic-v4": 6000,
+        "synthetic-navigation-v5": 1500
+      }
+    }
+  },
+  "labelPolicy": "Only executed runtime actions have observed labels; unchosen alternatives are masked. Navigation curriculum is synthetic. All original Neo runs stay in training; independent gameplay is never used as a synthetic success label.",
+  "runtimeOutcomes": {
+    "True": 209,
+    "False": 13
+  }
+}

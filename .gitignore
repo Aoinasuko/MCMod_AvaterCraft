@@ -14,10 +14,23 @@ TrainingData/npc-v4/*.bin
 tools/unity-tools.json
 PublishPackage/
 Docs/
+Docs_CC/
 **/avatarcraft-private-cache/
 **/bep_3davater_loader/remote-cache/
 
 run-npc-complex-qa/
+run-npc-natural-qa-*/
+run-npc-targeted-qa/
+run-npc-water-qa/
+TrainingData/npc-v5/*.jsonl.gz
+!TrainingData/npc-v5/observed-actions.jsonl.gz
+TrainingData/npc-v5/*.bin
+TrainingData/npc-v6/*.jsonl.gz
+!TrainingData/npc-v6/observed-actions.jsonl.gz
+TrainingData/npc-v6/*.bin
+TrainingData/npc-v7/*.jsonl.gz
+!TrainingData/npc-v7/observed-actions.jsonl.gz
+TrainingData/npc-v7/*.bin
 run-anchor-qa/
 run-anchor-ui-qa/
 run-area-qa/

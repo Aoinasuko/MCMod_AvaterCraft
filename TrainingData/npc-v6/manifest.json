@@ -1,0 +1,147 @@
+{
+  "seed": 20261026,
+  "features": [
+    "urgent",
+    "goal",
+    "ready",
+    "setup",
+    "verify",
+    "scan",
+    "approach",
+    "work",
+    "distance",
+    "failures",
+    "blocked",
+    "replan",
+    "idle",
+    "food_need",
+    "progress",
+    "repeat",
+    "target_missing",
+    "tool_missing",
+    "bag_free",
+    "candidate_reachable",
+    "candidate_loaded",
+    "unvisited",
+    "depth_gain",
+    "exploration_fraction",
+    "owner_distance",
+    "health",
+    "inventory_fraction",
+    "ore_target",
+    "diamond_target",
+    "ingredients_ready",
+    "chest_source",
+    "remaining_budget",
+    "combat",
+    "target_health",
+    "hostile_distance",
+    "weapon_ready",
+    "ranged",
+    "ammunition",
+    "needs_aim",
+    "use_charge",
+    "smelt_ready",
+    "fuel_available",
+    "team_waiting",
+    "delegated",
+    "dimension_travel",
+    "portal_visible",
+    "structure_observed",
+    "danger",
+    "height_delta",
+    "path_known",
+    "edit_fraction",
+    "target_failed",
+    "station_distance",
+    "team_stalled",
+    "supply_shortfall",
+    "travel_cost"
+  ],
+  "worldSplits": {
+    "61279": "train",
+    "61280": "train",
+    "61281": "train",
+    "61282": "validation",
+    "61283": "test"
+  },
+  "rawJournals": [
+    {
+      "seed": 61279,
+      "path": "61279\\journal\\a6dd702a-8ec5-401a-9683-7ab5b1990edf\\593da11b-d3c7-461c-ab9a-9831412e2106\\2026-10-25-00000.jsonl",
+      "sha256": "ea40b665eb35d2cb37c8245c7ff6e6d89aac6aca34038210effea17720b21a18"
+    },
+    {
+      "seed": 61280,
+      "path": "61280\\journal\\b929236a-f80b-4653-aa05-c3dddbcb9eeb\\cf7c8773-78ae-4ecf-90c8-0b7ffe6606d7\\2026-10-25-00000.jsonl",
+      "sha256": "93998ede99b996e0ac9e777eeb37f1dd2773d649884ab64d5ebf4a6ba01bafd5"
+    },
+    {
+      "seed": 61281,
+      "path": "61281\\journal\\e99e6f34-b0a4-4b0e-bee9-a3ac9d58e013\\95996a04-dbd6-49f1-843e-8800d35a16f3\\2026-10-25-00000.jsonl",
+      "sha256": "def539cc5360780e5fb84e7fee5f077ed433ee6c2ed14774a9c84ec55938fad4"
+    },
+    {
+      "seed": 61282,
+      "path": "61282\\journal\\18793522-4b55-493f-b9c6-47d96f64f5bb\\9c784368-ea24-4fba-9698-dd3128dba296\\2026-10-25-00000.jsonl",
+      "sha256": "412cf7c10d10e116034978b6f8e4a466629ab30f173b086b98b97a35151cf817"
+    },
+    {
+      "seed": 61283,
+      "path": "61283\\journal\\5052e2b6-ad14-4735-9525-4298dc97349f\\18a357ee-3c94-4906-b8b0-e81ea693f5a8\\2026-10-25-00000.jsonl",
+      "sha256": "97d30160fede4660b74e164c3d538d19c54f8ad95ae5796cf9aa7eb7655bd308"
+    }
+  ],
+  "campaignOutcomes": {
+    "True": 2732,
+    "False": 43
+  },
+  "campaignActionCount": 2775,
+  "deduplicated": {
+    "test": 2,
+    "validation": 5,
+    "train": 10
+  },
+  "splits": {
+    "train": {
+      "examples": 62051,
+      "sha256": "0989d5fc5e9864fe74919e25e98de9671f15c4df59d5243dc759980e63256ff6",
+      "sources": {
+        "synthetic-navigation-v5": 12000,
+        "synthetic-v4": 48000,
+        "observed-runtime": 2051
+      },
+      "observedOutcomes": {
+        "True": 2028,
+        "False": 23
+      }
+    },
+    "validation": {
+      "examples": 7705,
+      "sha256": "e9625bdbf222de057c3497a1fb80cda5dd741ae99b840ea46a6bcaa3faa34322",
+      "sources": {
+        "synthetic-v4": 6000,
+        "synthetic-navigation-v5": 1500,
+        "observed-runtime": 205
+      },
+      "observedOutcomes": {
+        "True": 196,
+        "False": 9
+      }
+    },
+    "test": {
+      "examples": 8219,
+      "sha256": "1e6b8a44d29e3287df3cf7b00136252c33fd8cc656411253e964b62dd1c71f37",
+      "sources": {
+        "synthetic-v4": 6000,
+        "synthetic-navigation-v5": 1500,
+        "observed-runtime": 719
+      },
+      "observedOutcomes": {
+        "True": 696,
+        "False": 23
+      }
+    }
+  },
+  "labelPolicy": "Only dispatched actions have observed outcomes. All unchosen alternatives and observed padding are masked. Worlds 61282 and 61283 are held out; exact candidate duplicates are excluded across splits. Synthetic curriculum accuracy is not gameplay or held-out action success rate."
+}

@@ -490,7 +490,7 @@ final class NpcComplexGameTests {
         finish(false, "LIVE_WALL_TIMEOUT: ten minutes");
         return;
       }
-      if (liveMode && live.waiting) {
+      if (liveMode && live.waiting()) {
         // Fast GameTest ticks must not turn a real network wait into hours of simulated combat.
         // Pause fixture actors/events, not the provider, until the requested plan is returned.
         for (var actor :

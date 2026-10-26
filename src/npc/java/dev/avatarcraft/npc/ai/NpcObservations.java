@@ -57,7 +57,7 @@ public final class NpcObservations {
     var essential = new JsonObject();
     for (String key :
         List.of(
-            "inventory", "item_counts", "equipped_slots", "free_bag_slots", "inventory_complete"))
+            "inventory", "item_counts", "equipped_slots", "free_bag_slots", "inventory_complete", "command_context"))
       if (copy.has(key)) essential.add(key, copy.remove(key));
     var other = bounded(copy, Math.max(256, limit - essential.toString().length() - 32));
     essential.entrySet().forEach(e -> other.add(e.getKey(), e.getValue()));

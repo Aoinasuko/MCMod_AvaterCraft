@@ -7,9 +7,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.util.*;
 
-/** Five trained FP32 experts; one routed 48→1000→1000→1 ranker per candidate. */
+/** Five trained FP32 experts; one routed 56→1419→1419→1 ranker per candidate. */
 public final class LocalActionPolicy {
-  public static final int VERSION = 4, EXPERTS = 5, WEIGHT_BYTES = 21020020, PARAMETERS = 5255005;
+  public static final int VERSION = 7, EXPERTS = 5, HIDDEN = 1419, WEIGHT_BYTES = 41945660, PARAMETERS = 10486415;
   public static final List<String> FEATURES =
       List.of(
           "urgent",
@@ -59,7 +59,8 @@ public final class LocalActionPolicy {
           "dimension_travel",
           "portal_visible",
           "structure_observed",
-          "danger");
+          "danger", "height_delta", "path_known", "edit_fraction", "target_failed",
+          "station_distance", "team_stalled", "supply_shortfall", "travel_cost");
   private final float[][] w1 = new float[EXPERTS][],
       b1 = new float[EXPERTS][],
       w2 = new float[EXPERTS][],
@@ -68,7 +69,7 @@ public final class LocalActionPolicy {
       b3 = new float[EXPERTS][];
 
   private static final class Scratch {
-    final float[] input = new float[48], a = new float[1000], b = new float[1000];
+    final float[] input = new float[56], a = new float[HIDDEN], b = new float[HIDDEN];
   }
 
   private final ThreadLocal<Scratch> scratch = ThreadLocal.withInitial(Scratch::new);
@@ -120,7 +121,7 @@ public final class LocalActionPolicy {
         || !o.has("experts")
         || o.getAsJsonArray("experts").size() != EXPERTS
         || !o.has("routing")
-        || !o.get("routing").getAsString().equals("context-v4")
+        || !o.get("routing").getAsString().equals("context-v7")
         || o.get("parameters").getAsInt() != PARAMETERS
         || !o.get("activation").getAsString().equals("relu")
         || !o.get("format").getAsString().equals("float32-le")
@@ -131,7 +132,7 @@ public final class LocalActionPolicy {
         || !o.getAsJsonArray("dimensions").asList().stream()
             .map(JsonElement::getAsInt)
             .toList()
-            .equals(List.of(48, 1000, 1000, 1)))
+            .equals(List.of(56, HIDDEN, HIDDEN, 1)))
       throw new IllegalArgumentException("Unknown policy contract");
     try {
       if (!HexFormat.of()
@@ -143,11 +144,11 @@ public final class LocalActionPolicy {
     }
     var bytes = ByteBuffer.wrap(weights).order(ByteOrder.LITTLE_ENDIAN);
     for (int expert = 0; expert < EXPERTS; expert++) {
-      w1[expert] = read(bytes, 48 * 1000);
-      b1[expert] = read(bytes, 1000);
-      w2[expert] = read(bytes, 1000 * 1000);
-      b2[expert] = read(bytes, 1000);
-      w3[expert] = read(bytes, 1000);
+      w1[expert] = read(bytes, 56 * HIDDEN);
+      b1[expert] = read(bytes, HIDDEN);
+      w2[expert] = read(bytes, HIDDEN * HIDDEN);
+      b2[expert] = read(bytes, HIDDEN);
+      w3[expert] = read(bytes, HIDDEN);
       b3[expert] = read(bytes, 1);
     }
     for (var entry : o.getAsJsonArray("probes")) {
@@ -172,18 +173,18 @@ public final class LocalActionPolicy {
   }
 
   public double score(double[] x) {
-    if (x.length != 48) throw new IllegalArgumentException("Expected 48 features");
+    if (x.length != 56) throw new IllegalArgumentException("Expected 56 features");
     var s = scratch.get();
-    for (int i = 0; i < 48; i++) {
+    for (int i = 0; i < 56; i++) {
       if (!Double.isFinite(x[i]) || Math.abs(x[i]) > 1)
         throw new IllegalArgumentException("Invalid feature");
       s.input[i] = (float) x[i];
     }
     int expert = expert(x);
-    layer(s.input, s.a, w1[expert], b1[expert], 48);
-    layer(s.a, s.b, w2[expert], b2[expert], 1000);
+    layer(s.input, s.a, w1[expert], b1[expert], 56);
+    layer(s.a, s.b, w2[expert], b2[expert], HIDDEN);
     float result = b3[expert][0];
-    for (int i = 0; i < 1000; i++) result += s.b[i] * w3[expert][i];
+    for (int i = 0; i < HIDDEN; i++) result += s.b[i] * w3[expert][i];
     return result;
   }
 
@@ -196,7 +197,7 @@ public final class LocalActionPolicy {
 
   private static void layer(
       float[] input, float[] output, float[] weights, float[] bias, int width) {
-    for (int j = 0; j < 1000; j++) {
+    for (int j = 0; j < output.length; j++) {
       float value = bias[j];
       int start = j * width;
       for (int i = 0; i < width; i++) value += weights[start + i] * input[i];
@@ -218,7 +219,7 @@ public final class LocalActionPolicy {
       int done,
       int count,
       JsonObject context) {
-    var x = new double[48];
+    var x = new double[56];
     x[0] = urgent ? 1 : 0;
     x[1] = kind.equals("idle") ? 0 : 1;
     x[2] = Set.of("idle", "replan").contains(kind) ? 0 : 1;
@@ -228,12 +229,13 @@ public final class LocalActionPolicy {
     x[6] = Set.of("approach", "explore").contains(kind) ? 1 : 0;
     x[7] = Set.of("execute", "eat", "excavate").contains(kind) ? 1 : 0;
     x[8] = Math.clamp(distance / 16., 0, 1);
+    if (context.has("distance")) x[8] = Math.clamp(context.get("distance").getAsDouble(), 0, 1);
     x[9] = Math.clamp(failures / 3., 0, 1);
     x[10] = x[11] = kind.equals("replan") ? 1 : 0;
     x[12] = kind.equals("idle") ? 1 : 0;
     x[13] = Math.clamp((20 - food) / 20., 0, 1);
     x[14] = Math.clamp((double) done / count, 0, 1);
-    for (int i = 16; i < 48; i++)
+    for (int i = 16; i < 56; i++)
       x[i] =
           Math.clamp(
               context.has(FEATURES.get(i)) ? context.get(FEATURES.get(i)).getAsDouble() : 0, -1, 1);

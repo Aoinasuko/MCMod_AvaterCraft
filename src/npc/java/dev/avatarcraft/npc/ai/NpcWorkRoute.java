@@ -66,6 +66,8 @@ final class NpcWorkRoute implements AutoCloseable {
   private Operation active;
   private long nextTick, deadline;
   private int edits, placed, dug, operations, supplyAttempts, toolAttempts, failures;
+  private int editSearchNodes;
+  private boolean editSearchLimited;
   private boolean closed;
   private final NpcMoveProgress movement;
   final CompletableFuture<JsonObject> result = new CompletableFuture<>();
@@ -477,16 +479,20 @@ final class NpcWorkRoute implements AutoCloseable {
 
   private boolean ready(BlockPos stand, boolean actual) {
     if (goal.equals("pickup")) {
-      var at = actual ? npc.position() : Vec3.atBottomCenterOf(stand);
+      var at = actual ? npc.position() : NpcWalkSurface.point(npc,stand);
       double margin = actual ? 1.1 : .85;
       return Math.abs(at.x - point.x) <= margin
           && Math.abs(at.z - point.z) <= margin
           && point.y >= at.y - .8
           && point.y < at.y + 2.4;
     }
-    if (goal.equals("reach") || goal.equals("bridge"))
-      return Vec3.atBottomCenterOf(stand).distanceToSqr(Vec3.atBottomCenterOf(target)) <= 1.6
-          && Math.abs(stand.getY() - target.getY()) < 1;
+    if (goal.equals("reach") || goal.equals("bridge")){
+      if(goal.equals("reach")&&(actual&&npc.isInWater()||NpcWaterTravel.swimmable(npc,stand))){
+        var at=actual?npc.position():NpcWalkSurface.point(npc,stand);var end=NpcWalkSurface.point(npc,target);
+        return at.distanceToSqr(end)<=1.6&&Math.abs(at.y-end.y)<1;
+      }
+      return Vec3.atBottomCenterOf(stand).distanceToSqr(Vec3.atBottomCenterOf(target))<=1.6&&Math.abs(stand.getY()-target.getY())<1;
+    }
     if (stand.getY() > target.getY()
         || Vec3.atBottomCenterOf(stand).distanceToSqr(Vec3.atCenterOf(target)) > 12.0) return false;
     if (actual) return skills.visible(target) && npc.distanceToSqr(Vec3.atCenterOf(target)) <= 16.0;
@@ -547,8 +553,15 @@ final class NpcWorkRoute implements AutoCloseable {
             -1);
       }
       if (walking.incomplete()) {
-        walkIncomplete = true;
-        return null;
+        // An unknown distant frontier does not make a local, fully checked work path unsafe.
+        // The edit search below still checks loaded terrain, permissions, supports and hazards.
+        // Keep distant travel read-only until a walking route or intermediate waypoint is known.
+        if (origin.distSqr(target) > 24 * 24) {
+          walkIncomplete = true;
+          return null;
+        }
+        NpcService.get(level.getServer()).record(npc, "walking_search_incomplete",
+            "Trying a bounded local work path", null, walking.diagnostics());
       }
     }
     if (goal.equals("pickup") && ready(origin, false))
@@ -602,7 +615,9 @@ final class NpcWorkRoute implements AutoCloseable {
     queue.add(new Node(origin, null, 0, heuristic(origin) * 3, 0));
     costs.put(origin, 0.);
     int nodes = 0;
+    editSearchLimited = false;
     while (!queue.isEmpty() && ++nodes <= 4096) {
+      editSearchNodes = nodes;
       var node = queue.remove();
       if (node.cost > costs.getOrDefault(node.pos, Double.POSITIVE_INFINITY) + .001) continue;
       if (node.previous != null && ready(node.pos, false)) {
@@ -621,6 +636,7 @@ final class NpcWorkRoute implements AutoCloseable {
           queue.add(new Node(next, node, cost, cost + heuristic(next) * 3, node.changes + change));
         }
     }
+    editSearchLimited = !queue.isEmpty();
     return null;
   }
 
@@ -670,7 +686,12 @@ final class NpcWorkRoute implements AutoCloseable {
 
   private void fail(String reason) {
     skills.cancel(reason);
-    result.complete(object("ok", false, "error", reason, "placed", placed, "dug", dug));
+    var response = object("ok", false, "error", reason, "placed", placed, "dug", dug);
+    response.addProperty("editSearchNodes", editSearchNodes);
+    response.addProperty("editSearchLimited", editSearchLimited);
+    response.addProperty("rejectedEdges", rejectedEdges.size());
+    if (walking != null) response.add("walkingSearch", walking.diagnostics());
+    result.complete(response);
   }
 
   JsonObject progress() {

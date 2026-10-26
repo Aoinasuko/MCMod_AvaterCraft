@@ -25,6 +25,9 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 /** Opt-in development GameTest; uses an isolated world and the actual server game operations. */
 public final class NpcGameTests {
   public static void register(RegisterGameTestsEvent event) {
+    if (Boolean.getBoolean("avatarcraft.waterQa")) { NpcWaterPoolGameTests.register(event); return; }
+    if (Boolean.getBoolean("avatarcraft.campaignQa")) { NpcCampaignGameTests.register(event); return; }
+    if (Boolean.getBoolean("avatarcraft.naturalQa")) { NpcNaturalGameTests.register(event); return; }
     if (Boolean.getBoolean("avatarcraft.journalQa")) { NpcJournalGameTests.register(event); return; }
     if (Boolean.getBoolean("avatarcraft.aiSettingsQa")) { NpcAiSettingsGameTests.register(event); return; }
     if (Boolean.getBoolean("avatarcraft.areaQa")) {
@@ -42,10 +45,18 @@ public final class NpcGameTests {
       return;
     }
     NpcSurvivalGameTests.register(event);
+    NpcNeoRecoveryGameTests.register(event);
+    NpcLocationGameTests.register(event);
+    NpcMissionGameTests.register(event);
+    NpcSpatialGameTests.register(event);
+    NpcWaterNavigationGameTests.register(event);
     NpcLifecycleGameTests.register(event);
     NpcInteractionGameTests.register(event);
     NpcWorkRouteGameTests.register(event);
     NpcNavigationGameTests.register(event);
+    NpcSpeedGameTests.register(event);
+    NpcActorRouteGameTests.register(event);
+    NpcArrivalGameTests.register(event);
     NpcRecoveryGameTests.register(event);
     NpcRuntimeFixGameTests.register(event);
     NpcLongTravelGameTests.register(event);
@@ -566,7 +577,8 @@ public final class NpcGameTests {
                   }
 
                   public CompletableFuture<NpcBrain.Reply> turn(String text, boolean voice) {
-                    return CompletableFuture.completedFuture(new NpcBrain.Reply("", false));
+                    return CompletableFuture.completedFuture(new NpcBrain.Reply(
+                        text.contains("VERIFIED_WORK_PAUSE") ? "ぼく、" + reason + "のでここで待つね。" : "", false));
                   }
 
                   public void stop() {}
@@ -598,6 +610,11 @@ public final class NpcGameTests {
           }
           if (!journalRead.get().isDone()) return;
           var entries = journalRead.get().join().entries();
+          if (entries.stream().noneMatch(e -> e.kind().equals("important_notice"))
+              && blockedTicks[0] < 250) {
+            journalRead.set(null);
+            return;
+          }
           h.assertTrue(
               entries.stream().filter(e -> e.kind().equals("planning_start")).count() == 1,
               "Planning start must be journaled");

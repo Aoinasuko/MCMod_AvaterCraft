@@ -73,6 +73,10 @@ public final class bep_3davater_companion {
   }
 
   public bep_3davater_companion(IEventBus bus, net.neoforged.fml.ModContainer container) {
+    NeoForge.EVENT_BUS.addListener(net.neoforged.neoforge.event.entity.living.LivingDeathEvent.class,
+        e -> dev.avatarcraft.npc.ai.NpcMission.killed(e.getEntity(),e.getSource().getEntity()));
+    NeoForge.EVENT_BUS.addListener(net.neoforged.neoforge.event.entity.EntityMobGriefingEvent.class,
+        e -> { if(e.getEntity() instanceof CompanionEntity)e.setCanGrief(false); });
     bus.addListener(
         net.neoforged.neoforge.common.world.chunk.RegisterTicketControllersEvent.class,
         event -> {

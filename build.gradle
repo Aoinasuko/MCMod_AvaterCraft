@@ -78,6 +78,50 @@ neoForge {
             gameDirectory = file('run-npc-qa')
             systemProperty 'avatarcraft.npcGameTest', 'true'
             systemProperty 'neoforge.enabledGameTestNamespaces', 'bep_3davater_companion'
+            if (System.getenv('AVATARCRAFT_NPC_TESTS')) {
+                programArgument '--tests'
+                programArgument System.getenv('AVATARCRAFT_NPC_TESTS')
+            }
+        }
+        npcNaturalGameTest {
+            type = 'gameTestServer'
+            gameDirectory = file('run-npc-natural-qa-' + providers.environmentVariable('AVATARCRAFT_NATURAL_SEED').getOrElse('61279'))
+            systemProperty 'avatarcraft.npcGameTest', 'true'
+            systemProperty 'avatarcraft.naturalQa', 'true'
+            systemProperty 'avatarcraft.campaignQa', providers.environmentVariable('AVATARCRAFT_CAMPAIGN_QA').getOrElse('false')
+            systemProperty 'avatarcraft.complexLive', providers.environmentVariable('AVATARCRAFT_NATURAL_LIVE').getOrElse('true')
+            systemProperty 'avatarcraft.naturalSeed', providers.environmentVariable('AVATARCRAFT_NATURAL_SEED').getOrElse('61279')
+            systemProperty 'neoforge.enabledGameTestNamespaces', 'bep_3davater_companion'
+            programArgument '--packs'
+            programArgument 'qa-packs'
+        }
+        npcWaterGameTest {
+            type = 'gameTestServer'
+            gameDirectory = file('run-npc-water-qa/' + providers.environmentVariable('AVATARCRAFT_WATER_CASE').getOrElse('drops'))
+            systemProperty 'avatarcraft.npcGameTest', 'true'
+            systemProperty 'avatarcraft.waterQa', 'true'
+            systemProperty 'avatarcraft.waterCase', providers.environmentVariable('AVATARCRAFT_WATER_CASE').getOrElse('drops')
+            systemProperty 'avatarcraft.qaOutputRoot', file('build').absolutePath
+            systemProperty 'avatarcraft.complexLive', 'true'
+            systemProperty 'neoforge.enabledGameTestNamespaces', 'bep_3davater_companion'
+        }
+        npcTargetedGameTest {
+            type = 'gameTestServer'
+            gameDirectory = file('run-npc-targeted-qa/' + providers.environmentVariable('AVATARCRAFT_NATURAL_SEED').getOrElse('61279') + '-' + providers.environmentVariable('AVATARCRAFT_TARGET_MISSION').getOrElse('coal'))
+            systemProperty 'avatarcraft.npcGameTest', 'true'
+            systemProperty 'avatarcraft.campaignQa', 'true'
+            systemProperty 'avatarcraft.targetMission', providers.environmentVariable('AVATARCRAFT_TARGET_MISSION').getOrElse('coal')
+            systemProperty 'avatarcraft.qaCommand', providers.environmentVariable('AVATARCRAFT_QA_COMMAND_OVERRIDE').getOrElse('')
+            systemProperty 'avatarcraft.suppliedDiamondTools', providers.environmentVariable('AVATARCRAFT_QA_DIAMOND_TOOLS').getOrElse('false')
+            systemProperty 'avatarcraft.qaPlanLimit', providers.environmentVariable('AVATARCRAFT_QA_PLAN_LIMIT').getOrElse('24')
+            systemProperty 'avatarcraft.qaWallSeconds', providers.environmentVariable('AVATARCRAFT_QA_WALL_SECONDS').getOrElse('1500')
+            systemProperty 'avatarcraft.qaRealTime', providers.environmentVariable('AVATARCRAFT_QA_REALTIME').getOrElse('false')
+            systemProperty 'avatarcraft.qaOutputRoot', file('build').absolutePath
+            systemProperty 'avatarcraft.complexLive', 'true'
+            systemProperty 'avatarcraft.naturalSeed', providers.environmentVariable('AVATARCRAFT_NATURAL_SEED').getOrElse('61279')
+            systemProperty 'neoforge.enabledGameTestNamespaces', 'bep_3davater_companion'
+            programArgument '--packs'
+            programArgument 'qa-packs'
         }
     }
     mods {
@@ -95,6 +139,48 @@ tasks.register('playerJar', Jar) {
     from sourceSets.player.output
 }
 assemble.dependsOn tasks.named('npcJar'), tasks.named('playerJar')
+
+tasks.register('prepareNpcNaturalWorld') {
+    doLast {
+        def seed = providers.environmentVariable('AVATARCRAFT_NATURAL_SEED').getOrElse('61279')
+        def pack = file("run-npc-natural-qa-${seed}/qa-packs/npc-natural")
+        pack.mkdirs()
+        new File(pack, 'pack.mcmeta').text = groovy.json.JsonOutput.toJson([pack: [description: 'Isolated NPC natural terrain QA', min_format: 82, max_format: 999]])
+        def preset = new File(pack, 'data/minecraft/worldgen/world_preset/flat_all_dimensions.json')
+        preset.parentFile.mkdirs()
+        def dims = [:]
+        ['overworld', 'the_nether', 'the_end'].each { dimension ->
+            def settings = dimension == 'the_nether' ? 'nether' : dimension == 'the_end' ? 'end' : 'overworld'
+            dims["minecraft:${dimension}"] = [type: "minecraft:${dimension}", 'neoforge:seed_override': Long.parseLong(seed),
+                generator: [type: 'minecraft:noise', settings: "minecraft:${settings}", biome_source:
+                    dimension == 'the_end' ? [type: 'minecraft:the_end'] : [type: 'minecraft:multi_noise', preset: "minecraft:${settings}"]]]
+        }
+        preset.text = groovy.json.JsonOutput.toJson([dimensions: dims])
+    }
+}
+tasks.matching { it.name == 'runNpcNaturalGameTest' }.configureEach { dependsOn 'prepareNpcNaturalWorld' }
+
+tasks.register('prepareNpcTargetedWorld') {
+    doLast {
+        def seed = providers.environmentVariable('AVATARCRAFT_NATURAL_SEED').getOrElse('61279')
+        def mission = providers.environmentVariable('AVATARCRAFT_TARGET_MISSION').getOrElse('coal')
+        if (!(mission in ['logs', 'coal', 'farm', 'diamond', 'skeleton'])) throw new GradleException('Invalid targeted NPC mission')
+        def pack = file("run-npc-targeted-qa/${seed}-${mission}/qa-packs/npc-natural")
+        pack.mkdirs()
+        new File(pack, 'pack.mcmeta').text = groovy.json.JsonOutput.toJson([pack: [description: 'Isolated NPC targeted natural QA', min_format: 82, max_format: 999]])
+        def preset = new File(pack, 'data/minecraft/worldgen/world_preset/flat_all_dimensions.json')
+        preset.parentFile.mkdirs()
+        def dims = [:]
+        ['overworld', 'the_nether', 'the_end'].each { dimension ->
+            def settings = dimension == 'the_nether' ? 'nether' : dimension == 'the_end' ? 'end' : 'overworld'
+            dims["minecraft:${dimension}"] = [type: "minecraft:${dimension}", 'neoforge:seed_override': Long.parseLong(seed),
+                generator: [type: 'minecraft:noise', settings: "minecraft:${settings}", biome_source:
+                    dimension == 'the_end' ? [type: 'minecraft:the_end'] : [type: 'minecraft:multi_noise', preset: "minecraft:${settings}"]]]
+        }
+        preset.text = groovy.json.JsonOutput.toJson([dimensions: dims])
+    }
+}
+tasks.matching { it.name == 'runNpcTargetedGameTest' }.configureEach { dependsOn 'prepareNpcTargetedWorld' }
 
 neoForge.runs {
     journalClient {

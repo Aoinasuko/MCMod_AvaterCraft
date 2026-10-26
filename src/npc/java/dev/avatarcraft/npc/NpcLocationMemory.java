@@ -57,6 +57,12 @@ public final class NpcLocationMemory {
     return places.remove(name) != null;
   }
 
+  public int clear() {
+    int count = places.size();
+    places.clear();
+    return count;
+  }
+
   public List<Place> entries() {
     return List.copyOf(places.values());
   }

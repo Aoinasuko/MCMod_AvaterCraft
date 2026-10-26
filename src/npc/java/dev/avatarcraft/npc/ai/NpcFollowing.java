@@ -72,8 +72,15 @@ final class NpcFollowing {
     if (path == null && (walking != null || now >= nextPath)) {
       if (walking == null) {
         destination = goal;
+        // The owner's block is above the floor while jumping or on a slab or stair edge.
         walking =
-            NpcWalkingRoute.to(npc, goal, p -> p.getY() == goal.getY() && p.distSqr(goal) <= 2);
+            NpcWalkingRoute.to(
+                npc,
+                goal,
+                p ->
+                    Math.abs(p.getY() - goal.getY()) <= 1
+                        && Math.pow(p.getX() - goal.getX(), 2) + Math.pow(p.getZ() - goal.getZ(), 2)
+                            <= 4);
       }
       var state = walking.poll();
       if (state == WalkingPathSearch.State.SEARCHING) return;
@@ -94,6 +101,7 @@ final class NpcFollowing {
     npc.getNavigation().setSpeedModifier(pace.speed());
     if (path != null && npc.getNavigation().getPath() != path)
       npc.getNavigation().moveTo(path, pace.speed());
+    if(path!=null)NpcWaterTravel.follow(npc,path,pace.speed());
   }
 
   void stop() {

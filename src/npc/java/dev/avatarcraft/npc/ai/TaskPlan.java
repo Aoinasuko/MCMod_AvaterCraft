@@ -4,7 +4,15 @@ import com.google.gson.*;
 import java.util.*;
 
 /** Bounded, language-independent goals. No remotely supplied code or arbitrary game commands. */
-public record TaskPlan(int version, String summary, String blocked, List<Step> steps) {
+public record TaskPlan(int version, String summary, String blocked, List<Step> steps, JsonObject goal) {
+  public TaskPlan(int version, String summary, String blocked, List<Step> steps) {
+    this(version, summary, blocked, steps, defaultGoal());
+  }
+
+  public static JsonObject defaultGoal() {
+    return CodexBridge.object("type","plan","target","","count",1,"location","",
+        "position",new JsonArray(),"radius",8);
+  }
   public static final Set<String> ACTIONS =
       Set.of(
           "mine",
@@ -178,6 +186,18 @@ public record TaskPlan(int version, String summary, String blocked, List<Step> s
   }
 
   public TaskPlan {
+    goal = goal == null || goal.isEmpty() ? defaultGoal() : goal.deepCopy();
+    exact(goal,"type","target","count","location","position","radius");
+    if (!Set.of("plan","deposit","farm","defeat").contains(string(goal,"type"))
+        || !string(goal,"target").matches("|#?[a-z0-9_.-]+:[a-z0-9_./-]+")
+        || integer(goal,"count")<1 || integer(goal,"count")>4096
+        || string(goal,"location").length()>32 || integer(goal,"radius")<1 || integer(goal,"radius")>16
+        || !Set.of(0,3).contains(goal.getAsJsonArray("position").size()))
+      throw new IllegalArgumentException("Invalid mission goal");
+    for(var coordinate:goal.getAsJsonArray("position"))
+      if(!coordinate.isJsonPrimitive()||!coordinate.getAsJsonPrimitive().isNumber()
+          ||!Double.isFinite(coordinate.getAsDouble())||Math.abs(coordinate.getAsDouble())>30000000)
+        throw new IllegalArgumentException("Invalid goal coordinate");
     if (version != 1
         || summary == null
         || blocked == null
@@ -198,7 +218,8 @@ public record TaskPlan(int version, String summary, String blocked, List<Step> s
     if (json == null || json.length() > 16384)
       throw new IllegalArgumentException("Plan exceeds bounds");
     var root = JsonParser.parseString(json).getAsJsonObject();
-    exact(root, "version", "summary", "blocked", "steps");
+    if(!root.has("goal"))root.add("goal",defaultGoal());
+    exact(root, "version", "summary", "blocked", "steps", "goal");
     var steps = new ArrayList<Step>();
     if (root.getAsJsonArray("steps").size() > 24)
       throw new IllegalArgumentException("Too many steps");
@@ -240,7 +261,7 @@ public record TaskPlan(int version, String summary, String blocked, List<Step> s
               string(s, "arguments")));
     }
     return new TaskPlan(
-        integer(root, "version"), string(root, "summary"), string(root, "blocked"), steps);
+        integer(root, "version"), string(root, "summary"), string(root, "blocked"), steps,root.getAsJsonObject("goal"));
   }
 
   public JsonObject journalDetails() {
@@ -334,6 +355,16 @@ public record TaskPlan(int version, String summary, String blocked, List<Step> s
     list.add("items", step);
     list.addProperty("maxItems", 24);
     root.add("steps", list);
+    var goalFields=new JsonObject();
+    goalFields.add("type",enumType(Set.of("plan","deposit","farm","defeat")));
+    goalFields.add("target",resource.deepCopy());
+    goalFields.add("count",type("integer"));goalFields.getAsJsonObject("count").addProperty("minimum",1);
+    goalFields.getAsJsonObject("count").addProperty("maximum",4096);
+    goalFields.add("location",type("string"));goalFields.getAsJsonObject("location").addProperty("maxLength",32);
+    goalFields.add("position",pos.deepCopy());
+    goalFields.add("radius",type("integer"));goalFields.getAsJsonObject("radius").addProperty("minimum",1);
+    goalFields.getAsJsonObject("radius").addProperty("maximum",16);
+    root.add("goal",objectType(goalFields));
     return objectType(root);
   }
 
@@ -363,6 +394,27 @@ public record TaskPlan(int version, String summary, String blocked, List<Step> s
 
   public static String instructions() {
     return "You translate authenticated owner instructions in Japanese or English into a local"
+               + " Minecraft task plan. The root goal is the ENTIRE original mission, immutable across phases/replans,"
+               + " not the current plan or remaining amount. goal={type,target,count,location,position,radius}."
+               + " For gathering and storage use type=deposit,target=item ID/tag,count=original requested total,"
+               + " location=the original delivery location (依頼の収納先 for this chest),position=[] or observed coordinates."
+               + " For harvest and replant use type=farm,location=the farm anchor,position=[],radius=8,target='',count=1."
+               + " For killing N mobs use type=defeat,target=exact mob registry ID,count=N,location='',position=[],radius=16."
+               + " Only unsupported or composite goals use type=plan,target='',count=1,location='',position=[],radius=8."
+               + " mission_goal observation reports authoritative verified progress. Never lower the original goal"
+               + " when replanning. Stop scheduling attacks once the shared verified death count reaches the goal."
+               + " Prefer tool harvest_replant(x,y,z,radius) for a farm's mature crops; it picks up real drops, reserves"
+               + " planting items, replants and verifies each crop. Do not create hoes unless soil actually needs tilling."
+               + " Observation.terrain_32 provides read-only radius32 terrain coverage, resource coordinates and connected walking waypoints;"
+               + " use tool observe_terrain() for fresh height/kind maps. Unknown cells are not safe or empty. Static connectivity is not a completed move."
+               + " Observation.entities_16 and tool observe_entities() show real radius16 entities including occluded dropped items, counts, velocity and pickup delay."
+               + " Before repeating a failed approach, observe terrain and select a different connected waypoint/access direction."
+               + " Water columns with a known depth up to5 blocks are surface-swimming route candidates. Deeper/unknown water is excluded."
+               + " Swimming uses local current-aware movement; deep-water/low-air emergency recovery runs locally before any model task."
+               + " Prefer an observed shallow swimming route before spending blocks on a bridge; never treat water as a dry mining support."
+               + " After harvest_replant, if mission_goal.products_collected is false, inspect observe_entities(), approach the actual remaining product drops"
+               + " using move_precisely/work_route goal=pickup, wait one second for normal pickup, re-observe inventory and original mission_goal."
+               + " Do not acquire replacement wheat from unrelated sources, grow extra crops, or declare completion just because planting or movement ended."
                + " Minecraft task plan. Rectangular work uses area_work with inclusive integer"
                + " corners, order=top_down/bottom_up and steps_json tool templates. Each template"
                + " has id,tool, arguments,priority,after,when,expect,required,item. Coordinate"
@@ -489,7 +541,23 @@ public record TaskPlan(int version, String summary, String blocked, List<Step> s
         + " never a new nearest chest at the pickup point. remember_location: location=chosen name,"
         + " position=observed chest/point coordinates or [] for current position; forget_location:"
         + " location=existing name. A full memory does not evict another location. Never invent"
-        + " unseen chest coordinates. tool: exactly one low-level operation, count=1,"
+        + " unseen chest coordinates. command_context.deliveryChest is the server-observed chest"
+        + " at instruction time: for 'this chest/ここのチェスト' save it with remember_location before"
+        + " leaving, then use its name for deposit. Never replace it with the player's later position."
+        + " You may forget any no-longer-needed personal location; when full, put forget_location"
+        + " steps first. Preserve destinations still required by the remaining mission."
+        + " Interpret spatial language from command_context, not by matching a fixed sentence."
+        + " 私/僕/俺/I/me refer to speaker, 君/あなた/you to addressee; both have frozen blockPosition"
+        + " and inclusive chunk bounds. For '私が立っているチャンク' use speaker.chunk; for '今君がいるところ'"
+        + " use addressee.blockPosition. pointedBlock is what the owner looked at when speaking."
+        + " Actor forward/right are frozen horizontal unit vectors for relative directions such as"
+        + " '私の後ろ3ブロック'; do not substitute world north for the speaker's forward direction."
+        + " Save these with tool remember_reference(name,reference=speaker_position/npc_position/pointed_block/delivery_chest)."
+        + " A chunk defines horizontal bounds, not an inferred floor height: inspect or ask for the vertical work extent"
+        + " before destructive area work, and split work into bounded area_work operations. If the referent is ambiguous"
+        + " ask the owner rather than invent a coordinate. On verified"
+        + " mission completion all eight personal location slots are cleared automatically; shared"
+        + " anchors persist. tool: exactly one low-level operation, count=1,"
         + " target='bep_3davater_companion:TOOL_NAME',arguments=a JSON-encoded string with the exact"
         + " argument object. Available atomic contracts: "
         + NpcTools.compactReference()
@@ -498,8 +566,10 @@ public record TaskPlan(int version, String summary, String blocked, List<Step> s
         + " inserting real eyes into observed end portal frames. Never invent discovered positions."
         + " work_route builds a bounded physical path using actual dig/place/movement. Use"
         + " tool=work_route for 'ブロックを掘ってこっちに来て/dig through and come here' and 'こっちまで橋を架けて/build a"
-        + " bridge to me'. Resolve the destination from observe.owner.position or the named"
-        + " observed destination. All arguments are required: x/y/z are observed coordinates,"
+        + " bridge to me'. For instruction-time 'here/こっち', resolve the destination from"
+        + " command_context.speaker.blockPosition or the named observed destination. Use the owner's"
+        + " current observe.owner.position only when explicitly following the moving owner."
+        + " All arguments are required: x/y/z are observed coordinates,"
         + " goal='reach' for coming here or goal='bridge' for constructing a bridge (does not walk"
         + " underneath a same-height gap). goal='mine' makes a block reachable; goal='pickup'"
         + " approaches the precise observed drop coordinates. mode='dig' for digging only, 'build'"

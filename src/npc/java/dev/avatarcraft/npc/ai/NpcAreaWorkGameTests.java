@@ -475,7 +475,7 @@ final class NpcAreaWorkGameTests {
     long started = System.nanoTime();
     h.onEachTick(
         () -> {
-          if (brain.waiting)
+          if (brain.waiting())
             java.util.concurrent.locks.LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(20));
           boolean clear = true;
           for (int x = 6; x <= 8; x++)

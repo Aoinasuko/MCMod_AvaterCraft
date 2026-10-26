@@ -6,6 +6,20 @@ import org.junit.jupiter.api.Test;
 
 class NpcLocationMemoryTest {
   @Test
+  void completionClearReleasesEverySlotAndSelectiveDeletionPreservesTheRest() {
+    var memory = new NpcLocationMemory();
+    for (int i=0;i<8;i++) memory.remember(new NpcLocationMemory.Place("p"+i,"minecraft:overworld",i,64,0,"point"));
+    assertTrue(memory.forget("p3"));
+    assertNotNull(memory.get("p4"));
+    assertNull(memory.get("p3"));
+    assertFalse(memory.forget("p3"));
+    assertTrue(memory.remember(new NpcLocationMemory.Place("destination","minecraft:overworld",30,64,0,"chest")));
+    assertEquals(8,memory.clear());
+    assertEquals("[]",memory.json());
+    assertEquals(0,memory.clear());
+    assertTrue(memory.remember(new NpcLocationMemory.Place("new","minecraft:overworld",1,64,0,"chest")));
+  }
+  @Test
   void eightNamedPlacesPersistAndNinthDoesNotEvictAnything() {
     var memory = new NpcLocationMemory();
     for (int i = 0; i < 8; i++)

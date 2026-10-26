@@ -19,6 +19,18 @@ public final class NpcGroundNavigation extends GroundPathNavigation {
   }
 
   @Override
+  public boolean moveTo(Path path,double speed){
+    if(path!=null&&mob instanceof dev.avatarcraft.npc.CompanionEntity npc)
+      for(int i=path.getNextNodeIndex();i<path.getNodeCount();i++){
+        var p=path.getNodePos(i);var water=NpcWaterTravel.water(level,p)?p:p.below();
+        if(!NpcWaterTravel.water(level,water))continue;
+        var column=NpcWaterTravel.column(level,water);
+        if(!column.known()||column.depth()>NpcWaterTravel.SAFE_DEPTH){stop();return false;}
+      }
+    return super.moveTo(path,speed);
+  }
+
+  @Override
   protected void followThePath() {
     var path = getPath();
     if (path == null || !GRID_PATHS.containsKey(path)) {

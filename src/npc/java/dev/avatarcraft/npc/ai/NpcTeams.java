@@ -10,6 +10,71 @@ import net.minecraft.server.level.ServerLevel;
 public final class NpcTeams {
   private NpcTeams() {}
 
+  static void resourceProgress(CompanionEntity worker, TaskPlan.Step step, int have) {
+    var job = job(worker);
+    if (job == null || !Set.of("collect", "pickup").contains(step.action())) return;
+    long now = worker.level().getGameTime();
+    if (!step.target().equals(job.neededItem) || have > job.availableCount || job.lastProgressTick == 0)
+      job.lastProgressTick = now;
+    job.neededItem = step.target();
+    job.neededCount = step.count();
+    job.availableCount = have;
+    NpcWorkData.get((ServerLevel) worker.level()).setDirty();
+  }
+
+  /** A waiting leader may help with a real missing material while the worker keeps its job. */
+  static TaskPlan assistance(CompanionEntity leader, TaskPlan remaining) {
+    if (remaining == null || remaining.steps().isEmpty()
+        || !remaining.steps().getFirst().action().equals("tool")
+        || !remaining.steps().getFirst().target().equals("bep_3davater_companion:await_teammate")) return null;
+    var level = (ServerLevel) leader.level();
+    var args = com.google.gson.JsonParser.parseString(remaining.steps().getFirst().arguments()).getAsJsonObject();
+    int wantedWorker = args.get("entity_id").getAsInt();
+    for (var job : NpcWorkData.get(level).jobs) {
+      if (!job.leader.equals(leader.getUUID()) || !job.status.equals("running")
+          || !job.parentInstruction.equals(leader.instruction())
+          || wantedWorker >= 0 && wantedWorker != job.initialEntityId
+          || job.supportAttempts >= 2 || job.neededItem == null || job.neededItem.isEmpty()
+          || job.neededItem.startsWith("#") || job.neededItem.equals(job.item)
+          || level.getGameTime() - job.lastProgressTick < 600) continue;
+      if (!(level.getEntity(job.worker) instanceof CompanionEntity worker) || !worker.isAlive()
+          || leader.distanceToSqr(worker) > 128 * 128) continue;
+      int missing = Math.min(16, job.neededCount - job.availableCount);
+      if (missing <= 0 || remaining.steps().size() > 20) continue;
+      var steps = new ArrayList<TaskPlan.Step>();
+      if (leader.getY() > 32 && remaining.steps().stream()
+          .anyMatch(s -> NpcResources.underground(s) && s.count() >= 8))
+        steps.add(NpcSurvival.step("acquire", "#minecraft:logs", "", 8));
+      steps.add(NpcSurvival.step("acquire", job.neededItem, "", missing));
+      steps.add(new TaskPlan.Step("give_item", job.neededItem, "", missing,
+          worker.getId(), -1, "main", 10, List.of()));
+      steps.addAll(remaining.steps());
+      job.supportAttempts++;
+      job.lastProgressTick = level.getGameTime();
+      NpcWorkData.get(level).setDirty();
+      NpcService.get(level.getServer()).record(leader, "team_rebalance",
+          "Waiting leader supplies a stalled teammate", worker.getUUID(),
+          object("job", job.id.toString(), "item", job.neededItem, "count", missing));
+      return new TaskPlan(1, remaining.summary(), "", steps);
+    }
+    return null;
+  }
+
+  static void rememberStation(CompanionEntity npc, net.minecraft.core.BlockPos position) {
+    var level = (ServerLevel) npc.level();
+    var block = level.getBlockState(position).getBlock();
+    if (block != net.minecraft.world.level.block.Blocks.CRAFTING_TABLE
+        && block != net.minecraft.world.level.block.Blocks.FURNACE) return;
+    var data = NpcWorkData.get(level);
+    String key = "station:" + npc.ownerId() + ":" + level.dimension().identifier() + ":" + position.toShortString();
+    if (!data.findings.containsKey(key) && data.findings.size() >= 64) return;
+    data.findings.put(key, object("kind", "workstation", "owner", npc.ownerId().toString(),
+        "dimension", level.dimension().identifier().toString(),
+        "block", net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block).toString(),
+        "x", position.getX(), "y", position.getY(), "z", position.getZ()));
+    data.setDirty();
+  }
+
   public static NpcWorkData.Job job(CompanionEntity worker) {
     return NpcWorkData.get((ServerLevel) worker.level()).jobs.stream()
         .filter(j -> j.worker.equals(worker.getUUID()) && j.status.equals("running"))
@@ -74,7 +139,7 @@ public final class NpcTeams {
     var workers =
         level.getEntitiesOfClass(
             CompanionEntity.class,
-            leader.getBoundingBox().inflate(48),
+            leader.getBoundingBox().inflate(128),
             n ->
                 n != leader
                     && n.isAlive()
@@ -91,7 +156,7 @@ public final class NpcTeams {
             new TaskPlan.Step(
                 "give_item", item, "", count, leader.getId(), -1, "main", 10, List.of()));
     var plan = new TaskPlan(1, "Prepare and deliver " + count + " " + item, "", steps);
-    worker.setInstruction("分担作業: " + item + " ×" + count);
+    worker.setInstruction("分担作業: " + item + " ×" + count, leader.commandContext());
     worker.mind().acceptDelegatedPlan(plan);
     var record = new NpcWorkData.Job();
     record.id = UUID.randomUUID();
@@ -138,7 +203,7 @@ public final class NpcTeams {
         level
             .getEntitiesOfClass(
                 CompanionEntity.class,
-                leader.getBoundingBox().inflate(48),
+                leader.getBoundingBox().inflate(128),
                 n ->
                     n != leader
                         && n.isAlive()
@@ -160,7 +225,7 @@ public final class NpcTeams {
     j.item = "";
     j.count = 1;
     j.initialEntityId = worker.getId();
-    worker.setInstruction("分担作業: " + plan.summary());
+    worker.setInstruction("分担作業: " + plan.summary(), leader.commandContext());
     worker.mind().acceptDelegatedPlan(plan);
     data.jobs.add(j);
     data.setDirty();
@@ -194,7 +259,12 @@ public final class NpcTeams {
                 "status",
                 j.status,
                 "problem",
-                j.problem));
+                j.problem,
+                "neededItem", j.neededItem,
+                "neededCount", j.neededCount,
+                "availableCount", j.availableCount,
+                "stalledTicks", Math.max(0, leader.level().getGameTime()-j.lastProgressTick),
+                "supportAttempts", j.supportAttempts));
         running |= j.status.equals("running");
         failed |= !Set.of("running", "complete").contains(j.status);
       }

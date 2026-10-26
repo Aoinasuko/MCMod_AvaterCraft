@@ -14,6 +14,7 @@ public final class NpcExecutionMemory {
   private final LinkedHashMap<String, JsonObject> searches = new LinkedHashMap<>();
   private final LinkedHashMap<String, List<List<Integer>>> trails = new LinkedHashMap<>();
   private JsonObject outcome = new JsonObject();
+  private final LinkedHashMap<String,JsonArray> emptyAreas=new LinkedHashMap<>();
 
   public static String failureCode(String error) {
     String s = error.toLowerCase(Locale.ROOT);
@@ -96,6 +97,12 @@ public final class NpcExecutionMemory {
 
   public void searched(
       String dimension, String tool, JsonObject args, JsonObject result, long now) {
+    if(tool.equals("find_blocks")&&args.has("origin")&&result.has("blocks")&&result.getAsJsonArray("blocks").isEmpty()){
+      String resource=args.get("block").getAsString();var origin=args.getAsJsonArray("origin");
+      String area=dimension+"|"+resource+"|"+(int)Math.floor(origin.get(0).getAsDouble()/4)+","+(int)Math.floor(origin.get(2).getAsDouble()/4);
+      emptyAreas.remove(area);emptyAreas.put(area,origin.deepCopy());
+      while(emptyAreas.size()>128)emptyAreas.remove(emptyAreas.keySet().iterator().next());
+    }
     if (!Set.of("find_blocks", "find_chests", "read_signs").contains(tool)
         || !result.has("ok")
         || !result.get("ok").getAsBoolean()) return;
@@ -182,7 +189,7 @@ public final class NpcExecutionMemory {
       String dimension, int x, int y, int z, int tx, int ty, int tz) {
     var trail = trails.getOrDefault(dimension, List.of());
     int from = -1, to = -1;
-    double fromDistance = 4, toDistance = 4;
+    double fromDistance = 4, toDistance = 16;
     for (int i = 0; i < trail.size(); i++) {
       var p = trail.get(i);
       double a = squared(p, x, y, z), b = squared(p, tx, ty, tz);
@@ -208,6 +215,30 @@ public final class NpcExecutionMemory {
     return result;
   }
 
+  /** Observed return checkpoints can include small drops, but never become unchecked walk edges. */
+  public List<List<Integer>> returnCheckpoints(String dimension, int x,int y,int z,int tx,int ty,int tz) {
+    var trail=trails.getOrDefault(dimension,List.of());
+    int from=-1,to=-1; double fd=4,td=16;
+    for(int i=0;i<trail.size();i++) {
+      double a=squared(trail.get(i),x,y,z),b=squared(trail.get(i),tx,ty,tz);
+      if(a<=fd){from=i;fd=a;}
+      if(b<td){to=i;td=b;}
+    }
+    if(from<=to || to<0)return List.of();
+    var points=new ArrayList<List<Integer>>();points.add(trail.get(from));
+    var anchor=trail.get(from);
+    for(int i=from-1;i>=to;i--) {
+      var a=trail.get(i+1);var b=trail.get(i);
+      if(Math.abs(a.get(0)-b.get(0))>4 || Math.abs(a.get(1)-b.get(1))>4
+          || Math.abs(a.get(2)-b.get(2))>4)return List.of();
+      if(squared(b,anchor.get(0),anchor.get(1),anchor.get(2))>=64
+          || Math.abs(b.get(1)-anchor.get(1))>=6 || i==to) {
+        points.add(b);anchor=b;
+      }
+    }
+    return points;
+  }
+
   private static double squared(List<Integer> p, int x, int y, int z) {
     return Math.pow(p.get(0) - x, 2.) + Math.pow(p.get(1) - y, 2.) + Math.pow(p.get(2) - z, 2.);
   }
@@ -229,6 +260,16 @@ public final class NpcExecutionMemory {
 
   public void newGoal() {
     outcome = new JsonObject();
+    emptyAreas.clear();
+  }
+
+  public boolean searchedEmpty(String dimension,String resource,int x,int y,int z){
+    String prefix=dimension+"|"+resource+"|";
+    for(var entry:emptyAreas.entrySet())if(entry.getKey().startsWith(prefix)){
+      var p=entry.getValue();
+      if(Math.hypot(p.get(0).getAsDouble()-x,p.get(2).getAsDouble()-z)<12&&Math.abs(p.get(1).getAsDouble()-y)<12)return true;
+    }
+    return false;
   }
 
   public String save() {
@@ -240,7 +281,7 @@ public final class NpcExecutionMemory {
             "trails",
             new Gson().toJsonTree(trails),
             "outcome",
-            outcome)
+            outcome,"emptyAreas",new Gson().toJsonTree(emptyAreas))
         .toString();
   }
 
@@ -249,11 +290,17 @@ public final class NpcExecutionMemory {
     searches.clear();
     trails.clear();
     outcome = new JsonObject();
+    emptyAreas.clear();
     if (json == null || json.isBlank()) return;
     try {
       if (json.length() > 262144) throw new IllegalArgumentException("Execution memory too large");
       var o = JsonParser.parseString(json).getAsJsonObject();
       var g = new Gson();
+      if(o.has("emptyAreas"))for(var e:o.getAsJsonObject("emptyAreas").entrySet()){
+        if(emptyAreas.size()>=128)break;
+        if(e.getKey().length()<=256&&e.getValue().isJsonArray()&&e.getValue().getAsJsonArray().size()==3)
+          emptyAreas.put(e.getKey(),e.getValue().getAsJsonArray().deepCopy());
+      }
       for (var e : o.getAsJsonArray("failures")) {
         var f = g.fromJson(e, Failure.class);
         if (failures.size() == 64 || f.args.toString().length() > 8192) break;

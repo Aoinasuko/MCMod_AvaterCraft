@@ -548,11 +548,11 @@ final class NpcSurvivalGameTests {
                   .getDataStorage()
                   .computeIfAbsent(net.minecraft.world.level.TicketStorage.TYPE);
           if (phase[0] == 0) {
-            if (tickets(h, n.getUUID(), storage).size() != 9) return;
+            if (tickets(h, n.getUUID(), storage).size() != 49) return;
             h.assertTrue(
                 tickets(h, n.getUUID(), storage)
                     .equals(NpcChunkLoading.square(n.chunkPosition().x(), n.chunkPosition().z())),
-                "Exactly current 3x3 must be tick-loaded");
+                "Exactly current 7x7 must be tick-loaded");
             var ops =
                 h.getLevel()
                     .registryAccess()
@@ -584,12 +584,12 @@ final class NpcSurvivalGameTests {
             return;
           }
           if (phase[0] == 2) {
-            if (tickets(h, second[0].getUUID(), storage).size() != 9) return;
+            if (tickets(h, second[0].getUUID(), storage).size() != 49) return;
             n.discard();
             h.assertTrue(
                 tickets(h, n.getUUID(), storage).isEmpty(), "Removed NPC must release its tickets");
             h.assertTrue(
-                tickets(h, second[0].getUUID(), storage).size() == 9,
+                tickets(h, second[0].getUUID(), storage).size() == 49,
                 "One NPC must not release another NPC's overlapping tickets");
             second[0].discard();
             h.succeed();

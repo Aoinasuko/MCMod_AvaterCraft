@@ -15,13 +15,22 @@ final class NpcComplexLiveBrain implements NpcBrain {
   private final CompletableFuture<CodexBridge> bridge;
   final List<TaskPlan> plans = new CopyOnWriteArrayList<>();
   final List<String> errors = new CopyOnWriteArrayList<>();
-  volatile boolean waiting;
+  final List<JsonObject> exchanges = new CopyOnWriteArrayList<>();
+  private final java.util.concurrent.atomic.AtomicInteger inFlight = new java.util.concurrent.atomic.AtomicInteger();
+  boolean waiting() { return inFlight.get() > 0; }
   volatile int requests;
   private volatile boolean closed;
   private final Supplier<String> fixtureContext;
+  private final int maxRequests;
 
   NpcComplexLiveBrain(String caseId, Supplier<String> fixtureContext) {
+    this(caseId,fixtureContext,24);
+  }
+
+  NpcComplexLiveBrain(String caseId, Supplier<String> fixtureContext,int maxRequests) {
     this.fixtureContext = fixtureContext;
+    if(maxRequests<1||maxRequests>24)throw new IllegalArgumentException("QA request limit 1..24 required");
+    this.maxRequests=maxRequests;
     if (!Boolean.getBoolean("avatarcraft.complexLive"))
       throw new IllegalStateException("Live QA opt-in required");
     bridge =
@@ -34,7 +43,8 @@ final class NpcComplexLiveBrain implements NpcBrain {
                 config.turnTimeoutSeconds = 120;
                 var client =
                     new CodexBridge(
-                        config, Path.of("../build/npc-complex-live-workspaces/" + caseId));
+                        config, Path.of(System.getProperty("avatarcraft.qaOutputRoot", "../build"))
+                            .resolve("npc-complex-live-workspaces").resolve(caseId));
                 client.initialize().get(45, TimeUnit.SECONDS);
                 if (closed) client.close();
                 return client;
@@ -70,12 +80,13 @@ final class NpcComplexLiveBrain implements NpcBrain {
       Personality p,
       BiFunction<String, JsonObject, CompletionStage<JsonObject>> tools,
       boolean advanced) {
-    waiting = true;
+    inFlight.incrementAndGet();
     return bridge
         .thenCompose(b -> advanced ? b.openAdvanced(p, tools) : b.open(p, tools))
         .thenApply(
             real ->
                 new Session() {
+                  final String sessionId = UUID.randomUUID().toString();
                   public boolean busy() {
                     return real.busy();
                   }
@@ -93,16 +104,23 @@ final class NpcComplexLiveBrain implements NpcBrain {
                   }
 
                   public CompletableFuture<TaskPlan> plan(String prompt) {
-                    if (++requests > 24)
+                    int request = ++requests;
+                    if (request > maxRequests)
                       return CompletableFuture.failedFuture(
                           new IllegalStateException("QA live planning budget exhausted"));
-                    waiting = true;
-                    return real.plan(prompt + "\n" + fixtureContext.get())
+                    inFlight.incrementAndGet();
+                    String input = prompt + "\n" + fixtureContext.get();
+                    long began = System.nanoTime();
+                    return real.plan(input)
                         .whenComplete(
                             (plan, error) -> {
                               if (error == null) plans.add(plan);
                               else errors.add(error.toString());
-                              waiting = false;
+                              exchanges.add(CodexBridge.object("session", sessionId, "request", request,
+                                  "input", input, "plan", new com.google.gson.Gson().toJsonTree(plan),
+                                  "error", error == null ? "" : error.toString(),
+                                  "durationMs", (System.nanoTime()-began)/1_000_000));
+                              inFlight.decrementAndGet();
                             });
                   }
 
@@ -116,7 +134,7 @@ final class NpcComplexLiveBrain implements NpcBrain {
                 })
         .whenComplete(
             (s, e) -> {
-              waiting = false;
+              inFlight.decrementAndGet();
               if (e != null) errors.add(e.toString());
             });
   }

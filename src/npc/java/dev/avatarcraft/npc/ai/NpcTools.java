@@ -10,6 +10,10 @@ public final class NpcTools {
   private static final Map<String, Spec> SPECS = new LinkedHashMap<>();
 
   static {
+    add("observe_terrain","Read-only 3D terrain sphere of radius32 around self. Returns loaded/unknown coverage, collision/water/lava counts, nearest-floor height/kind maps, actual resource coordinates, and body-clear connected ground/swimming waypoints. Known water depth1..5 is allowed for surface swimming; deeper/unknown water is excluded. Includes occluded loaded blocks, never generates chunks or edits blocks. Dynamic actors and changed terrain still require movement verification.");
+    add("observe_entities","Read-only sphere of radius16 around self, including occluded entities. Returns actual IDs, positions, velocity, health/hostility, and dropped item type/count/pickup delay. Counts all; nearest items then hostiles first, at most128 rows with explicit truncation. Presence or arrival is not collection: wait at least10 ticks then re-observe inventory and mission_goal.");
+    add("harvest_replant","Harvest mature crops around observed x/y/z (radius 1..16), walk to pick up their real drops, reserve planting items and replant every harvested cell. Supports wheat, carrots, potatoes, beetroot. Verifies crop state; no invented seed or hoe. Fails with remaining work on missing seed, changed soil or access failure.",
+        "x:integer","y:integer","z:integer","radius:integer");
     add("create_blueprint", "Create a saved AI-authored building design and translucent preview. design_json={name,size:[w,h,d],parts:[{from:[x,y,z],to:[x,y,z],block:exact_id}]}; relative inclusive boxes, later parts override, air carves openings. Max side32/volume4096/64parts/8192chars. site_json={from:[world x,y,z],to:[world x,y,z]} constrains the building range; {} searches a nearby loaded supported clear site. Select specified materials, otherwise prefer observed inventory/chest building materials. Returns actual origin, needed/missing quantities and blueprint_id; later tools can use current.","design_json:string","site_json:string");
     add("inspect_blueprint","Inspect this NPC's saved building plan, origin, preview, required inventory and missing blocks. blueprint_id=current or exact returned ID.","blueprint_id:string");
     add("gather_blueprint","Secure all remaining blueprint block items in this NPC's inventory before construction, preferring nearby accessible chests via find_chests/move_to/withdraw, then existing acquire/craft/smelt chains. No item creation. Returns actual missing quantities or a concrete supply failure. blueprint_id=current or exact ID.","blueprint_id:string");
@@ -30,7 +34,7 @@ public final class NpcTools {
         "query:string");
     add(
         "move_to",
-        "Move on foot up to 512 blocks, reserving sequential intermediate legs within 128 blocks."
+        "Move on ground or across known surface-water depth1..5 up to 512 blocks, reserving sequential intermediate legs within 128 blocks. Deeper/unknown water is excluded; local emergency breathing recovery overrides tasks. Flowing water uses sprint propulsion."
             + " Each leg requires loaded safe terrain and uses cached incremental walking A* before"
             + " any edits, sprinting for distant travel and walking near arrival. Uses permitted"
             + " wooden doors and closes doors it opened. Arrival means within 0.8 blocks of its"
@@ -367,6 +371,10 @@ public final class NpcTools {
         "forget_location",
         "Forget a named location, freeing one of eight memory slots.",
         "name:string");
+    add("remember_reference", "Save a frozen server-observed command reference in one of eight personal memory slots. "
+        + "reference=speaker_position/npc_position/pointed_block/delivery_chest. Uses instruction-time coordinates even after moving. "
+        + "For an entire chunk use command_context speaker/addressee.chunk inclusive bounds in area_work; a memory is a point, not a region.",
+        "name:string", "reference:string");
   }
 
   private static void add(String name, String description, String... fields) {
@@ -533,6 +541,7 @@ public final class NpcTools {
   /** Local observation memory inherits observe; it cannot modify blocks, inventory or ownership. */
   public static boolean permitted(String name, Collection<String> allowed) {
     return allowed.contains(name)
+        || Set.of("observe_terrain","observe_entities").contains(name) && allowed.contains("observe")
         || name.equals("create_blueprint") && allowed.containsAll(List.of("observe","place"))
         || name.equals("inspect_blueprint") && allowed.contains("observe")
         || name.equals("gather_blueprint") && allowed.containsAll(List.of("observe","move_to","withdraw","dig","craft"))
@@ -574,7 +583,8 @@ public final class NpcTools {
         || Set.of("guard", "guard_post").contains(name)
             && allowed.containsAll(List.of("attack", "move_to", "observe"))
         || name.equals("defeat") && allowed.contains("attack")
-        || Set.of("remember_location", "forget_location").contains(name)
+        || name.equals("harvest_replant") && allowed.containsAll(List.of("dig","place","observe","move_to"))
+        || Set.of("remember_location", "forget_location", "remember_reference").contains(name)
             && allowed.contains("observe");
   }
 

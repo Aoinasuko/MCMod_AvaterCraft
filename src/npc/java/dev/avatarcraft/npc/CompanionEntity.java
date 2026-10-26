@@ -60,6 +60,7 @@ public final class CompanionEntity extends PathfinderMob
   }
 
   private String expeditionState = "{}";
+  private String commandContext = "{}";
   private com.google.gson.JsonArray recentResults = new com.google.gson.JsonArray();
   public final dev.avatarcraft.npc.ai.NpcExecutionMemory executionMemory =
       new dev.avatarcraft.npc.ai.NpcExecutionMemory();
@@ -129,6 +130,8 @@ public final class CompanionEntity extends PathfinderMob
   private Personality personality = Personality.preset("tortobu");
   public final NpcInventory inventory = new NpcInventory(this);
   public final NpcLocationMemory locations = new NpcLocationMemory();
+  public final dev.avatarcraft.npc.ai.NpcMission mission = new dev.avatarcraft.npc.ai.NpcMission(this);
+  public final dev.avatarcraft.npc.ai.NpcWaterSafety waterSafety = new dev.avatarcraft.npc.ai.NpcWaterSafety(this);
 
   public CompanionEntity(EntityType<? extends CompanionEntity> type, Level level) {
     super(type, level);
@@ -149,6 +152,7 @@ public final class CompanionEntity extends PathfinderMob
     var navigation = new dev.avatarcraft.npc.ai.NpcGroundNavigation(this, level);
     navigation.getNodeEvaluator().setCanOpenDoors(true);
     navigation.getNodeEvaluator().setCanPassDoors(true);
+    navigation.setCanFloat(true);
     return navigation;
   }
 
@@ -253,14 +257,30 @@ public final class CompanionEntity extends PathfinderMob
   }
 
   public void setInstruction(String value) {
+    var player = owner == null || level().isClientSide() ? null
+        : level().getServer().getPlayerList().getPlayer(owner);
+    setInstruction(value, dev.avatarcraft.npc.ai.NpcCommandContext.capture(this, player));
+  }
+
+  public com.google.gson.JsonObject commandContext() {
+    return com.google.gson.JsonParser.parseString(commandContext).getAsJsonObject();
+  }
+
+  public void setInstruction(String value, com.google.gson.JsonObject context) {
     if (value == null || value.length() > 2048)
       throw new IllegalArgumentException("Instruction exceeds 2048 characters");
+    String captured = context.toString();
+    if (captured.length() > 4096) throw new IllegalArgumentException("Oversized command context");
+    commandContext = value.isBlank() ? "{}" : captured;
     workSequenceState = "{}";
     entityData.set(INSTRUCTION, value.strip());
+    mission.reset();
     mind().instructionChanged(instruction());
   }
 
   public void completeInstruction() {
+    locations.clear();
+    commandContext = "{}";
     entityData.set(INSTRUCTION, "");
   }
 
@@ -307,6 +327,7 @@ public final class CompanionEntity extends PathfinderMob
   }
 
   public void tick() {
+    if (!level().isClientSide() && isAlive()) waterSafety.preTick();
     if (!level().isClientSide()) gateController.tick();
     super.tick();
     if (!level().isClientSide()) containerAnimation.tick();
@@ -333,7 +354,7 @@ public final class CompanionEntity extends PathfinderMob
         executionMemory.walked(
             level().dimension().identifier().toString(), feet.getX(), feet.getY(), feet.getZ());
       }
-      mind().tick();
+      if (!waterSafety.tick()) mind().tick();
       if (tickCount % 10 == 0)
         for (var item :
             server.getEntitiesOfClass(
@@ -358,11 +379,13 @@ public final class CompanionEntity extends PathfinderMob
     output.putString("Personality", personality.json());
     output.putString("Instruction", instruction());
     output.putString("RememberedLocations", locations.json());
+    output.putString("CommandContext", commandContext);
     output.putString("LocalTaskState", mind == null ? localTaskState : mind.saveState());
     output.putString("ExpeditionState", expeditionState);
     output.putString("WorkSequenceState", workSequenceState);
     output.putString("RecentActionResults", recentResults.toString());
     output.putString("ExecutionMemory", executionMemory.save());
+    output.putString("MissionGoal", mission.save());
     output.putBoolean("Recovering", recovering);
     output.putString("OwnerRespawnDimension", respawnDimension);
     output.putDouble("OwnerRespawnX", respawnPosition.x);
@@ -417,7 +440,13 @@ public final class CompanionEntity extends PathfinderMob
       locations.load("[]");
     }
     localTaskState = input.getStringOr("LocalTaskState", "");
+    try {
+      String context = input.getStringOr("CommandContext", "{}");
+      commandContext = context.length() <= 4096
+          ? com.google.gson.JsonParser.parseString(context).getAsJsonObject().toString() : "{}";
+    } catch (RuntimeException ignored) { commandContext = "{}"; }
     executionMemory.restore(input.getStringOr("ExecutionMemory", ""));
+    mission.restore(input.getStringOr("MissionGoal", "{}"));
     expeditionState = input.getStringOr("ExpeditionState", "{}");
     workSequenceState = input.getStringOr("WorkSequenceState", "{}");
     if (workSequenceState.length() > 16384) workSequenceState = "{}";

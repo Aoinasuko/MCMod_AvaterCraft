@@ -14,6 +14,9 @@ public final class NpcWorkData extends SavedData {
     public String parentInstruction, item, status = "running", problem = "";
     public int count;
     public int initialEntityId;
+    public String neededItem = "";
+    public int neededCount, availableCount, supportAttempts;
+    public long lastProgressTick;
   }
 
   public static final class Group {
@@ -26,6 +29,7 @@ public final class NpcWorkData extends SavedData {
   public final Map<String, UUID> furnaces = new LinkedHashMap<>();
   public final List<Job> jobs = new ArrayList<>();
   public final Map<String, JsonObject> findings = new LinkedHashMap<>();
+  public final Map<String, JsonObject> kills = new LinkedHashMap<>();
   public final List<Group> groups = new ArrayList<>();
 
   private static NpcWorkData parse(String json) {
@@ -56,6 +60,11 @@ public final class NpcWorkData extends SavedData {
           || !Set.of("running", "complete", "blocked", "cancelled").contains(job.status)
           || job.count < 1
           || job.count > 64) throw new IllegalArgumentException("Invalid saved team job");
+    for (var job : data.jobs)
+      if (job.neededItem == null || job.neededItem.length() > 128 || job.neededCount < 0
+          || job.neededCount > 256 || job.availableCount < 0 || job.availableCount > 4096
+          || job.supportAttempts < 0 || job.supportAttempts > 2)
+        throw new IllegalArgumentException("Invalid saved team progress");
     for (var group : data.groups)
       if (group == null
           || group.owner == null

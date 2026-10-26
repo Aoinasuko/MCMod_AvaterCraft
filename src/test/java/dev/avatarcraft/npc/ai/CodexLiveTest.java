@@ -20,6 +20,29 @@ class CodexLiveTest {
   @TempDir Path workspace;
 
   @Test
+  void blockedSpeechUsesTheConfiguredCharacterVoice() throws Exception {
+    var config = new CodexConfig();
+    if (System.getenv("AVATARCRAFT_CODEX_EXECUTABLE") != null)
+      config.executable = System.getenv("AVATARCRAFT_CODEX_EXECUTABLE");
+    var profile = Personality.preset("tortobu");
+    profile.instructions = "元気な案内役。安全に進められないときも落ち着いて所有者へ説明する。";
+    profile.speakingStyle = "一人称は『おれ』、語尾には『ぞ』を使う。";
+    try (var bridge = new CodexBridge(config, workspace)) {
+      bridge.initialize().get(40, TimeUnit.SECONDS);
+      var speech = NpcBlockedSpeech.generate(CompletableFuture.completedFuture(bridge), profile,
+          object("instruction", "ダイヤ10個を指定チェストへ収納", "reason", "採掘対象への安全な経路が見つからない",
+              "verifiedProgress", object("diamonds", 3, "stored", 0))).get(40, TimeUnit.SECONDS);
+      assertTrue(speech.contains("ぞ"), speech);
+      assertTrue(speech.contains("待") || speech.contains("止"), speech);
+      assertFalse(speech.contains("作業を保留しています"), speech);
+      assertFalse(speech.contains("目標を達成"), speech);
+      java.nio.file.Files.writeString(Path.of("build/npc-blocked-live-result.json"),
+          new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(
+              object("speakingStyle",profile.speakingStyle,"speech",speech,"verifiedState","BLOCKED")));
+    }
+  }
+
+  @Test
   void verifiedCompletionSpeechUsesConfiguredCharacterVoice() throws Exception {
     var config = new CodexConfig();
     if (System.getenv("AVATARCRAFT_CODEX_EXECUTABLE") != null)

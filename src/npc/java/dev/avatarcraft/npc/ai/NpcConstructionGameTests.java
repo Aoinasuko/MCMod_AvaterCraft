@@ -303,7 +303,7 @@ final class NpcConstructionGameTests {
     long start = System.nanoTime();
     h.onEachTick(
         () -> {
-          if (brain.waiting)
+          if (brain.waiting())
             java.util.concurrent.locks.LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(20));
           var plan = NpcBlueprints.get(h.getLevel().getServer()).plans.get(n.getUUID().toString());
           boolean complete =

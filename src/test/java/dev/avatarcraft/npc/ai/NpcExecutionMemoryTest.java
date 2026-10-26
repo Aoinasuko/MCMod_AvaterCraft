@@ -8,6 +8,17 @@ import java.util.*;
 import org.junit.jupiter.api.Test;
 
 class NpcExecutionMemoryTest {
+  @Test
+  void emptyResourceCoveragePersistsAcrossAcquisitionRestartsButNotNewGoals(){
+    var memory=new NpcExecutionMemory();
+    memory.searched("minecraft:overworld","find_blocks",object("block","#minecraft:logs","radius",16,
+        "origin",new Gson().toJsonTree(List.of(-1,64,-17))),object("ok",true,"blocks",new JsonArray()),10);
+    var loaded=new NpcExecutionMemory();loaded.restore(memory.save());
+    assertTrue(loaded.searchedEmpty("minecraft:overworld","#minecraft:logs",0,65,-16));
+    assertFalse(loaded.searchedEmpty("minecraft:overworld","#minecraft:logs",24,64,-17));
+    assertFalse(loaded.searchedEmpty("minecraft:overworld","minecraft:coal_ore",0,65,-16));
+    loaded.newGoal();assertFalse(loaded.searchedEmpty("minecraft:overworld","#minecraft:logs",0,65,-16));
+  }
   private static final String DIM = "minecraft:overworld";
 
   @Test
@@ -94,6 +105,15 @@ class NpcExecutionMemoryTest {
     m.walked(DIM, 0, 76, 0);
     m.walked(DIM, 0, 4, 0);
     assertTrue(m.returnPath(DIM, 0, 4, 0, 0, 76, 0).isEmpty());
+    assertTrue(m.returnCheckpoints(DIM,0,4,0,0,76,0).isEmpty());
+  }
+
+  @Test
+  void smallDropsAreOnlyReturnCheckpointsAndChestMayBeBesideTheTrail() {
+    var m=new NpcExecutionMemory();
+    m.walked(DIM,0,70,0);m.walked(DIM,1,68,0);m.walked(DIM,2,67,0);
+    assertTrue(m.returnPath(DIM,2,67,0,0,70,2).isEmpty());
+    assertEquals(List.of(List.of(2,67,0),List.of(0,70,0)),m.returnCheckpoints(DIM,2,67,0,0,70,2));
   }
 
   @Test

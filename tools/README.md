@@ -77,11 +77,13 @@ NPCのHTTPプロバイダーはJUnitの模擬APIで検証します（外部API�
 
 ## ローカル行動モデル
 
-`python tools/generate_npc_curriculum.py`で日英216,000組の命令・観察・計画・候補データを生成し、`python tools/train_npc_policy.py`でversion 4の5専門家を学習します。48→1000→1000→1を専門家ごとに持ち、計5,255,005パラメータ・21,020,020 bytesです。各候補では1専門家だけを使用します。既定は学習192,000組・40epoch、検証12,000組・独立評価12,000組。初期重みは生成先の`initial-policy.bin`へ保存します。言語理解は接続AI、ローカルモデルは構造化候補の順位付けです。推論はJavaのみで、利用者にPython・GPUの導入は不要です。`tools/export_npc_policy_examples.py`のログ抽出はレビュー資料用で、未レビューの選択結果を正解として自動学習しません。`tools/NpcCurriculumCheck.java`は全想定計画を実際のTaskPlanの契約で検証します。詳しくは [構成と学習手順](../Docs/NpcPolicyV4.md)。
+現在の行動モデルはv7です。前回の5 seed×4課題の実操作10,739件と以前の監査データを使用し、56→1419→1419→1の5専門家・10,486,415パラメータ・41,945,660 bytesを全層再学習しました。学習65,058件、検証11,997件、独立評価8,723件です。seed単位で分割し、重複候補配列を除外します。未実行候補と観測データのパディングには教師値を付けません。通常の入口	ools/train_npc_policy.pyもv7を呼び、--initial TrainingData/npc-v7/initial-policy.binでv6の元重みを指定します。出力先はuild/npc-policy-v7/で、検証前に配布重みを上書きしません。詳細は [v7データセット](../TrainingData/npc-v7/README_ja.md)、[25課題の検証報告](../Docs/NpcV7FiveTaskVerification20261026.md) を参照してください。従来の日英データは`python tools/generate_npc_curriculum.py`で再生成できます。
 
 `tools/NpcPolicyBenchmark.java` はJava 25のソースファイル実行で、コンパイル済みNPCクラス・NPCリソース・Gsonをクラスパスに指定して動かします。24候補の評価だけを測り、ワールド探索・経路探索・API応答時間は含みません。
 
-`tools/NpcToolCatalog.java` は同じクラスパスで実際の`NpcTools`定義をJSONへ抽出します。出力を`build/npc-tools.json`へ保存し、`python tools/generate_npc_tool_docs.py`で開発者用の`Docs/NpcTools.md`を生成します。全63種の引数名・型と日本語の実行条件を同期し、説明のないツールがあれば失敗します。
+`tools/NpcToolCatalog.java` は同じクラスパスで実際の`NpcTools`定義をJSONへ抽出します。出力を`build/npc-tools.json`へ保存し、`python tools/generate_npc_tool_docs.py`で開発者用の`Docs/NpcTools.md`を生成します。全67種の引数名・型と日本語の実行条件を同期し、説明のないツールがあれば失敗します。
+
+原木・石炭・畑・協力ダイヤ採掘・スケルトン討伐を前の失敗に左右されず採取する場合は、`python tools/run_npc_targeted_campaign.py`を使います。5 seed×5課題をそれぞれ初期化した隔離ワールドで実行し、最大5サーバーで並行処理します。共通のGradle起動引数が別ケースへ混ざらないよう、各JVMが引数を消費して初期結果を出すまで次の起動を待ちます。`--run-id`で採取を区別し、同じIDの終了済みケースは再実行せず再開します。元ログ・計画入出力・実状態とSHA-256を`build/npc-targeted-archive/<run-id>/`へ保存します。全ケース終了後に`python tools/report_npc_v7_verification.py --run-id <run-id>`で結果表、未実行候補を正解付けしない観測データ、計画入出力のgzip、持ち運べるログZIPを生成します。`--partial`は終了済みケースだけを集計します。`runNpcTargetedGameTest`は`AVATARCRAFT_NATURAL_SEED`と`AVATARCRAFT_TARGET_MISSION=logs/coal/farm/diamond/skeleton`で単独起動でき、`avatarcraft.qaOutputRoot`で記録先を絶対パスに固定します。
 
 ## アバターアンカーの検証
 
@@ -130,3 +132,19 @@ Unityの表示名・メニューはB.E.P 3DAvater Exporterです。`ExporterLang
 `python tools/generate_release_docs.py`で3ページを生成し、`python tools/validate_release_docs.py`で言語・ページ間リンク・アンカー・ローカル素材を検証します。`release/assets/guide.css`と`guide.js`は共通です。`release`へ旧Markdown資料を再生成しません。
 
 `python tools/package_release.py --revision html-guide`は過去の配布物を残してHTML版のZIPを作成します。3つのMOD、Assets用 `.unitypackage`、UPM用 `.tgz`、日英HTMLガイド、性格サンプルを収録し、UnityのGUIDとアセットの一致・全ファイルのハッシュを検証します。UnityPackageは依存パッケージを自動導入しないため、必要なNewtonsoft.Jsonの導入手順もガイドへ記載しています。
+
+## 周囲空間の観測と7×7ロード
+
+`observe_terrain()`は半径32の3次元球のロード済み地形・足場接続・資源位置を読み取り、`observe_entities()`は半径16の実体・落下アイテムの位置・速度・個数を返します。未ロード・省略・投影の限界を明示します。NPCごとの常時ロードは中心＋周囲3チャンク、7×7の49枚です。上位計画にも`terrain_32`と`entities_16`を渡します。
+
+同じ5 seed・5課題の比較は`python tools/run_npc_targeted_campaign.py --run-id 20261026-spatial32-entities16-chunks7-v7`で実行し、全件終了後に`python tools/report_npc_spatial_verification.py`で集計します。途中確認は同ツールの`--partial`です。v7の重みを前回と同じものに固定し、観測追加後のログを学習へ混ぜず別に保存します。検証中は共有のコンパイル済みクラスを更新しないでください。結果は [観測追加の検証報告](../Docs/NpcSpatialObservationVerification20261026.md) に出力します。
+
+## 水中移動・退避と道具支給の5 seed検証
+
+`NpcWaterTravel`は既知の水深1〜5の水面を通常の歩行探索へ接続し、水流ではダッシュと衝突を保った推進を使います。`NpcWaterSafety`は深い／深さ不明の水での潜水や酸素120以下を検出し、通常命令より先にローカルで空気へ退避します。位置や空気を人工的に補充しません。
+
+`AVATARCRAFT_QA_DIAMOND_TOOLS=true`、`AVATARCRAFT_QA_REALTIME=true`、`AVATARCRAFT_QA_PLAN_LIMIT=8`、`AVATARCRAFT_QA_WALL_SECONDS=360`を設定し、`python tools/run_npc_targeted_campaign.py --run-id 20261026-water-safety-tools-v7`で5 seed×5課題を実行します。原木・石炭・ダイヤは各NPCにダイヤのつるはし・シャベル・斧を各3本支給します。畑と戦闘にはこの追加道具を支給しません。戦闘の防具・剣は従来どおりです。`python tools/report_npc_water_safety_campaign.py --partial`で途中経過、引数なしで全25件の集計を行います。検証中はコンパイル済みクラスを更新しないでください。結果は [水中移動・退避の検証報告](../Docs/NpcWaterSafetyToolsVerification20261026.md)。
+
+## 水のプールの3課題
+
+`python tools/run_npc_water_study.py`は隔離した24×16・深さ4のプールと木の足場を作り、浮遊アイテム回収、離れたチェストの回収、夜のスケルトン討伐を実計画AIで試します。3ケースを独立したワールドで並行実行し、各4分・実計画6回で区切ります。50ms/Tick待ちで物理を進め、NPCの酸素・体力・入水・所持数・位置を記録します。終了済みのケースは同じ採取IDでは再試行しません。`--summarize-only`は既存ログだけを再集計します。結果は [水のプール検証報告](../Docs/NpcWaterPoolStudy20261026.md)。単独実行は`AVATARCRAFT_WATER_CASE=drops/chest/combat`を指定して`tools/dev.ps1 -Task runNpcWaterGameTest`です。

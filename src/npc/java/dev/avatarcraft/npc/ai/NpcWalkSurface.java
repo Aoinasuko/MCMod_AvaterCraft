@@ -31,12 +31,17 @@ public final class NpcWalkSurface {
 
   public static Vec3 point(Mob npc, BlockPos cell) {
     double height = height(npc.level(), npc, cell);
+    if(!Double.isFinite(height)&&npc instanceof CompanionEntity companion)height=NpcWaterTravel.height(companion,cell);
     return new Vec3(
         cell.getX() + .5, Double.isFinite(height) ? height : cell.getY(), cell.getZ() + .5);
   }
 
   public static BlockPos standingCell(CompanionEntity npc) {
     var p = npc.blockPosition();
+    if(npc.isInWater()){
+      var column=NpcWaterTravel.current(npc);var surface=new BlockPos(p.getX(),column.top()+1,p.getZ());
+      if(column.known()&&NpcWaterTravel.swimmable(npc,surface))return surface;
+    }
     var shape =
         npc.level().getBlockState(p).getCollisionShape(npc.level(), p, CollisionContext.of(npc));
     return npc.onGround() && !shape.isEmpty() && shape.max(Direction.Axis.Y) <= 1.00001
@@ -140,7 +145,7 @@ public final class NpcWalkSurface {
     return true;
   }
 
-  private static boolean hazard(Block b) {
+  static boolean hazard(Block b) {
     return b == Blocks.MAGMA_BLOCK
         || b == Blocks.CACTUS
         || b == Blocks.FIRE

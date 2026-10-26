@@ -39,6 +39,7 @@ public final class NpcSkills {
   private NpcExpedition expedition;
   private NpcWorkRoute workRoute;
   private NpcToolQueue areaWork;
+  private NpcFarming farming;
   private NpcConstruction construction;
   private NpcLongTravel longTravel;
   private final int acquisitionDepth;
@@ -47,12 +48,15 @@ public final class NpcSkills {
   private final NpcFollowing following;
   private final TravelPace travelPace = new TravelPace();
   private boolean continuousWork;
+  private boolean reservedLeg;
+  void reservedLeg() { reservedLeg = true; }
 
   void continuousWork(boolean enabled) {
     continuousWork = enabled;
   }
 
   private double movementSpeed(double distanceSquared, boolean precise) {
+    if (npc.getMoveControl() instanceof NpcStepMoveControl control) control.precise(precise);
     if (continuousWork && !precise && distanceSquared > 2.25 && canSprint(npc)) {
       npc.setSprinting(true);
       npc.getNavigation().setSpeedModifier(2.2);
@@ -62,6 +66,17 @@ public final class NpcSkills {
     npc.setSprinting(travelPace.sprinting());
     npc.getNavigation().setSpeedModifier(travelPace.speed());
     return travelPace.speed();
+  }
+
+  /**
+   * At player pace the body coasts about 1.2 times its speed after input stops, enough to slide off
+   * a one-block stair. Keep steering onto the target until it has nearly stopped.
+   */
+  private boolean settling(BlockPos target) {
+    if (!npc.onGround() || npc.getDeltaMovement().horizontalDistanceSqr() <= .08 * .08) return false;
+    var point = NpcWalkSurface.point(npc, target);
+    npc.getMoveControl().setWantedPosition(point.x, point.y, point.z, 1.0);
+    return true;
   }
 
   static boolean canSprint(CompanionEntity npc) {
@@ -94,6 +109,8 @@ public final class NpcSkills {
     BlockPos actorDetour;
     long detourUntil;
     int detours;
+    /** The walking goal was widened to cells around the named target; adopt the route's end. */
+    boolean retarget;
     NpcWalkingRoute walking;
     net.minecraft.world.level.pathfinder.Path walkingPath;
     long checkedPath;
@@ -102,6 +119,7 @@ public final class NpcSkills {
     BlockPos entityDestination, portalExit;
     final Set<LivingEntity> guardedTargets = new HashSet<>();
     boolean returningToPost;
+    boolean waterMode;
 
     Action(
         String name,
@@ -336,6 +354,10 @@ public final class NpcSkills {
   }
 
   private CompletionStage<JsonObject> perform(String name, JsonObject args) {
+    if(npc.waterSafety.active()&&!Set.of("observe","observe_terrain","observe_entities","inspect_entities","inspect_entity","inspect_block","find_blocks","find_chests","find_anchors","team_status","read_signs","stop","say").contains(name))
+      return immediate(error("WATER_EMERGENCY: local breathing recovery has priority; retry after recovery"));
+    if(name.equals("observe_terrain"))return immediate(NpcSpatialObservation.terrain(npc,true,true));
+    if(name.equals("observe_entities"))return immediate(NpcSpatialObservation.entities(npc));
     if (name.equals("observe")) return immediate(observe());
     if (name.equals("find_blocks")) return immediate(findBlocks(args));
     if (name.equals("find_chests")) return immediate(findChests(args));
@@ -355,12 +377,22 @@ public final class NpcSkills {
     if (name.equals("team_status"))
       return immediate(NpcTeams.status(npc, args.get("entity_id").getAsInt()));
     if (name.equals("forget_location"))
-      return immediate(object("ok", npc.locations.forget(args.get("name").getAsString())));
+      return immediate(object("ok", true, "removed", npc.locations.forget(args.get("name").getAsString()),
+          "locations", npc.locations.snapshot()));
+    if (name.equals("remember_reference")) {
+      try {
+        var place = NpcCommandContext.reference(npc, args.get("name").getAsString(), args.get("reference").getAsString());
+        return immediate(npc.locations.remember(place) ? object("ok",true,"locations",npc.locations.snapshot())
+            : error("Location memory is full (8); forget an unnecessary named place first"));
+      } catch (RuntimeException e) { return immediate(error("Cannot resolve command reference: " + e.getMessage())); }
+    }
     if (name.equals("remember_location")) {
       var p = pos(args);
-      if (!permitted(p, 16)) return immediate(error("Location must be in the nearby loaded area"));
-      boolean isChest = level().getBlockState(p).getBlock() instanceof ChestBlock;
-      if (isChest && chest(p, 16) == null) return immediate(error("Chest is inaccessible"));
+      var captured = NpcCommandContext.delivery(npc);
+      boolean frozen = captured != null && p.equals(new BlockPos(captured.x(), captured.y(), captured.z()));
+      if (!frozen && !permitted(p, 16)) return immediate(error("Location must be nearby or the server-observed command chest"));
+      boolean isChest = frozen || level().getBlockState(p).getBlock() instanceof ChestBlock;
+      if (!frozen && isChest && chest(p, 16) == null) return immediate(error("Chest is inaccessible"));
       boolean saved =
           npc.locations.remember(
               new dev.avatarcraft.npc.NpcLocationMemory.Place(
@@ -398,6 +430,14 @@ public final class NpcSkills {
       return immediate(object("ok", true, "blueprint_id", p.id));
     }
     if (name.equals("release_item")) return interactions.execute(name, args);
+    releaseCompleted();
+    if(name.equals("harvest_replant")){
+      if(busy())return immediate(error("Another action is still in progress"));
+      var p=pos(args);
+      if(!permitted(p,128))return immediate(error("Farm must be in the permitted loaded area"));
+      farming=new NpcFarming(npc,p,args.get("radius").getAsInt(),acquisitionDepth,resourceChain);
+      return farming.result;
+    }
     if (busy()) return immediate(error("Another game action is still in progress"));
     if (Set.of("create_blueprint", "gather_blueprint", "build_blueprint").contains(name)) {
       construction = new NpcConstruction(npc, name, args, acquisitionDepth + 1, resourceChain);
@@ -601,7 +641,14 @@ public final class NpcSkills {
       }
     }
     if (Set.of("move_to", "move_precisely").contains(name)
-        && npc.distanceToSqr(Vec3.atBottomCenterOf(pos(args))) > 128 * 128) {
+        && (npc.distanceToSqr(Vec3.atBottomCenterOf(pos(args))) > 128 * 128
+            || !reservedLeg && Math.abs(pos(args).getY()-npc.getY())>16
+                && npc.executionMemory.returnPath(level().dimension().identifier().toString(),
+                    npc.blockPosition().getX(),npc.blockPosition().getY(),npc.blockPosition().getZ(),
+                    pos(args).getX(),pos(args).getY(),pos(args).getZ()).isEmpty()
+                && !npc.executionMemory.returnCheckpoints(level().dimension().identifier().toString(),
+                    npc.blockPosition().getX(),npc.blockPosition().getY(),npc.blockPosition().getZ(),
+                    pos(args).getX(),pos(args).getY(),pos(args).getZ()).isEmpty())) {
       longTravel = new NpcLongTravel(npc, name, pos(args), acquisitionDepth, resourceChain);
       return longTravel.result;
     }
@@ -638,6 +685,7 @@ public final class NpcSkills {
   }
 
   public void tick() {
+    if(farming!=null){var current=farming;current.tick();if(farming==current&&current.result.isDone()){farming=null;current.close();}return;}
     if (npc.containerAnimation.busy()) return;
     if (action != null
         && action.name.equals("guard")
@@ -655,51 +703,51 @@ public final class NpcSkills {
       else return;
     }
     if (longTravel != null) {
-      longTravel.tick();
-      if (longTravel.result.isDone()) longTravel = null;
+      var current = longTravel; current.tick();
+      if (longTravel == current && current.result.isDone()) longTravel = null;
       return;
     }
     if (construction != null) {
-      construction.tick();
-      if (construction.result.isDone()) {
-        construction.close();
+      var current = construction; current.tick();
+      if (construction == current && current.result.isDone()) {
+        current.close();
         construction = null;
       }
       return;
     }
     if (areaWork != null) {
-      areaWork.tick();
-      if (areaWork.result.isDone()) {
-        areaWork.close();
+      var current = areaWork; current.tick();
+      if (areaWork == current && current.result.isDone()) {
+        current.close();
         areaWork = null;
       }
       return;
     }
     if (workRoute != null) {
-      workRoute.tick();
-      if (workRoute.result.isDone()) {
-        workRoute.close();
+      var current = workRoute; current.tick();
+      if (workRoute == current && current.result.isDone()) {
+        current.close();
         workRoute = null;
       }
       return;
     }
     if (acquisition != null) {
-      acquisition.tick();
-      if (acquisition.result.isDone()) {
-        acquisition.close();
+      var current = acquisition; current.tick();
+      if (acquisition == current && current.result.isDone()) {
+        current.close();
         acquisition = null;
       }
       return;
     }
     if (smelting != null) {
-      smelting.tick();
-      if (smelting.result.isDone()) smelting = null;
+      var current = smelting; current.tick();
+      if (smelting == current && current.result.isDone()) smelting = null;
       return;
     }
     if (expedition != null) {
-      expedition.tick();
-      if (expedition.result.isDone()) {
-        expedition.close();
+      var current = expedition; current.tick();
+      if (expedition == current && current.result.isDone()) {
+        current.close();
         expedition = null;
       }
       return;
@@ -845,6 +893,12 @@ public final class NpcSkills {
         }
         if (avoidStationaryActor(current, target, now)) return;
       }
+      if (current.name.equals("move_to") && npc.isInWater() && distance<=2.25 && NpcWaterTravel.swimmable(npc,target)){
+        boolean sameCell=npc.blockPosition().getX()==target.getX()&&npc.blockPosition().getZ()==target.getZ();
+        if(distance<=reach&&sameCell){finish(object("ok",true,"position",vector(npc.position())));return;}
+        var point=NpcWalkSurface.point(npc,target);
+        npc.getMoveControl().setWantedPosition(point.x,point.y,point.z,NpcWaterTravel.flowing(npc)?2.2:1.2);return;
+      }
       if (current.name.equals("move_to")
           && npc.onGround()
           && distance <= 2.25
@@ -852,7 +906,7 @@ public final class NpcSkills {
         boolean sameCell =
             npc.blockPosition().getX() == target.getX()
                 && npc.blockPosition().getZ() == target.getZ();
-        if (distance <= reach && sameCell) {
+        if (distance <= reach && sameCell && !settling(target)) {
           finish(object("ok", true, "position", vector(npc.position())));
           return;
         }
@@ -917,6 +971,7 @@ public final class NpcSkills {
       }
       npc.getNavigation().stop();
       if (current.name.equals("move_to")) {
+        if (settling(target)) return;
         finish(object("ok", true, "position", vector(npc.position())));
         return;
       }
@@ -1135,7 +1190,7 @@ public final class NpcSkills {
     }
     a.checkedPath = now + 5;
     if (a.walkingPath == null) {
-      if (!npc.onGround()) return;
+      if (!npc.onGround()&&!npc.isInWater()) return;
       if (a.walking == null) {
         var goals = new ArrayList<BlockPos>();
         for (var p :
@@ -1161,7 +1216,7 @@ public final class NpcSkills {
       }
       a.walkingPath = a.walking.path();
     }
-    npc.getNavigation().moveTo(a.walkingPath, speed);
+    NpcWaterTravel.follow(npc,a.walkingPath,speed);
     var waypoint = a.walkingPath.isDone() ? destination : a.walkingPath.getNextNodePos();
     if (!a.name.equals("guard")
         && a.movement.stalled(
@@ -1264,7 +1319,7 @@ public final class NpcSkills {
       }
     }
     if (current.walkingPath == null) {
-      if (!npc.onGround()) {
+      if (!npc.onGround()&&!npc.isInWater()) {
         if (current.movement.stalled(
             now, npc.getX(), npc.getY(), npc.getZ(), target.getX(), target.getY(), target.getZ()))
           finish(error("MOVEMENT_STALLED: no grounded route progress for 20 seconds"));
@@ -1284,6 +1339,11 @@ public final class NpcSkills {
         boolean interaction =
             !current.args.has("_arrival")
                 && level().getBlockEntity(target) instanceof net.minecraft.world.Container;
+        // A planner often names the block itself or the air above the floor; stand in the
+        // nearest supported cell instead of rejecting the whole move. Precise moves stay exact.
+        current.retarget =
+            interaction
+                || !current.args.has("_arrival") && !NpcWaterTravel.passable(npc, target);
         current.walking =
             interaction
                 ? NpcWalkingRoute.to(
@@ -1294,7 +1354,9 @@ public final class NpcSkills {
                             && !p.equals(target)
                             && visibleFrom(
                                 Vec3.atBottomCenterOf(p).add(0, npc.getEyeHeight(), 0), target))
-                : new NpcWalkingRoute(npc, target, List.of(target));
+                : current.retarget
+                    ? NpcWalkingRoute.to(npc, target, p -> p.distSqr(target) <= near(target))
+                    : new NpcWalkingRoute(npc, target, List.of(target));
       }
       var state = current.walking.poll();
       if (state == WalkingPathSearch.State.SEARCHING) {
@@ -1313,9 +1375,9 @@ public final class NpcSkills {
       }
       current.walkingPath = current.walking.path();
       var end = current.walkingPath.getEndNode();
-      if (end != null
-          && !current.args.has("_arrival")
-          && level().getBlockEntity(target) instanceof net.minecraft.world.Container) {
+      if (end != null && current.retarget) {
+        if (!current.args.has("requested"))
+          current.args.add("requested", vector(Vec3.atBottomCenterOf(target)));
         current.args.addProperty("x", end.x);
         current.args.addProperty("y", end.y);
         current.args.addProperty("z", end.z);
@@ -1326,7 +1388,50 @@ public final class NpcSkills {
       npc.getNavigation().moveTo(current.walkingPath, speed);
       current.progressTick = now;
     }
+    NpcWaterTravel.follow(npc,current.walkingPath,speed);
     return true;
+  }
+
+  /** Prefer a cell touching the named one (the floor below, a side, the top); else a diagonal. */
+  private double near(BlockPos target) {
+    for (var direction : Direction.values())
+      if (NpcWaterTravel.passable(npc, target.relative(direction))) return 1;
+    return 2;
+  }
+
+  private boolean waterWalking(Action a,BlockPos target,double speed,long now){
+    a.waterMode=true;
+    if(npc.distanceToSqr(NpcWalkSurface.point(npc,target))<.64)return true;
+    if(a.walkingPath==null||a.walkingPath.isDone()||now>=a.checkedPath&&npc.horizontalCollision){
+      a.checkedPath=now+80;
+      a.walkingPath=npc.getNavigation().createPath(target,0);
+      if(a.walkingPath==null||!a.walkingPath.canReach()){
+        net.minecraft.world.level.pathfinder.Path best=null;double score=Double.POSITIVE_INFINITY;
+        for(var p:BlockPos.betweenClosed(npc.blockPosition().offset(-8,-2,-8),npc.blockPosition().offset(8,6,8))){
+          if(!NpcWalkSurface.standable(npc,p))continue;
+          double cost=p.distSqr(target)+.2*p.distSqr(npc.blockPosition());
+          if(cost>=score)continue;
+          var candidate=npc.getNavigation().createPath(p,0);
+          if(candidate!=null&&candidate.canReach()){best=candidate;score=cost;}
+        }
+        a.walkingPath=best;
+      }
+      if(a.walkingPath!=null&&!a.walkingPath.isDone()){
+        var first=a.walkingPath.getNextNodePos();
+        if(first.getX()==npc.blockPosition().getX()&&first.getZ()==npc.blockPosition().getZ())a.walkingPath.advance();
+      }
+    }
+    if(a.walkingPath!=null){
+      npc.getNavigation().moveTo(a.walkingPath,Math.min(1.2,speed));
+      if(!a.walkingPath.isDone()){
+        var next=a.walkingPath.getNextNodePos();
+        npc.getMoveControl().setWantedPosition(next.getX()+.5,Math.max(npc.getY(),next.getY()),next.getZ()+.5,Math.min(1.2,speed));
+      }
+    }
+    npc.getJumpControl().jump();
+    if(a.movement.stalled(now,npc.getX(),npc.getY(),npc.getZ(),target.getX(),target.getY(),target.getZ()))
+      finish(error("MOVEMENT_STALLED: no observed swimming route to shore or target"));
+    return false;
   }
 
   private List<BlockPos> rememberedReturn(BlockPos target) {
@@ -1358,9 +1463,19 @@ public final class NpcSkills {
       current.actorDetour = null;
       current.progressTick = now;
     }
-    if (now - current.progressTick < 20 || current.detours >= 4) return false;
+    // Only a body that has really stopped is blocked, and only by what stands on its route: the
+    // straight line to the goal may cross a wall with animals behind it.
+    long idle =
+        current.name.equals("move_to")
+            ? current.movement.idleTicks(now)
+            : now - current.progressTick;
+    if (idle < 20 || current.detours >= 4) return false;
+    var heading =
+        current.walkingPath != null && !current.walkingPath.isDone()
+            ? current.walkingPath.getNextNodePos()
+            : target;
     var direction =
-        NpcWalkSurface.point(npc, target).subtract(npc.position()).multiply(1, 0, 1).normalize();
+        NpcWalkSurface.point(npc, heading).subtract(npc.position()).multiply(1, 0, 1).normalize();
     var corridor = npc.getBoundingBox().expandTowards(direction.scale(1.5));
     if (level()
         .getEntities(
@@ -1455,6 +1570,17 @@ public final class NpcSkills {
       if (changed) npc.exhaust(.005f);
       finish(object("ok", changed && !level().getBlockState(target).equals(state)));
     }
+  }
+
+  boolean canPlaceAt(BlockPos target) {
+    if (!mayChange(target, 4) || !level().getBlockState(target).canBeReplaced()) return false;
+    for (var face : Direction.values()) {
+      var support = target.relative(face.getOpposite());
+      if (mayChange(support, 5) && !level().getBlockState(support).getCollisionShape(level(), support).isEmpty()
+          && visibleHit(Vec3.atCenterOf(support).add(face.getStepX() * .5, face.getStepY() * .5,
+              face.getStepZ() * .5), support)) return true;
+    }
+    return false;
   }
 
   private JsonObject place(JsonObject args) {
@@ -1581,7 +1707,8 @@ public final class NpcSkills {
           && level().getBlockState(p).isAir()
           && level().getBlockState(p.below()).isFaceSturdy(level(), p.below(), Direction.UP)
           && !npc.getBoundingBox().intersects(new AABB(p))
-          && level().getEntities(npc, new AABB(p)).isEmpty()) sites.add(p.immutable());
+          && level().getEntities(npc, new AABB(p)).isEmpty()
+          && canPlaceAt(p)) sites.add(p.immutable());
     sites.sort(Comparator.comparingDouble(p -> npc.distanceToSqr(Vec3.atCenterOf(p))));
     if (sites.isEmpty()) return immediate(error("No accessible empty supported workstation site"));
     var p = sites.getFirst();
@@ -1987,6 +2114,10 @@ public final class NpcSkills {
         true,
         "health",
         npc.getHealth(),
+        "air",npc.getAirSupply(),
+        "water_safety",npc.waterSafety.observation(),
+        "in_water",npc.isInWater(),
+        "water_current",npc.isInWater()&&NpcWaterTravel.flowing(npc),
         "food",
         npc.foodLevel(),
         "using_item",
@@ -2009,6 +2140,8 @@ public final class NpcSkills {
         entities,
         "locations",
         npc.locations.snapshot(),
+        "command_context",
+        npc.commandContext(),
         "dimension",
         level().dimension().identifier().toString(),
         "action",
@@ -2084,6 +2217,7 @@ public final class NpcSkills {
     action = null;
     following.stop();
     travelPace.reset();
+    if (npc.getMoveControl() instanceof NpcStepMoveControl control) control.precise(false);
     npc.setSprinting(false);
     npc.getNavigation().stop();
     npc.setMining(false);
@@ -2098,6 +2232,10 @@ public final class NpcSkills {
           && result.get("ok").getAsBoolean()
           && current.started != null)
         result.addProperty("moved_distance", npc.position().distanceTo(current.started));
+      if (current.name.equals("move_to") && current.detours > 0)
+        result.addProperty("actorDetours", current.detours);
+      if (current.name.equals("move_to") && current.args.has("requested"))
+        result.add("requestedTarget", current.args.get("requested"));
       if (current.name.equals("dig"))
         level().destroyBlockProgress(npc.getId(), pos(current.args), -1);
       current.result.complete(result);
@@ -2108,6 +2246,7 @@ public final class NpcSkills {
     generation++;
     npc.containerAnimation.close();
     interactions.close();
+    var farm=farming;farming=null;if(farm!=null)farm.close();
     var travel = longTravel;
     longTravel = null;
     if (travel != null) travel.close();
@@ -2134,6 +2273,7 @@ public final class NpcSkills {
 
   public boolean busy() {
     return action != null
+        || farming != null
         || longTravel != null
         || workRoute != null
         || areaWork != null
@@ -2143,5 +2283,16 @@ public final class NpcSkills {
         || expedition != null
         || interactions.busy()
         || npc.containerAnimation.busy();
+  }
+
+  private void releaseCompleted() {
+    if(farming!=null&&farming.result.isDone()){var done=farming;farming=null;done.close();}
+    if (acquisition != null && acquisition.result.isDone()) { var done=acquisition; acquisition=null; done.close(); }
+    if (workRoute != null && workRoute.result.isDone()) { var done=workRoute; workRoute=null; done.close(); }
+    if (areaWork != null && areaWork.result.isDone()) { var done=areaWork; areaWork=null; done.close(); }
+    if (construction != null && construction.result.isDone()) { var done=construction; construction=null; done.close(); }
+    if (expedition != null && expedition.result.isDone()) { var done=expedition; expedition=null; done.close(); }
+    if (longTravel != null && longTravel.result.isDone()) { var done=longTravel; longTravel=null; done.close(); }
+    if (smelting != null && smelting.result.isDone()) smelting=null;
   }
 }

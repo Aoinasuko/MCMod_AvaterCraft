@@ -24,6 +24,7 @@ final class NpcWalkingRoute {
   private final long started;
   private boolean incomplete;
   private boolean unknownGoals;
+  private String limitReason = "";
 
   NpcWalkingRoute(CompanionEntity npc, BlockPos destination, Collection<BlockPos> goals) {
     this(npc, destination, goals, p -> true);
@@ -77,6 +78,7 @@ final class NpcWalkingRoute {
     if (search.state() != WalkingPathSearch.State.SEARCHING) return search.state();
     if (npc.level().getGameTime() - started > 240) {
       incomplete = true;
+      limitReason = "TIME_LIMIT";
       return WalkingPathSearch.State.LIMIT;
     }
     var server = npc.level().getServer();
@@ -103,6 +105,16 @@ final class NpcWalkingRoute {
 
   boolean incomplete() {
     return incomplete || search.state() == WalkingPathSearch.State.LIMIT;
+  }
+
+  com.google.gson.JsonObject diagnostics() {
+    return CodexBridge.object(
+        "state", search.state().name(), "nodes", search.expanded(),
+        "elapsedTicks", npc.level().getGameTime() - started,
+        "unloaded", terrain.unloaded, "unknownGoals", unknownGoals,
+        "reason", !limitReason.isEmpty() ? limitReason
+            : search.state() == WalkingPathSearch.State.LIMIT ? "NODE_LIMIT"
+            : terrain.unloaded || unknownGoals ? "UNLOADED" : search.state().name());
   }
 
   List<BlockPos> points() {
@@ -137,7 +149,7 @@ final class NpcWalkingRoute {
   }
 
   static boolean validAhead(CompanionEntity npc, Path path) {
-    var terrain = new Terrain(npc, path.getTarget(), 8);
+    var terrain = new Terrain(npc, path.getTarget(), 0);
     for (int i = path.getNextNodeIndex();
         i < Math.min(path.getNodeCount(), path.getNextNodeIndex() + 6);
         i++) {
@@ -154,7 +166,7 @@ final class NpcWalkingRoute {
   }
 
   static boolean validPoints(CompanionEntity npc, List<BlockPos> points) {
-    var terrain = new Terrain(npc, null, 8);
+    var terrain = new Terrain(npc, null, 0);
     for (int i = 0; i < points.size(); i++) {
       var p = points.get(i);
       if (!terrain.stand(p) || i > 0 && !terrain.transition(cell(points.get(i - 1)), cell(p)))
@@ -169,7 +181,7 @@ final class NpcWalkingRoute {
   }
 
   static BlockPos landing(CompanionEntity npc, BlockPos preferred) {
-    var terrain = new Terrain(npc, null, 8);
+    var terrain = new Terrain(npc, null, 0);
     if (npc.distanceToSqr(net.minecraft.world.phys.Vec3.atBottomCenterOf(preferred)) <= 120 * 120
         && terrain.stand(preferred)) return preferred;
     BlockPos best = null;
@@ -202,8 +214,12 @@ final class NpcWalkingRoute {
   }
 
   private static final class Terrain implements WalkingPathSearch.Terrain {
+    /** About a four-block detour: step around a standing creature, but never treat it as a wall. */
+    static final int ACTOR_PENALTY = 40;
+
     final CompanionEntity npc;
     final Map<Long, Boolean> cache = new HashMap<>();
+    // Creatures move, so where they stood when the search began costs extra but stays passable.
     final Set<Long> occupied = new HashSet<>();
     final BlockPos allowed;
     Predicate<BlockPos> permitted = p -> true;
@@ -212,6 +228,7 @@ final class NpcWalkingRoute {
     Terrain(CompanionEntity npc, BlockPos allowed, int actorRange) {
       this.npc = npc;
       this.allowed = allowed;
+      if (actorRange <= 0) return;
       for (var actor :
           npc
               .level()
@@ -246,28 +263,32 @@ final class NpcWalkingRoute {
       return true;
     }
 
+    @Override
+    public int penalty(WalkingPathSearch.Cell p) {
+      long key = BlockPos.asLong(p.x(), p.y(), p.z());
+      return occupied.contains(key) && (allowed == null || allowed.asLong() != key)
+          ? ACTOR_PENALTY
+          : 0;
+    }
+
     private boolean compute(BlockPos p) {
       if (!permitted.test(p)) return false;
-      if (occupied.contains(p.asLong()) && !p.equals(allowed)) return false;
       if (!npc.level().hasChunkAt(p)
           || !npc.level().hasChunkAt(p.below())
           || !npc.level().hasChunkAt(p.above())) {
         unloaded = true;
         return false;
       }
-      return NpcWalkSurface.standable(npc, p);
+      return NpcWaterTravel.passable(npc, p);
     }
 
     public boolean transition(WalkingPathSearch.Cell from, WalkingPathSearch.Cell to) {
       var a = new BlockPos(from.x(), from.y(), from.z());
       var b = new BlockPos(to.x(), to.y(), to.z());
-      double ay = NpcWalkSurface.height(npc.level(), npc, a),
-          by = NpcWalkSurface.height(npc.level(), npc, b);
+      double ay = NpcWaterTravel.height(npc, a),
+          by = NpcWaterTravel.height(npc, b);
       if (!Double.isFinite(ay)) ay = npc.getY();
-      return Double.isFinite(by)
-          && by - ay <= 1.00001
-          && ay - by <= 1.25001
-          && (Math.abs(ay - by) < 1e-5 || NpcWalkSurface.stepClear(npc, a, b, ay, by));
+      return NpcWaterTravel.transition(npc,a,b,ay,by);
     }
   }
 }

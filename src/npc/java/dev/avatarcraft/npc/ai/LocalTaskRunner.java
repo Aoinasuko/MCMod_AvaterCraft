@@ -62,8 +62,17 @@ public final class LocalTaskRunner implements AutoCloseable {
       return List.of();
     }
 
+    default List<Option> explorationFallback(TaskPlan.Step step, Set<String> visited,
+        int actions, JsonArray targets) {
+      return exploration(step, visited, actions, new JsonArray());
+    }
+
     default void record(JsonObject selection) {}
     default void event(String kind, JsonObject details) {}
+    default JsonObject candidateContext(String tool, JsonObject args) { return new JsonObject(); }
+    default boolean harvestBeforePickup(TaskPlan.Step step, JsonArray targets, JsonObject observation) {
+      return false;
+    }
 
     default boolean storageReachable(JsonObject chest) {
       return distance(observe(), vector(chest)) <= 3;
@@ -132,6 +141,8 @@ public final class LocalTaskRunner implements AutoCloseable {
   public boolean needsReplan() {
     return !closed && !problem.isEmpty();
   }
+
+  public void rejectCompletion(String reason) { problem=reason; }
 
   public String problem() {
     return problem;
@@ -468,7 +479,8 @@ public final class LocalTaskRunner implements AutoCloseable {
           lastFailure = "Inventory is full";
           break;
         }
-        if (s.action().equals("collect") && o.has("drops")) {
+        if (s.action().equals("collect") && o.has("drops")
+            && !world.harvestBeforePickup(s, blocks, o)) {
           for (var e : o.getAsJsonArray("drops")) {
             var drop = e.getAsJsonObject();
             if (!NpcResources.matches(drop, s.target())) continue;
@@ -779,6 +791,10 @@ public final class LocalTaskRunner implements AutoCloseable {
             Collections.unmodifiableSet(new LinkedHashSet<>(visited)),
             explorationActions,
             targets)) option(out, option, "exploration");
+    if (out.isEmpty() && !targets.isEmpty())
+      for (var option : world.explorationFallback(s,
+          Collections.unmodifiableSet(new LinkedHashSet<>(visited)), explorationActions, targets))
+        option(out, option, "exploration");
     if (out.isEmpty()) lastFailure = "安全に進める経路・掘り下げ先がありません。液体・崩落・保護・範囲・道具を確認してください";
   }
 
@@ -837,6 +853,8 @@ public final class LocalTaskRunner implements AutoCloseable {
 
   private JsonObject context(TaskPlan.Step s, JsonObject o, Candidate c) {
     var result = c.context.deepCopy();
+    for (var field : world.candidateContext(c.tool, c.args).entrySet())
+      result.add(field.getKey(), field.getValue());
     result.addProperty(
         "target_missing", c.tag.equals("exploration") || scannedBlocks && blocks.isEmpty() ? 1 : 0);
     result.addProperty(

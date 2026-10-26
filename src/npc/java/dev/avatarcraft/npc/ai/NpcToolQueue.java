@@ -367,7 +367,7 @@ final class NpcToolQueue implements AutoCloseable {
           || b instanceof TrapDoorBlock
           || b instanceof FenceGateBlock
           || b instanceof BedBlock
-          || b instanceof CropBlock
+          || b instanceof CropBlock crop && !crop.isMaxAge(state)
           || b instanceof NetherPortalBlock
           || b instanceof EndPortalBlock
           || b instanceof EndPortalFrameBlock
@@ -375,7 +375,7 @@ final class NpcToolQueue implements AutoCloseable {
       if (!level.getFluidState(p).isEmpty()
           || level.getBlockState(p.above()).getBlock() instanceof FallingBlock)
         return "Unsafe fluid/gravity excavation";
-      for (var d : Direction.values())
+      for (var d : state.getBlock() instanceof CropBlock ? List.<Direction>of() : List.of(Direction.values()))
         if (!level.hasChunkAt(p.relative(d)) || !level.getFluidState(p.relative(d)).isEmpty())
           return "Fluid/unloaded neighbour";
     }

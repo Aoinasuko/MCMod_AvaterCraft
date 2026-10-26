@@ -5,16 +5,17 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.neoforged.neoforge.common.world.chunk.*;
 
-/** Persistent entity-owned ticking tickets. Each NPC owns its own overlapping 3x3 square. */
+/** Persistent entity-owned ticking tickets. Each NPC owns its own overlapping 7x7 square. */
 public final class NpcChunkLoading {
+  public static final int RADIUS = 3;
   public static final TicketController CONTROLLER = new TicketController(bep_3davater_companion.id("companions"));
   private ServerLevel level;
   private Set<Long> chunks = Set.of();
 
   public static Set<Long> square(int x, int z) {
     var result = new LinkedHashSet<Long>();
-    for (int dx = -1; dx <= 1; dx++)
-      for (int dz = -1; dz <= 1; dz++) result.add(ChunkPos.pack(x + dx, z + dz));
+    for (int dx = -RADIUS; dx <= RADIUS; dx++)
+      for (int dz = -RADIUS; dz <= RADIUS; dz++) result.add(ChunkPos.pack(x + dx, z + dz));
     return Set.copyOf(result);
   }
 
