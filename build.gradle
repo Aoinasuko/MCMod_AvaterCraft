@@ -16,6 +16,11 @@ sourceSets {
         compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
         runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
     }
+    // Development GameTests: loaded with the companion mod in dev runs, never packed into npcJar.
+    npcGameTest {
+        compileClasspath += sourceSets.npc.output + sourceSets.npc.compileClasspath
+        runtimeClasspath += sourceSets.npc.output + sourceSets.npc.runtimeClasspath
+    }
     test {
         compileClasspath += sourceSets.npc.output + sourceSets.player.output
         runtimeClasspath += sourceSets.npc.output + sourceSets.player.output
@@ -127,7 +132,7 @@ neoForge {
     mods {
         bep_3davater_loader { sourceSet sourceSets.main }
         bep_3davater_player { sourceSet sourceSets.player }
-        bep_3davater_companion { sourceSet sourceSets.npc }
+        bep_3davater_companion { sourceSet sourceSets.npc; sourceSet sourceSets.npcGameTest }
     }
 }
 tasks.register('npcJar', Jar) {

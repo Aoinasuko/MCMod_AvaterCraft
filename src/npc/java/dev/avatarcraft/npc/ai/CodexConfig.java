@@ -18,6 +18,9 @@ public final class CodexConfig implements Cloneable {
       System.getProperty("os.name").startsWith("Windows") ? "codex.exe" : "codex";
   public String model = "";
   public String complexModel = "";
+  /** A chat reply that has not come in this long is abandoned; planning keeps the full limit. */
+  public static final int SPEECH_TURN_SECONDS = 45;
+
   public int requestTimeoutSeconds = 30,
       turnTimeoutSeconds = 180,
       maxToolCalls = 32,

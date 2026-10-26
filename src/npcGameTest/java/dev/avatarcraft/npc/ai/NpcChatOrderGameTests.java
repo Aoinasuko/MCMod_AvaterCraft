@@ -22,6 +22,11 @@ final class NpcChatOrderGameTests {
             bep_3davater_companion.id("chat_order_qa"), new TestEnvironmentDefinition.AllOf());
     test(event, env, "chat_order_survives_owner_walking_away", h -> order(h, false));
     test(event, env, "chat_order_survives_a_later_small_talk", h -> order(h, true));
+    // Alone in its batch: the other chat tests would take the shared request slot.
+    var alone =
+        event.registerEnvironment(
+            bep_3davater_companion.id("chat_priority_qa"), new TestEnvironmentDefinition.AllOf());
+    test(event, alone, "owner_chat_not_delayed_by_periodic_speech", NpcChatOrderGameTests::priority);
   }
 
   private static void test(
@@ -128,6 +133,37 @@ final class NpcChatOrderGameTests {
           if (smallTalk && brain.replies.size() == 2 && !brain.replies.get(1).isDone())
             brain.replies.get(1).complete(new NpcBrain.Reply("急ぐね", false, ""));
           if (!n.instruction().equals(ORDER)) return;
+          n.discard();
+          h.succeed();
+        });
+  }
+
+  /** Periodic speech has just used the request slot; the owner's message still goes out now. */
+  private static void priority(GameTestHelper h) {
+    for (int x = 0; x < 12; x++) for (int z = 0; z < 12; z++) h.setBlock(x, 0, z, Blocks.STONE);
+    ServerPlayer owner = h.makeMockServerPlayerInLevel();
+    owner.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(4, 1, 4))));
+    var n = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
+    n.initialize(owner, "tortobu");
+    n.setFollowsOwner(false);
+    n.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(6, 1, 4))));
+    h.getLevel().addFreshEntity(n);
+    var service = NpcService.get(h.getLevel().getServer());
+    service.ownerJoined(owner.getUUID());
+    var brain = new Brain();
+    var mind = new NpcMind(n, service, brain);
+    n.gameTestMind(mind);
+    // Another NPC's chatter takes the shared slot a moment before the owner speaks.
+    h.assertTrue(service.requestSlot(h.getLevel().getGameTime() + 1), "Speech takes the slot");
+    mind.hearPlayer(owner, ORDER);
+    int[] ticks = {0};
+    h.onEachTick(
+        () -> {
+          ticks[0]++;
+          if (brain.prompts.isEmpty()) {
+            h.assertTrue(ticks[0] < 40, "The owner's message must not wait for the speech interval");
+            return;
+          }
           n.discard();
           h.succeed();
         });

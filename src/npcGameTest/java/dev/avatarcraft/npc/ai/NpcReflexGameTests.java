@@ -22,6 +22,10 @@ final class NpcReflexGameTests {
     test(event, env, "reflex_strikes_back_without_instruction", h -> strike(h, false));
     test(event, env, "reflex_defends_the_owner", h -> strike(h, true));
     test(event, env, "reflex_steps_out_of_lava", NpcReflexGameTests::lava);
+    test(event, env, "reflex_runs_from_a_swelling_creeper", NpcReflexGameTests::creeper);
+    test(event, env, "reflex_raises_shield_against_arrow", NpcReflexGameTests::arrow);
+    test(event, env, "reflex_retreats_when_badly_hurt", NpcReflexGameTests::retreat);
+    test(event, env, "reflex_stops_at_a_deep_edge", NpcReflexGameTests::edge);
   }
 
   private static void test(
@@ -98,6 +102,100 @@ final class NpcReflexGameTests {
           if (n.isInLava() || ticks[0] < 10) return;
           h.assertTrue(n.isAlive(), "NPC must get out alive");
           h.assertTrue(ticks[0] < 80, "NPC must leave the lava quickly: " + ticks[0]);
+          n.discard();
+          h.succeed();
+        });
+  }
+
+  /** A primed creeper next to the NPC: it runs before the blast. */
+  private static void creeper(GameTestHelper h) {
+    var n = fixture(h, new BlockPos(6, 1, 6));
+    var creeper = EntityTypes.CREEPER.create(h.getLevel(), EntitySpawnReason.COMMAND);
+    creeper.setNoAi(true);
+    var p = h.absoluteVec(new Vec3(8.5, 1, 6.5));
+    creeper.setPos(p.x, p.y, p.z);
+    h.getLevel().addFreshEntity(creeper);
+    creeper.ignite();
+    h.onEachTick(
+        () -> {
+          if (creeper.isAlive()) return;
+          h.assertTrue(n.isAlive() && n.getHealth() > 10, "NPC must be clear of the blast: " + n.getHealth());
+          n.discard();
+          h.succeed();
+        });
+  }
+
+  /** A skeleton draws on the NPC and looses; the shield in the off hand takes the arrow. */
+  private static void arrow(GameTestHelper h) {
+    var n = fixture(h, new BlockPos(6, 1, 6));
+    n.setItemInHand(net.minecraft.world.InteractionHand.OFF_HAND, new ItemStack(Items.SHIELD));
+    var skeleton = EntityTypes.SKELETON.create(h.getLevel(), EntitySpawnReason.COMMAND);
+    skeleton.setNoAi(true);
+    var at = h.absoluteVec(new Vec3(13.5, 1, 6.5));
+    skeleton.setPos(at.x, at.y, at.z);
+    skeleton.setItemSlot(net.minecraft.world.entity.EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
+    skeleton.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, new ItemStack(Items.BOW));
+    h.getLevel().addFreshEntity(skeleton);
+    int[] ticks = {0};
+    float[] start = {0};
+    h.onEachTick(
+        () -> {
+          ticks[0]++;
+          if (ticks[0] == 10) {
+            start[0] = n.getHealth();
+            skeleton.setTarget(n);
+            skeleton.startUsingItem(net.minecraft.world.InteractionHand.MAIN_HAND);
+          }
+          if (ticks[0] == 40) {
+            var shot = new net.minecraft.world.entity.projectile.arrow.Arrow(
+                h.getLevel(), skeleton, new ItemStack(Items.ARROW), null);
+            var from = h.absoluteVec(new Vec3(12.5, 2.2, 6.5));
+            shot.setPos(from.x, from.y, from.z);
+            shot.setDeltaMovement(n.getBoundingBox().getCenter().subtract(from).normalize().scale(2));
+            h.getLevel().addFreshEntity(shot);
+          }
+          if (ticks[0] < 80) return;
+          h.assertTrue(n.getHealth() >= start[0], "The shield must stop the arrow: " + n.getHealth() + " < " + start[0]);
+          n.discard();
+          h.succeed();
+        });
+  }
+
+  /** At low health the NPC backs away from the monster instead of trading blows. */
+  private static void retreat(GameTestHelper h) {
+    var n = fixture(h, new BlockPos(6, 1, 6));
+    n.setHealth(4);
+    var zombie = EntityTypes.ZOMBIE.create(h.getLevel(), EntitySpawnReason.COMMAND);
+    zombie.setNoAi(true);
+    zombie.setItemSlot(net.minecraft.world.entity.EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
+    var p = h.absoluteVec(new Vec3(8.5, 1, 6.5));
+    zombie.setPos(p.x, p.y, p.z);
+    h.getLevel().addFreshEntity(zombie);
+    int[] ticks = {0};
+    h.onEachTick(
+        () -> {
+          if (++ticks[0] == 5) n.hurtServer(h.getLevel(), h.getLevel().damageSources().mobAttack(zombie), 1);
+          if (ticks[0] < 60) return;
+          h.assertTrue(n.distanceTo(zombie) > 6, "NPC must back away: " + n.distanceTo(zombie));
+          zombie.discard();
+          n.discard();
+          h.succeed();
+        });
+  }
+
+  /** Knocked toward a deep drop, the NPC stops on the rim. */
+  private static void edge(GameTestHelper h) {
+    var n = fixture(h, new BlockPos(6, 1, 6));
+    // Floor ends at x=8; beyond it a deep shaft.
+    for (int x = 9; x < 16; x++)
+      for (int z = 0; z < 16; z++) for (int y = -6; y <= 0; y++) h.setBlock(x, y, z, Blocks.AIR);
+    int[] ticks = {0};
+    h.onEachTick(
+        () -> {
+          ticks[0]++;
+          if (ticks[0] > 5 && ticks[0] < 30 && n.onGround()) n.setDeltaMovement(.2, n.getDeltaMovement().y, 0);
+          if (ticks[0] < 60) return;
+          h.assertTrue(n.getY() > h.absoluteVec(new Vec3(0, .5, 0)).y, "NPC must stay on the rim: " + n.position());
           n.discard();
           h.succeed();
         });

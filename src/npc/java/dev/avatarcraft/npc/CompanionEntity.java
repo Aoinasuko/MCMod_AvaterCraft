@@ -349,7 +349,10 @@ public final class CompanionEntity extends PathfinderMob
   }
 
   public void tick() {
-    if (!level().isClientSide() && isAlive()) waterSafety.preTick();
+    if (!level().isClientSide() && isAlive()) {
+      waterSafety.preTick();
+      reflexes.preTick();
+    }
     if (!level().isClientSide()) gateController.tick();
     super.tick();
     if (!level().isClientSide()) containerAnimation.tick();

@@ -174,14 +174,18 @@ public final class HttpBrain implements NpcBrain {
         return CompletableFuture.failedFuture(
             new RejectedExecutionException("NPC concurrency limit reached"));
       }
-      var turn = new Active(config.turnTimeoutSeconds);
+      int limit =
+          workTurn
+              ? config.turnTimeoutSeconds
+              : Math.min(config.turnTimeoutSeconds, CodexConfig.SPEECH_TURN_SECONDS);
+      var turn = new Active(limit);
       if (!active.compareAndSet(null, turn)) {
         permits.release();
         if (workTurn) workPermits.release();
         return CompletableFuture.failedFuture(new IllegalStateException("NPC is already thinking"));
       }
       turn.reply
-          .orTimeout(config.turnTimeoutSeconds, TimeUnit.SECONDS)
+          .orTimeout(limit, TimeUnit.SECONDS)
           .whenComplete(
               (r, error) -> {
                 if (error != null) turn.cancel();

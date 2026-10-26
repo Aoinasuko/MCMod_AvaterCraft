@@ -48,7 +48,7 @@ public final class NpcService implements AutoCloseable {
   private final ExecutorService connections = Executors.newVirtualThreadPerTaskExecutor();
   private CompletableFuture<NpcBrain> bridge;
   private volatile NpcBrain connecting;
-  private long retryAfter, nextRequest;
+  private long retryAfter, nextRequest, nextUrgent;
   private volatile boolean closed;
   private String error = "";
   private final Map<UUID, Set<CompletableFuture<String>>> deathSpeech = new HashMap<>();
@@ -135,8 +135,23 @@ public final class NpcService implements AutoCloseable {
   }
 
   public boolean requestSlot(long tick) {
+    return requestSlot(tick, false);
+  }
+
+  /**
+   * Owner chat and planning are rate-limited among themselves only, so periodic or completion
+   * speech never makes an order wait; speech still yields to them.
+   */
+  public boolean requestSlot(long tick, boolean urgent) {
+    long gap = config.minimumRequestIntervalSeconds * 20L;
+    if (urgent) {
+      if (tick < nextUrgent) return false;
+      nextUrgent = tick + gap;
+      nextRequest = Math.max(nextRequest, tick + gap);
+      return true;
+    }
     if (tick < nextRequest) return false;
-    nextRequest = tick + config.minimumRequestIntervalSeconds * 20L;
+    nextRequest = tick + gap;
     return true;
   }
 

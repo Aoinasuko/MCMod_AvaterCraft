@@ -53,7 +53,7 @@ public final class NpcBuildUiQa {
                     "create_blueprint",
                     object(
                         "design_json",
-                        NpcConstructionGameTests.house(),
+                        house(),
                         "site_json",
                         selection.toString()))
                 .toCompletableFuture();
@@ -100,5 +100,10 @@ public final class NpcBuildUiQa {
 
   public static void clear() {
     JOBS.clear();
+  }
+
+  /** The small house both the UI check and the construction GameTests build. */
+  static String house() {
+    return "{\"name\":\"小さな家\",\"size\":[5,4,5],\"parts\":[{\"from\":[0,0,0],\"to\":[4,3,4],\"block\":\"minecraft:oak_planks\"},{\"from\":[1,1,1],\"to\":[3,2,3],\"block\":\"minecraft:air\"},{\"from\":[2,1,0],\"to\":[2,2,0],\"block\":\"minecraft:air\"}]}";
   }
 }

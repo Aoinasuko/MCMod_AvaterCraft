@@ -25,7 +25,8 @@ public final class NpcWaterSafety {
   private boolean danger(){
     if(!npc.isInWater()||breathing())return false;
     var c=NpcWaterTravel.current(npc);
-    return !c.known()||c.depth()>5||c.surface()-npc.getY()>5||npc.getAirSupply()<=120;
+    // Under ice or a roof the air never comes back by waiting; leave for open air at once.
+    return !c.known()||c.depth()>5||c.surface()-npc.getY()>5||npc.getAirSupply()<=120||!NpcWaterState.surfaceOpen(npc);
   }
   public void preTick(){
     if(!active&&danger()){

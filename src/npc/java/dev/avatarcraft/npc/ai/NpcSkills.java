@@ -945,14 +945,23 @@ public final class NpcSkills {
                   waypoint.getZ());
           long idle = current.movement.idleTicks(now);
           // Only a body that has stopped dead; precise placement creeps slowly by design.
+          // Waiting beside the goal (e.g. for a drop to become collectable) is not being stuck.
           if (!stalled
               && !current.args.has("_arrival")
+              && current.walkingPath != null
+              && !current.walkingPath.isDone()
+              && distance > 2.25
               && npc.onGround()
               && npc.getDeltaMovement().horizontalDistanceSqr() < 1e-4
               && idle > 0
               && idle % NpcMoveProgress.NUDGE_TICKS == 0) {
-            // A snagged player hops, then looks for another way; do the same before giving up.
-            if (idle / NpcMoveProgress.NUDGE_TICKS % 2 == 1) npc.getJumpControl().jump();
+            // Pressed against a ledge, hop once; otherwise (or after the hop) look for another way.
+            // Never hop on farmland, which a landing tramples.
+            boolean farmland =
+                level().getBlockState(npc.blockPosition().below()).getBlock()
+                    instanceof net.minecraft.world.level.block.FarmlandBlock;
+            if (idle / NpcMoveProgress.NUDGE_TICKS % 2 == 1 && npc.horizontalCollision && !farmland)
+              npc.getJumpControl().jump();
             else {
               npc.getNavigation().stop();
               current.walkingPath = null;
@@ -2268,6 +2277,8 @@ public final class NpcSkills {
         "water_safety",npc.waterSafety.observation(),
         "in_water",npc.isInWater(),
         "water_current",npc.isInWater()&&NpcWaterTravel.flowing(npc),
+        // Depth, way up to air, ice or roof overhead, and the nearest shore while in water.
+        "water",npc.isInWater()?NpcWaterState.of(npc).json():JsonNull.INSTANCE,
         "food",
         npc.foodLevel(),
         "using_item",

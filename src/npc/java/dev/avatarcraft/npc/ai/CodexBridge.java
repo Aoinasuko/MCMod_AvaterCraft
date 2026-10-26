@@ -362,9 +362,13 @@ public final class CodexBridge implements NpcBrain {
         if (workTurn) workPermits.release();
         return CompletableFuture.failedFuture(new IllegalStateException("NPC is already thinking"));
       }
+      int limit =
+          workTurn
+              ? config.turnTimeoutSeconds
+              : Math.min(config.turnTimeoutSeconds, CodexConfig.SPEECH_TURN_SECONDS);
       var completed =
           turn.reply
-              .orTimeout(config.turnTimeoutSeconds, TimeUnit.SECONDS)
+              .orTimeout(limit, TimeUnit.SECONDS)
               .whenComplete(
                   (reply, error) -> {
                     if (active.compareAndSet(turn, null)) {

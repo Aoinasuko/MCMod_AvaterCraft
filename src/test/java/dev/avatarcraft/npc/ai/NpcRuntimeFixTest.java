@@ -81,13 +81,19 @@ class NpcRuntimeFixTest {
 
   @Test
   void searchAndVerifiedEditsPauseWatchdog() {
-    var progress = new NpcMoveProgress(0);
+    // Edits happen on work routes, which keep the longer limit.
+    var progress = new NpcMoveProgress(0, NpcMoveProgress.WORK_STALL_TICKS);
     progress.stalled(0, .5, 1, .5, 10, 1, 0);
     progress.pauseForSearch(399);
     assertFalse(progress.stalled(700, .5, 1, .5, 10, 1, 0));
     progress.edited(700);
     assertFalse(progress.stalled(1099, .5, 1, .5, 10, 1, 0));
     assertTrue(progress.stalled(1101, .5, 1, .5, 10, 1, 0));
+    // A plain move gives up sooner; the short nudges have run by then.
+    var move = new NpcMoveProgress(0);
+    move.stalled(0, .5, 1, .5, 10, 1, 0);
+    assertFalse(move.stalled(NpcMoveProgress.STALL_TICKS, .5, 1, .5, 10, 1, 0));
+    assertTrue(move.stalled(NpcMoveProgress.STALL_TICKS + 1, .5, 1, .5, 10, 1, 0));
   }
 
   @Test

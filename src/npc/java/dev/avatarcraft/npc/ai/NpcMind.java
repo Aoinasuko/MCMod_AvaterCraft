@@ -43,6 +43,7 @@ public final class NpcMind implements AutoCloseable {
   private Deferred deferred;
   private boolean openingWork, openingSpeech, heard;
   private long epoch, chatEpoch, nextThink, nextConversation;
+  private int failures;
   private long nextSpeechOpen;
   private long nextTeamCheck;
   private boolean announcedBlock;
@@ -384,7 +385,7 @@ public final class NpcMind implements AutoCloseable {
       npc.setAiStatus(skills.busy() ? "作業中" : "AI思考中");
       return;
     }
-    if (now < nextThink || !work.canStart(false) || !service.requestSlot(now)) return;
+    if (now < nextThink || !work.canStart(false) || !service.requestSlot(now, true)) return;
     long generation = epoch;
     var planningSession = work;
     String requestId = UUID.randomUUID().toString();
@@ -468,7 +469,7 @@ public final class NpcMind implements AutoCloseable {
                           if (error != null) {
                             work = null;
                             planningSession.close();
-                            nextThink = level.getGameTime() + 600;
+                            nextThink = level.getGameTime() + backoff();
                             npc.setAiStatus("AI応答エラー。再試行待ち");
                             recordFailure("planning", error);
                             var cause = error;
@@ -537,8 +538,14 @@ public final class NpcMind implements AutoCloseable {
                                 null,
                                 boundPlan.journalDetails());
                           }
+                          failures = 0;
                           nextThink = level.getGameTime() + 60;
                         }));
+  }
+
+  /** Retry soon after a passing failure, then back off up to the former fixed 30 seconds. */
+  private long backoff() {
+    return Math.min(600, 40L << Math.min(4, failures++));
   }
 
   private void open(boolean voice) {
@@ -588,11 +595,14 @@ public final class NpcMind implements AutoCloseable {
                             npc.setAiStatus("AIセッション開始エラー。接続先・モデル・認証設定を確認してください");
                             recordFailure(voice ? "speech_session" : "planning_session", error);
                             if (voice) nextSpeechOpen = level.getGameTime() + 600;
-                            else nextThink = level.getGameTime() + 600;
+                            else nextThink = level.getGameTime() + backoff();
                             return;
                           }
                           if (voice) speech = session;
-                          else work = session;
+                          else {
+                            work = session;
+                            failures = 0;
+                          }
                         }));
   }
 
@@ -679,7 +689,7 @@ public final class NpcMind implements AutoCloseable {
                           }));
       return;
     }
-    if (!playerChat.canStart(true) || !service.requestSlot(now)) return;
+    if (!playerChat.canStart(true) || !service.requestSlot(now, true)) return;
     var first = playerChats.removeFirst();
     var batch = new ArrayList<HumanChat>();
     batch.add(first);

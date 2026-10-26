@@ -123,7 +123,16 @@ public final class bep_3davater_companion {
         && !net.neoforged.fml.loading.FMLEnvironment.isProduction())
       bus.addListener(
           net.neoforged.neoforge.event.RegisterGameTestsEvent.class,
-          dev.avatarcraft.npc.ai.NpcGameTests::register);
+          event -> {
+            // The GameTests live in a development-only source set that the release JAR omits.
+            try {
+              Class.forName("dev.avatarcraft.npc.ai.NpcGameTests")
+                  .getMethod("register", net.neoforged.neoforge.event.RegisterGameTestsEvent.class)
+                  .invoke(null, event);
+            } catch (ReflectiveOperationException e) {
+              throw new IllegalStateException("NPC GameTests are not on the classpath", e);
+            }
+          });
     NeoForge.EVENT_BUS.addListener(
         net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent.class,
         event -> {

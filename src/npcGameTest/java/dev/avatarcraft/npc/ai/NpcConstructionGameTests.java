@@ -64,7 +64,7 @@ final class NpcConstructionGameTests {
   }
 
   static String house() {
-    return "{\"name\":\"小さな家\",\"size\":[5,4,5],\"parts\":[{\"from\":[0,0,0],\"to\":[4,3,4],\"block\":\"minecraft:oak_planks\"},{\"from\":[1,1,1],\"to\":[3,2,3],\"block\":\"minecraft:air\"},{\"from\":[2,1,0],\"to\":[2,2,0],\"block\":\"minecraft:air\"}]}";
+    return NpcBuildUiQa.house();
   }
 
   private static JsonObject site(GameTestHelper h, int x1, int y1, int z1, int x2, int y2, int z2) {
