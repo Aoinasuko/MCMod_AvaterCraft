@@ -132,6 +132,9 @@ public final class CompanionEntity extends PathfinderMob
   public final NpcLocationMemory locations = new NpcLocationMemory();
   public final dev.avatarcraft.npc.ai.NpcMission mission = new dev.avatarcraft.npc.ai.NpcMission(this);
   public final dev.avatarcraft.npc.ai.NpcWaterSafety waterSafety = new dev.avatarcraft.npc.ai.NpcWaterSafety(this);
+  public final dev.avatarcraft.npc.ai.NpcReflexes reflexes = new dev.avatarcraft.npc.ai.NpcReflexes(this);
+  /** Game time of the last planned attack, hunt, guard or defeat step; reflexes yield to it. */
+  public long lastCombatAction = Long.MIN_VALUE / 2;
 
   public CompanionEntity(EntityType<? extends CompanionEntity> type, Level level) {
     super(type, level);
@@ -228,6 +231,10 @@ public final class CompanionEntity extends PathfinderMob
 
   public int foodLevel() {
     return entityData.get(FOOD);
+  }
+
+  public NpcVitals vitals() {
+    return vitals;
   }
 
   public boolean avatarMining() {
@@ -354,7 +361,8 @@ public final class CompanionEntity extends PathfinderMob
         executionMemory.walked(
             level().dimension().identifier().toString(), feet.getX(), feet.getY(), feet.getZ());
       }
-      if (!waterSafety.tick()) mind().tick();
+      // Drowning first, then reflexes; planned work is paused while either owns the body.
+      if (!waterSafety.tick() && !reflexes.tick()) mind().tick();
       if (tickCount % 10 == 0)
         for (var item :
             server.getEntitiesOfClass(

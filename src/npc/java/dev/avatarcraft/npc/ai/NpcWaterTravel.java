@@ -87,7 +87,9 @@ public final class NpcWaterTravel {
   static void follow(CompanionEntity npc,net.minecraft.world.level.pathfinder.Path path,double speed){
     if(path==null)return;
     if(npc.isInWater())npc.setSprinting(flowing(npc));
-    npc.getNavigation().moveTo(path,npc.isInWater()&&flowing(npc)?2.2:speed);
+    double pace=npc.isInWater()&&flowing(npc)?2.2:speed;
+    // Re-issuing the same path every tick resets vanilla stuck detection, so only start it once.
+    if(npc.getNavigation().getPath()!=path)npc.getNavigation().moveTo(path,pace);else npc.getNavigation().setSpeedModifier(pace);
     if(!path.isDone()){
       var p=path.getNextNodePos();var point=NpcWalkSurface.point(npc,p);
       if(npc.isInWater()||swimmable(npc,p))npc.getMoveControl().setWantedPosition(point.x,point.y,point.z,flowing(npc)?2.2:Math.max(1.2,speed));

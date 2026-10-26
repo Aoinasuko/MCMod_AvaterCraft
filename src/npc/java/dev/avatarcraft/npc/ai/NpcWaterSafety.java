@@ -18,8 +18,9 @@ public final class NpcWaterSafety {
   public boolean active(){return active;}
   private boolean breathing(){
     var eye=npc.getEyePosition();var p=BlockPos.containing(eye);if(!npc.level().hasChunkAt(p))return false;
-    var fluid=npc.level().getFluidState(p);
-    return fluid.isEmpty()||eye.y>=p.getY()+fluid.getHeight(npc.level(),p);
+    // Use the same test vanilla uses to drain air (eye height minus 0.111), so the emergency does
+    // not end in the top sliver of a water block while air is still running out.
+    return !npc.isEyeInFluid(net.minecraft.tags.FluidTags.WATER);
   }
   private boolean danger(){
     if(!npc.isInWater()||breathing())return false;

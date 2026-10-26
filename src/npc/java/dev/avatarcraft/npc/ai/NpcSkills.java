@@ -9,6 +9,7 @@ import dev.avatarcraft.npc.InventoryTransfer;
 import dev.avatarcraft.npc.NpcInventory;
 import java.util.*;
 import java.util.concurrent.*;
+import net.minecraft.tags.BlockTags;
 import java.util.function.*;
 import net.minecraft.core.*;
 import net.minecraft.core.registries.*;
@@ -79,16 +80,30 @@ public final class NpcSkills {
     return true;
   }
 
+  /**
+   * Players keep sprinting along walls and up single steps. Only refuse when the body above step
+   * height would hit something within a block along the route.
+   */
   static boolean canSprint(CompanionEntity npc) {
+    if (npc.foodLevel() <= 6 || npc.isShiftKeyDown() || npc.isUsingItem() || npc.isInWater())
+      return false;
     var path = npc.getNavigation().getPath();
-    boolean flat =
-        path == null || path.isDone() || path.getNextNodePos().getY() == npc.blockPosition().getY();
-    return npc.foodLevel() > 6
-        && !npc.isShiftKeyDown()
-        && !npc.isUsingItem()
-        && !npc.isInWater()
-        && flat
-        && npc.level().noCollision(npc, npc.getBoundingBox().inflate(.35, 0, .35));
+    if (path == null || path.isDone()) return true;
+    var next = path.getNextNodePos();
+    if (Math.abs(next.getY() - npc.blockPosition().getY()) > 1) return false;
+    var heading = Vec3.atBottomCenterOf(next).subtract(npc.position()).multiply(1, 0, 1);
+    if (heading.lengthSqr() < 1e-4) return true;
+    var box = npc.getBoundingBox();
+    double lift = next.getY() > npc.blockPosition().getY() ? 1 : 0;
+    var body =
+        new AABB(
+            box.minX,
+            box.minY + Math.max(lift, npc.maxUpStep()) + .01,
+            box.minZ,
+            box.maxX,
+            box.maxY + lift,
+            box.maxZ);
+    return npc.level().noCollision(npc, body.expandTowards(heading.normalize()));
   }
 
   private volatile long generation;
@@ -103,6 +118,9 @@ public final class NpcSkills {
     int miningTicks;
     float progress;
     ItemStack tool = ItemStack.EMPTY;
+    /** A leaf block being cut because it alone hides the mining target. */
+    BlockPos clearing;
+    float clearingProgress;
     Vec3 started;
     double bestDistance = Double.POSITIVE_INFINITY;
     long progressTick;
@@ -111,6 +129,8 @@ public final class NpcSkills {
     int detours;
     /** The walking goal was widened to cells around the named target; adopt the route's end. */
     boolean retarget;
+    /** Partial routes walked after the search budget ran out. */
+    int partialLegs;
     NpcWalkingRoute walking;
     net.minecraft.world.level.pathfinder.Path walkingPath;
     long checkedPath;
@@ -330,6 +350,67 @@ public final class NpcSkills {
               .add(face.getStepX() * .499, face.getStepY() * .499, face.getStepZ() * .499),
           target)) return true;
     return false;
+  }
+
+  /** Player block interaction range, measured from the eyes like the player's. */
+  static final double REACH = 4.5;
+
+  boolean withinReach(BlockPos target) {
+    return withinReachFrom(npc.getEyePosition(), target);
+  }
+
+  static boolean withinReachFrom(Vec3 eye, BlockPos target) {
+    return eye.distanceToSqr(Vec3.atCenterOf(target)) <= REACH * REACH;
+  }
+
+  /** Reachable and visible, or hidden only by leaves that can be cut first. */
+  boolean minable(BlockPos target) {
+    return withinReach(target)
+        && (visible(target) || leafObstruction(npc.getEyePosition(), target) != null);
+  }
+
+  /**
+   * The nearest leaf block that alone hides the target from the eye, or null when the target is
+   * visible or something other than leaves is in the way.
+   */
+  BlockPos leafObstruction(Vec3 eye, BlockPos target) {
+    BlockPos best = null;
+    double nearest = Double.POSITIVE_INFINITY;
+    var center = Vec3.atCenterOf(target);
+    var points = new ArrayList<Vec3>(List.of(center));
+    for (var face : Direction.values())
+      points.add(center.add(face.getStepX() * .499, face.getStepY() * .499, face.getStepZ() * .499));
+    for (var point : points) {
+      var leaf = leafOnRay(eye, point, target);
+      if (leaf == null) continue;
+      double d = eye.distanceToSqr(Vec3.atCenterOf(leaf));
+      if (d < nearest) {
+        nearest = d;
+        best = leaf;
+      }
+    }
+    return best;
+  }
+
+  private BlockPos leafOnRay(Vec3 eye, Vec3 point, BlockPos target) {
+    var start = eye;
+    BlockPos first = null;
+    for (int layers = 0; layers < 6; layers++) {
+      var hit =
+          level()
+              .clip(
+                  new ClipContext(
+                      start, point, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, npc));
+      if (hit.getType() == HitResult.Type.MISS || hit.getBlockPos().equals(target)) return first;
+      var at = hit.getBlockPos();
+      if (!level().getBlockState(at).is(BlockTags.LEAVES)) return null;
+      if (first == null) first = at.immutable();
+      var step = point.subtract(start).normalize().scale(.05);
+      var next = hit.getLocation();
+      for (int i = 0; i < 40 && BlockPos.containing(next).equals(at); i++) next = next.add(step);
+      start = next;
+    }
+    return null;
   }
 
   boolean visibleHit(Vec3 point, BlockPos target) {
@@ -844,7 +925,7 @@ public final class NpcSkills {
       if (current.name.equals("move_to") && !walking(current, target, speed, now)) return;
       boolean approaching =
           current.name.equals("move_to")
-              || current.name.equals("dig") && (distance > 16 || !visible(target));
+              || current.name.equals("dig") && !minable(target);
       if (approaching) {
         if (current.name.equals("move_to")) {
           var waypoint =
@@ -916,8 +997,7 @@ public final class NpcSkills {
                 target.getX() + .5, NpcWalkSurface.point(npc, target).y, target.getZ() + .5, 1.0);
         return;
       }
-      if (current.name.equals("dig")
-          && (!visible(target) || npc.distanceToSqr(Vec3.atCenterOf(target)) > 16)) {
+      if (current.name.equals("dig") && !minable(target)) {
         var destination = new NpcLocalWorld(npc, this).approach(vector(Vec3.atCenterOf(target)));
         if (destination == null) {
           finish(error("No visible mining approach"));
@@ -942,7 +1022,7 @@ public final class NpcSkills {
       }
       // A path may finish while the entity is still settling onto a lower stair.
       if (current.name.equals("move_to") && !npc.onGround() && !npc.isInWater()) return;
-      if (distance > reach) {
+      if (current.name.equals("dig") ? !minable(target) : distance > reach) {
         if (!npc.onGround() && !npc.isInWater()) return;
         if (current.name.equals("move_to")) {
           if (npc.getNavigation().getPath() != current.walkingPath && current.walkingPath != null)
@@ -1013,6 +1093,7 @@ public final class NpcSkills {
       following.tick(target);
       return;
     }
+    npc.lastCombatAction = now;
     npc.getLookControl().setLookAt(target);
     double reach = current.name.equals("follow") ? 9 : 6.25;
     double speed = movementSpeed(npc.distanceToSqr(target), false);
@@ -1364,6 +1445,19 @@ public final class NpcSkills {
         current.progressTick = now;
         return false;
       }
+      // Unloaded terrain still stops here; only an exhausted budget continues.
+      if (state == WalkingPathSearch.State.LIMIT && current.partialLegs < 4) {
+        // Out of search budget, not out of route: walk the best part found and search again
+        // from there, as the replan below does when that partial path is used up.
+        var partial = current.walking.partialPath();
+        if (partial != null) {
+          current.partialLegs++;
+          current.walkingPath = partial;
+          npc.getNavigation().moveTo(current.walkingPath, speed);
+          current.progressTick = now;
+          return false;
+        }
+      }
       if (state != WalkingPathSearch.State.FOUND) {
         finish(
             error(
@@ -1542,8 +1636,19 @@ public final class NpcSkills {
       finish(error("Mining target changed"));
       return;
     }
-    if (state.getDestroySpeed(level(), target) < 0 || !mayChange(target, 4) || !visible(target)) {
+    if (state.getDestroySpeed(level(), target) < 0
+        || !mayChange(target, 6)
+        || !withinReach(target)) {
       finish(error("Block cannot be mined or is not visible"));
+      return;
+    }
+    if (!visible(target)) {
+      var leaf = leafObstruction(npc.getEyePosition(), target);
+      if (leaf == null || !mayChange(leaf, 6) || !withinReach(leaf)) {
+        finish(error("Block cannot be mined or is not visible"));
+        return;
+      }
+      clearLeaf(current, leaf);
       return;
     }
     npc.getLookControl().setLookAt(target.getX() + .5, target.getY() + .5, target.getZ() + .5);
@@ -1569,6 +1674,30 @@ public final class NpcSkills {
           asPlayer(NpcInventory.MAIN_HAND, fake -> fake.gameMode.destroyBlock(target));
       if (changed) npc.exhaust(.005f);
       finish(object("ok", changed && !level().getBlockState(target).equals(state)));
+    }
+  }
+
+  /** Cuts one leaf in the line of sight with the held tool; mining resumes once it is gone. */
+  private void clearLeaf(Action current, BlockPos leaf) {
+    if (!leaf.equals(current.clearing)) {
+      current.clearing = leaf;
+      current.clearingProgress = 0;
+    }
+    var state = level().getBlockState(leaf);
+    npc.getLookControl().setLookAt(leaf.getX() + .5, leaf.getY() + .5, leaf.getZ() + .5);
+    float progress =
+        state.getDestroySpeed(level(), leaf) == 0
+            ? 1
+            : asPlayer(NpcInventory.MAIN_HAND, fake -> state.getDestroyProgress(fake, level(), leaf));
+    if (!Float.isFinite(progress) || progress <= 0) {
+      finish(error("No progress cutting the leaves in the way"));
+      return;
+    }
+    current.clearingProgress += progress;
+    if (npc.tickCount % 5 == 0) npc.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
+    if (current.clearingProgress >= 1) {
+      asPlayer(NpcInventory.MAIN_HAND, fake -> fake.gameMode.destroyBlock(leaf));
+      current.clearing = null;
     }
   }
 

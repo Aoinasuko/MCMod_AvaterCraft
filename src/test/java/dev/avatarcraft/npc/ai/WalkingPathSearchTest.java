@@ -100,4 +100,21 @@ class WalkingPathSearchTest {
         new WalkingPathSearch(start, List.of(new WalkingPathSearch.Cell(129, 0, 0)), p -> true)
             .state());
   }
+
+  @Test
+  void exhaustedBudgetOffersTheBestPartialRouteTowardTheGoal() {
+    var start = new WalkingPathSearch.Cell(0, 0, 0);
+    var goal = new WalkingPathSearch.Cell(100, 0, 0);
+    // A wall across x=50 with one gap far to the side forces a wide search.
+    WalkingPathSearch.Terrain terrain = p -> p.y() == 0 && (p.x() != 50 || p.z() == 90);
+    var search = run(new WalkingPathSearch(start, List.of(goal), terrain, 2000));
+    assertEquals(WalkingPathSearch.State.LIMIT, search.state());
+    var partial = search.partialPath();
+    assertFalse(partial.isEmpty(), "A partial route is offered");
+    assertEquals(start, partial.getFirst());
+    var end = partial.getLast();
+    assertTrue(Math.abs(goal.x() - end.x()) < goal.x(), "The partial route ends closer to the goal");
+    assertTrue(new WalkingPathSearch(start, List.of(goal), terrain).partialPath().isEmpty(),
+        "No partial route before any search");
+  }
 }

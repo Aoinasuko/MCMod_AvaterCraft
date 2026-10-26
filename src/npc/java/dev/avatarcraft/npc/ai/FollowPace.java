@@ -5,8 +5,9 @@ public final class FollowPace {
   private boolean moving, sprinting;
 
   public void update(double distanceSquared) {
-    moving = distanceSquared > (moving ? 2.5 * 2.5 : 6 * 6);
-    sprinting = moving && distanceSquared > (sprinting ? 4.5 * 4.5 : 8 * 8);
+    // Keep close behind the owner instead of waiting for a large gap, then stopping far back.
+    moving = distanceSquared > (moving ? 2 * 2 : 3.5 * 3.5);
+    sprinting = moving && distanceSquared > (sprinting ? 3.5 * 3.5 : 5 * 5);
   }
 
   public boolean moving() {

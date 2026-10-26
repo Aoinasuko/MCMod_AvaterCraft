@@ -45,13 +45,21 @@ public final class WalkingPathSearch {
       new PriorityQueue<>(Comparator.comparingInt(Node::estimate).thenComparingInt(n -> -n.cost));
   private final Map<Long, Integer> costs = new HashMap<>();
   private final int minX, maxX, minY, maxY, minZ, maxZ;
+  private final int maxNodes;
   private State state = State.SEARCHING;
   private List<Cell> path = List.of();
   private int expanded;
+  /** The expanded node nearest the goals, for continuing when the budget runs out. */
+  private Node closest;
 
   public WalkingPathSearch(Cell start, Collection<Cell> ends, Terrain terrain) {
+    this(start, ends, terrain, MAX_NODES);
+  }
+
+  WalkingPathSearch(Cell start, Collection<Cell> ends, Terrain terrain, int maxNodes) {
     this.start = start;
     this.terrain = terrain;
+    this.maxNodes = maxNodes;
     int lx = Integer.MAX_VALUE, hx = Integer.MIN_VALUE, ly = lx, hy = hx, lz = lx, hz = hx;
     for (var p : ends) {
       if (!inside(p)) continue;
@@ -113,7 +121,7 @@ public final class WalkingPathSearch {
     int count = 0;
     while (!open.isEmpty() && count < budget) {
       if ((count & 15) == 0 && System.nanoTime() >= deadlineNanos) return state;
-      if (expanded >= MAX_NODES || costs.size() >= MAX_NODES * 2) {
+      if (expanded >= maxNodes || costs.size() >= maxNodes * 2) {
         state = State.LIMIT;
         return state;
       }
@@ -121,6 +129,7 @@ public final class WalkingPathSearch {
       if (n.cost != costs.getOrDefault(n.p.key(), Integer.MAX_VALUE)) continue;
       count++;
       expanded++;
+      if (closest == null || heuristic(n.p) < heuristic(closest.p)) closest = n;
       if (goals.contains(n.p.key())) {
         var reverse = new ArrayList<Cell>();
         for (var at = n; at != null; at = at.parent) reverse.add(at.p);
@@ -160,6 +169,19 @@ public final class WalkingPathSearch {
 
   public List<Cell> path() {
     return path;
+  }
+
+  /**
+   * After the budget ran out, the route to the expanded cell nearest the goals; empty when the
+   * search finished or made no headway. Walking it and searching again keeps the body moving.
+   */
+  public List<Cell> partialPath() {
+    if (state == State.FOUND || state == State.UNREACHABLE || closest == null) return List.of();
+    if (heuristic(closest.p) >= heuristic(start)) return List.of();
+    var reverse = new ArrayList<Cell>();
+    for (var at = closest; at != null; at = at.parent) reverse.add(at.p);
+    Collections.reverse(reverse);
+    return List.copyOf(reverse);
   }
 
   public int expanded() {

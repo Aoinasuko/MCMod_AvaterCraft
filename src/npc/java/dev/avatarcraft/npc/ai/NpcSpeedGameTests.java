@@ -20,8 +20,20 @@ final class NpcSpeedGameTests {
     var env =
         event.registerEnvironment(
             bep_3davater_companion.id("speed_qa"), new TestEnvironmentDefinition.AllOf());
-    test(event, env, "ground_sprint_speed_matches_player", h -> measure(h, false));
-    test(event, env, "ground_walk_speed_matches_player", h -> measure(h, true));
+    test(event, env, "ground_sprint_speed_matches_player", h -> measure(h, Mode.OPEN));
+    test(event, env, "ground_walk_speed_matches_player", h -> measure(h, Mode.HUNGRY));
+    test(event, env, "sprint_continues_beside_a_wall", h -> measure(h, Mode.WALL));
+    test(event, env, "sprint_continues_over_a_step", h -> measure(h, Mode.STEP));
+    test(event, env, "diagonal_sprint_keeps_pace", h -> measure(h, Mode.DIAGONAL));
+  }
+
+  /** OPEN/WALL/STEP sprint; HUNGRY walks because food 6 or less forbids sprinting, as for players. */
+  enum Mode {
+    OPEN,
+    WALL,
+    STEP,
+    DIAGONAL,
+    HUNGRY
   }
 
   private static void test(
@@ -40,10 +52,13 @@ final class NpcSpeedGameTests {
         });
   }
 
-  /** A wall touching the route keeps canSprint false, so the walk case measures walking pace. */
-  private static void measure(GameTestHelper h, boolean walk) {
-    for (int x = 0; x < 80; x++) for (int z = 0; z < 12; z++) h.setBlock(x, 0, z, Blocks.BEDROCK);
-    if (walk) for (int x = 0; x < 80; x++) for (int y = 1; y <= 2; y++) h.setBlock(x, y, 6, Blocks.STONE);
+  private static void measure(GameTestHelper h, Mode mode) {
+    int depth = mode == Mode.DIAGONAL ? 64 : 12;
+    for (int x = 0; x < 80; x++) for (int z = 0; z < depth; z++) h.setBlock(x, 0, z, Blocks.BEDROCK);
+    if (mode == Mode.WALL)
+      for (int x = 0; x < 80; x++) for (int y = 1; y <= 2; y++) h.setBlock(x, y, 6, Blocks.STONE);
+    if (mode == Mode.STEP)
+      for (int x = 40; x < 80; x++) for (int z = 0; z < 12; z++) h.setBlock(x, 1, z, Blocks.BEDROCK);
     var owner = h.makeMockServerPlayerInLevel();
     owner.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(2, 1, 1))));
     var n = bep_3davater_companion.COMPANION.get().create(h.getLevel(), EntitySpawnReason.COMMAND);
@@ -51,8 +66,9 @@ final class NpcSpeedGameTests {
     n.setFollowsOwner(false);
     n.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(4, 1, 5))));
     h.getLevel().addFreshEntity(n);
+    if (mode == Mode.HUNGRY) n.vitals().restore(6, 0, 0, 0);
     var skills = new NpcSkills(n, (s, id) -> {});
-    var target = h.absolutePos(new BlockPos(74, 1, 5));
+    var target = h.absolutePos(new BlockPos(mode == Mode.DIAGONAL ? 64 : 74, mode == Mode.STEP ? 2 : 1, mode == Mode.DIAGONAL ? 60 : 5));
     var result =
         skills
             .execute("move_to", object("x", target.getX(), "y", target.getY(), "z", target.getZ()))
@@ -75,17 +91,21 @@ final class NpcSpeedGameTests {
           }
           if (!result.isDone()) return;
           double speed = ticks[0] == 0 ? 0 : sum[0] / ticks[0] * 20;
+          boolean walk = mode == Mode.HUNGRY;
           double reference = walk ? PLAYER_WALK : PLAYER_SPRINT;
           String report =
               String.format(
                   "NPC_SPEED_QA %s: %.3f blocks/s (player %.3f, ratio %.2f), sprinting %d/%d ticks",
-                  walk ? "walk" : "sprint", speed, reference, speed / reference, ticks[1], ticks[0]);
+                  mode, speed, reference, speed / reference, ticks[1], ticks[0]);
           System.getLogger("bep_3davater_loader NPC QA").log(System.Logger.Level.INFO, report);
           h.assertTrue(result.join().get("ok").getAsBoolean(), "Must arrive: " + result.join());
           h.assertTrue(
               walk ? ticks[1] == 0 : ticks[1] * 10 >= ticks[0] * 9,
-              (walk ? "Wall case must not sprint: " : "Open case must sprint: ") + report);
-          h.assertTrue(Math.abs(speed / reference - 1) <= .1, "Speed must match the player: " + report);
+              (walk ? "Hungry NPC must not sprint: " : "Must keep sprinting: ") + report);
+          // Climbing the step costs a little speed, as it does for a player.
+          double tolerance = mode == Mode.STEP ? .15 : .1;
+          h.assertTrue(
+              Math.abs(speed / reference - 1) <= tolerance, "Speed must match the player: " + report);
           skills.cancel("Test done");
           n.discard();
           h.succeed();

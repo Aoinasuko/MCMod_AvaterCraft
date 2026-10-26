@@ -8,15 +8,15 @@ class TravelPaceTest {
   @Test
   void distantTravelSprintsAndUsesHysteresisBeforeWalkingAgain() {
     var pace = new TravelPace();
-    pace.update(64, true, false);
+    pace.update(25, true, false);
     assertTrue(pace.sprinting());
     assertEquals(2.2, pace.speed());
-    pace.update(36, true, false);
-    assertTrue(pace.sprinting());
     pace.update(16, true, false);
+    assertTrue(pace.sprinting());
+    pace.update(4, true, false);
     assertFalse(pace.sprinting());
     assertEquals(1.6, pace.speed());
-    pace.update(36, true, false);
+    pace.update(16, true, false);
     assertFalse(pace.sprinting());
   }
 

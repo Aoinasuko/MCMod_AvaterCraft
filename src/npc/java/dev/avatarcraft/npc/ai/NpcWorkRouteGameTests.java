@@ -24,6 +24,7 @@ final class NpcWorkRouteGameTests {
         event.registerEnvironment(
             bep_3davater_companion.id("work_route_qa"), new TestEnvironmentDefinition.AllOf());
     test(event, env, "logs_through_dense_leaf_shell", 4000, NpcWorkRouteGameTests::leaves);
+    test(event, env, "canopy_enclosed_trunk_from_the_ground", 4000, NpcWorkRouteGameTests::canopy);
     test(event, env, "tall_tree_builds_walkable_stairs", 7000, NpcWorkRouteGameTests::tallTree);
     test(event, env, "dig_through_wall_to_owner", 4000, NpcWorkRouteGameTests::tunnel);
     test(
@@ -177,6 +178,37 @@ final class NpcWorkRouteGameTests {
         new TaskPlan(1, "get logs", "", List.of(step)),
         new NpcLocalWorld(n, s),
         n.personality().allowedSkills);
+  }
+
+  /**
+   * A natural tree: the canopy wraps the trunk above head height. Without scaffolding, a player
+   * cuts the leaves in the way from the ground and reaches the logs from eye height.
+   */
+  private static void canopy(GameTestHelper h) {
+    ground(h);
+    var n = npc(h, 3, 1, 6);
+    n.inventory.setItem(0, new ItemStack(Items.IRON_AXE));
+    var leaf = Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true);
+    for (int x = 6; x <= 8; x++)
+      for (int y = 3; y <= 7; y++)
+        for (int z = 5; z <= 7; z++)
+          if (x != 7 || z != 6 || y == 7) h.setBlock(new BlockPos(x, y, z), leaf);
+    for (int y = 1; y <= 6; y++) h.setBlock(7, y, 6, Blocks.OAK_LOG);
+    var s = skills(n);
+    var runner = collect(n, s, 6);
+    h.onEachTick(
+        () -> {
+          s.tick();
+          runner.tick(h.getLevel().getGameTime());
+          h.assertFalse(runner.needsReplan(), "Canopy trunk access failed: " + runner.problem());
+          if (runner.complete()) {
+            h.assertTrue(count(n, Items.OAK_LOG) >= 6, "Every trunk log must be collected");
+            runner.close();
+            s.cancel("Test done");
+            n.discard();
+            h.succeed();
+          }
+        });
   }
 
   private static void leaves(GameTestHelper h) {

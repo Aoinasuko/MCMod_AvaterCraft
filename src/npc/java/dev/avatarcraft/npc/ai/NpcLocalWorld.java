@@ -234,8 +234,7 @@ public final class NpcLocalWorld implements LocalTaskRunner.World {
             target.get(0).getAsDouble(), target.get(1).getAsDouble(), target.get(2).getAsDouble());
     // Automatic bulk gathering must not hollow out its floor; descend by stairs instead.
     if (p.getY() < npc.blockPosition().getY()) return false;
-    return skills.visible(p) && npc.distanceToSqr(Vec3.atCenterOf(p)) <= 16
-        || approach(target) != null;
+    return skills.minable(p) || approach(target) != null;
   }
 
   @Override
@@ -1104,7 +1103,8 @@ public final class NpcLocalWorld implements LocalTaskRunner.World {
     var candidates = new ArrayList<BlockPos>();
     for (int dx = -2; dx <= 2; dx++)
       for (int dz = -2; dz <= 2; dz++)
-        for (int dy = -1; dy <= 1; dy++) {
+        // Logs above head height are cut from below, as a player reaches up into a canopy.
+        for (int dy = -4; dy <= 1; dy++) {
           if (dx == 0 && dz == 0) continue;
           var p = block.offset(dx, dy, dz);
           if (!excluded.contains(p)
@@ -1122,14 +1122,15 @@ public final class NpcLocalWorld implements LocalTaskRunner.World {
                       p.getX() + .8,
                       p.getY() + 1.8,
                       p.getZ() + .8))
-              && Vec3.atBottomCenterOf(p).distanceToSqr(Vec3.atCenterOf(block)) <= 4)
+              // Stand next to ordinary blocks; only blocks above head height use the full reach.
+              && (Vec3.atBottomCenterOf(p).distanceToSqr(Vec3.atCenterOf(block)) <= 4
+                  || block.getY() > p.getY() + 1 && NpcSkills.withinReachFrom(eye(p), block)))
             candidates.add(p);
         }
     candidates.sort(Comparator.comparingDouble(p -> npc.distanceToSqr(Vec3.atBottomCenterOf(p))));
     for (var p : candidates) {
       if (blocked("move_to", object("x", p.getX(), "y", p.getY(), "z", p.getZ()))) continue;
-      if (!skills.visibleFrom(Vec3.atBottomCenterOf(p).add(0, npc.getEyeHeight(), 0), block))
-        continue;
+      if (!sees(p, block)) continue;
       var path = npc.getNavigation().createPath(p, 0);
       if (path != null && path.canReach())
         return object("x", p.getX(), "y", p.getY(), "z", p.getZ());
@@ -1137,10 +1138,18 @@ public final class NpcLocalWorld implements LocalTaskRunner.World {
     // The short native probe may fail while the actor is settling or outside its search radius.
     // Defer the actual reachability decision to move_precisely's bounded walking search.
     for (var p : candidates)
-      if (!blocked("move_to", object("x", p.getX(), "y", p.getY(), "z", p.getZ()))
-          && skills.visibleFrom(Vec3.atBottomCenterOf(p).add(0, npc.getEyeHeight(), 0), block))
+      if (!blocked("move_to", object("x", p.getX(), "y", p.getY(), "z", p.getZ())) && sees(p, block))
         return object("x", p.getX(), "y", p.getY(), "z", p.getZ());
     return null;
+  }
+
+  private Vec3 eye(BlockPos stand) {
+    return Vec3.atBottomCenterOf(stand).add(0, npc.getEyeHeight(), 0);
+  }
+
+  /** Visible from that standing cell, or hidden only by leaves the NPC will cut first. */
+  private boolean sees(BlockPos stand, BlockPos block) {
+    return skills.visibleFrom(eye(stand), block) || skills.leafObstruction(eye(stand), block) != null;
   }
 
   public void record(JsonObject selection) {

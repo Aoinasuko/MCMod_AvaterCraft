@@ -38,8 +38,11 @@ public final class NpcMind implements AutoCloseable {
       com.google.gson.JsonObject commandContext) {}
 
   private final Deque<HumanChat> playerChats = new ArrayDeque<>();
+  /** An owner's order whose reply arrived after a newer owner message; kept until that answers. */
+  private record Deferred(String task, com.google.gson.JsonObject context, long sequence) {}
+  private Deferred deferred;
   private boolean openingWork, openingSpeech, heard;
-  private long epoch, nextThink, nextConversation;
+  private long epoch, chatEpoch, nextThink, nextConversation;
   private long nextSpeechOpen;
   private long nextTeamCheck;
   private boolean announcedBlock;
@@ -229,7 +232,7 @@ public final class NpcMind implements AutoCloseable {
         local = null;
         closeWork();
         npc.completeInstruction();
-        npc.setFollowsOwner(false);
+        // Following while idle is the owner's setting; finishing a task must not switch it off.
         skills.cancel("Goal completed");
         speechEpoch++;
         if (speech != null) speech.close();
@@ -647,7 +650,7 @@ public final class NpcMind implements AutoCloseable {
     }
     if (playerChat == null) {
       openingPlayerChat = true;
-      long generation = epoch;
+      long generation = chatEpoch;
       var profile = npc.personality();
       profile.allowedSkills.clear();
       brain()
@@ -664,7 +667,7 @@ public final class NpcMind implements AutoCloseable {
                       .getServer()
                       .execute(
                           () -> {
-                            if (generation != epoch || !npc.isAlive()) {
+                            if (generation != chatEpoch || !npc.isAlive()) {
                               if (session != null) session.close();
                               return;
                             }
@@ -682,7 +685,7 @@ public final class NpcMind implements AutoCloseable {
     batch.add(first);
     while (!playerChats.isEmpty() && playerChats.getFirst().speaker.equals(first.speaker))
       batch.add(playerChats.removeFirst());
-    long last = batch.getLast().sequence, generation = epoch;
+    long last = batch.getLast().sequence, generation = chatEpoch, orderEpoch = epoch;
     var chatSession = playerChat;
     long voiceGeneration = speechEpoch;
     String context =
@@ -716,7 +719,7 @@ public final class NpcMind implements AutoCloseable {
                     .getServer()
                     .execute(
                         () -> {
-                          if (generation != epoch || playerChat != chatSession || !npc.isAlive())
+                          if (generation != chatEpoch || playerChat != chatSession || !npc.isAlive())
                             return;
                           if (error != null) {
                             playerChat = null;
@@ -725,21 +728,39 @@ public final class NpcMind implements AutoCloseable {
                             npc.setAiStatus("チャット応答エラー。接続設定を確認してください");
                             return;
                           }
+                          // The speaker and place were checked and frozen when the chat was heard;
+                          // walking away while the model answers must not silently drop the order.
                           var speaker = level.getServer().getPlayerList().getPlayer(first.speaker);
-                          if (speaker == null
-                              || speaker.level() != level
-                              || speaker.distanceToSqr(npc) > 144
-                              || !npc.hasLineOfSight(speaker)) return;
+                          if (speaker == null) return;
                           if (!reply.speech().isBlank()
                               && (voiceGeneration == speechEpoch || !reply.instruction().isBlank()))
                             service.say(npc, reply.speech(), speaker.getId());
+                          boolean superseded = latestOwnerChat > last;
+                          String task = reply.instruction().strip();
+                          // An order set elsewhere (GUI, another reply) after this chat was sent wins.
+                          if (orderEpoch != epoch) return;
                           if (PlayerChatPolicy.mayStartTask(
-                              first.owner,
-                              npc.ownedBy(speaker),
-                              latestOwnerChat > last,
-                              reply.instruction())) {
-                            String task = reply.instruction().strip();
-                            npc.setInstruction(task.equals("__stop__") ? "" : task, batch.getLast().commandContext);
+                              first.owner, npc.ownedBy(speaker), false, task)) {
+                            if (superseded) {
+                              // A later owner message is still queued; it decides, but a mere
+                              // "hurry" or "ok?" must not erase this order.
+                              deferred = new Deferred(task, batch.getLast().commandContext, last);
+                              service.record(npc, "instruction_deferred", task, speaker.getUUID(),
+                                  object("sequence", last, "latest", latestOwnerChat));
+                            } else {
+                              deferred = null;
+                              npc.setInstruction(task.equals("__stop__") ? "" : task, batch.getLast().commandContext);
+                            }
+                          } else if (!superseded
+                              && first.owner
+                              && npc.ownedBy(speaker)
+                              && deferred != null
+                              && deferred.sequence < last) {
+                            var order = deferred;
+                            deferred = null;
+                            service.record(npc, "instruction_resumed", order.task, speaker.getUUID(),
+                                object("sequence", order.sequence));
+                            npc.setInstruction(order.task.equals("__stop__") ? "" : order.task, order.context);
                           }
                         }));
   }
@@ -747,7 +768,8 @@ public final class NpcMind implements AutoCloseable {
   public void instructionChanged(String instruction) {
     planningRetryPending = false;
     NpcTeams.changed(npc);
-    stop();
+    // Keep the chat session and any owner messages still queued; they may refine this order.
+    stop(false);
     replans = 0;
     phases = 0;
     recoveryAttempts = 0;
@@ -770,7 +792,12 @@ public final class NpcMind implements AutoCloseable {
   }
 
   public void stop() {
+    stop(true);
+  }
+
+  private void stop(boolean dropChat) {
     epoch++;
+    if (dropChat) chatEpoch++;
     speechEpoch++;
     completionTicket++;
     completionPending = false;
@@ -781,10 +808,13 @@ public final class NpcMind implements AutoCloseable {
     skills.cancel("Stopped");
     if (work != null) work.close();
     if (speech != null) speech.close();
-    if (playerChat != null) playerChat.close();
-    playerChat = null;
-    openingPlayerChat = false;
-    playerChats.clear();
+    if (dropChat) {
+      if (playerChat != null) playerChat.close();
+      playerChat = null;
+      openingPlayerChat = false;
+      playerChats.clear();
+      deferred = null;
+    }
     work = speech = null;
     openingWork = openingSpeech = false;
   }

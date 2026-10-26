@@ -132,6 +132,15 @@ final class NpcWalkingRoute {
     return search.expanded();
   }
 
+  /** The best route found so far when the budget ran out, or null if it gets no closer. */
+  Path partialPath() {
+    var points =
+        new ArrayList<>(
+            search.partialPath().stream().map(c -> new BlockPos(c.x(), c.y(), c.z())).toList());
+    if (points.size() > 1 && !terrain.stand(points.getFirst())) points.removeFirst();
+    return points.size() < 3 ? null : nativePath(points, points.getLast());
+  }
+
   Path path() {
     return nativePath(points(), destination);
   }

@@ -5,7 +5,8 @@ public final class TravelPace {
   private boolean sprinting;
 
   public void update(double distanceSquared, boolean allowed, boolean precise) {
-    sprinting = allowed && !precise && distanceSquared >= (sprinting ? 4.5 * 4.5 : 8 * 8);
+    // A player sprints anything longer than a few blocks.
+    sprinting = allowed && !precise && distanceSquared >= (sprinting ? 3 * 3 : 5 * 5);
   }
 
   public boolean sprinting() {
