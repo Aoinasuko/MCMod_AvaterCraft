@@ -131,6 +131,8 @@ public final class NpcSkills {
     boolean retarget;
     /** Partial routes walked after the search budget ran out. */
     int partialLegs;
+    /** Short recoveries (re-searches) while snagged. */
+    int nudges;
     NpcWalkingRoute walking;
     net.minecraft.world.level.pathfinder.Path walkingPath;
     long checkedPath;
@@ -932,20 +934,39 @@ public final class NpcSkills {
               current.walkingPath != null && !current.walkingPath.isDone()
                   ? current.walkingPath.getNextNodePos()
                   : target;
-          if (current.movement.stalled(
-              now,
-              npc.getX(),
-              npc.getY(),
-              npc.getZ(),
-              waypoint.getX(),
-              waypoint.getY(),
-              waypoint.getZ())) {
+          boolean stalled =
+              current.movement.stalled(
+                  now,
+                  npc.getX(),
+                  npc.getY(),
+                  npc.getZ(),
+                  waypoint.getX(),
+                  waypoint.getY(),
+                  waypoint.getZ());
+          long idle = current.movement.idleTicks(now);
+          // Only a body that has stopped dead; precise placement creeps slowly by design.
+          if (!stalled
+              && !current.args.has("_arrival")
+              && npc.onGround()
+              && npc.getDeltaMovement().horizontalDistanceSqr() < 1e-4
+              && idle > 0
+              && idle % NpcMoveProgress.NUDGE_TICKS == 0) {
+            // A snagged player hops, then looks for another way; do the same before giving up.
+            if (idle / NpcMoveProgress.NUDGE_TICKS % 2 == 1) npc.getJumpControl().jump();
+            else {
+              npc.getNavigation().stop();
+              current.walkingPath = null;
+              current.walking = null;
+              current.nudges++;
+            }
+          }
+          if (stalled) {
             finish(
                 object(
                     "ok",
                     false,
                     "error",
-                    "MOVEMENT_STALLED: no new route progress for 20 seconds",
+                    "MOVEMENT_STALLED: no new route progress for 10 seconds",
                     "position",
                     vector(npc.position()),
                     "target",
@@ -1308,7 +1329,7 @@ public final class NpcSkills {
             waypoint.getX(),
             waypoint.getY(),
             waypoint.getZ()))
-      finish(error("MOVEMENT_STALLED: combat approach made no progress for 20 seconds"));
+      finish(error("MOVEMENT_STALLED: combat approach made no progress for 10 seconds"));
   }
 
   private void portal(Action a, BlockPos portal, long now) {
@@ -1403,7 +1424,7 @@ public final class NpcSkills {
       if (!npc.onGround()&&!npc.isInWater()) {
         if (current.movement.stalled(
             now, npc.getX(), npc.getY(), npc.getZ(), target.getX(), target.getY(), target.getZ()))
-          finish(error("MOVEMENT_STALLED: no grounded route progress for 20 seconds"));
+          finish(error("MOVEMENT_STALLED: no grounded route progress for 10 seconds"));
         return false;
       }
       if (current.walking == null) {
@@ -2363,6 +2384,8 @@ public final class NpcSkills {
         result.addProperty("moved_distance", npc.position().distanceTo(current.started));
       if (current.name.equals("move_to") && current.detours > 0)
         result.addProperty("actorDetours", current.detours);
+      if (current.name.equals("move_to") && current.nudges > 0)
+        result.addProperty("stuckResearches", current.nudges);
       if (current.name.equals("move_to") && current.args.has("requested"))
         result.add("requestedTarget", current.args.get("requested"));
       if (current.name.equals("dig"))

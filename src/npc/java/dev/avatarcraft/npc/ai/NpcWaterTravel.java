@@ -41,6 +41,8 @@ public final class NpcWaterTravel {
     var level=npc.level();if(water(level,cell)||!water(level,cell.below()))return false;
     var c=column(level,cell.below());
     if(!c.known||c.depth<1||c.depth>SAFE_DEPTH||cell.getY()!=c.top+1)return false;
+    // One block deep: a player stands on the bottom and wades rather than swimming at the surface.
+    if(c.depth==1&&NpcWalkSurface.standable(npc,cell.below()))return false;
     var floor=cell.below(c.depth+1);
     if(level.getBlockState(floor).getCollisionShape(level,floor).isEmpty()||NpcWalkSurface.hazard(level.getBlockState(floor).getBlock()))return false;
     double feet=c.surface-.4,r=npc.getBbWidth()/2.;
@@ -49,13 +51,15 @@ public final class NpcWaterTravel {
     return bodyClear(npc,new AABB(cell.getX()+.5-r+1e-5,feet+1e-5,cell.getZ()+.5-r+1e-5,
         cell.getX()+.5+r-1e-5,feet+npc.getBbHeight(),cell.getZ()+.5+r-1e-5));
   }
-  public static boolean passable(CompanionEntity npc,BlockPos p){return NpcWalkSurface.standable(npc,p)||swimmable(npc,p);}
+  public static boolean passable(CompanionEntity npc,BlockPos p){return NpcWalkSurface.standable(npc,p)||swimmable(npc,p)||NpcWalkSurface.climbable(npc,p);}
   public static double height(CompanionEntity npc,BlockPos p){
     double dry=NpcWalkSurface.height(npc.level(),npc,p);
-    return Double.isFinite(dry)?dry:swimmable(npc,p)?column(npc.level(),p.below()).surface-.4:Double.NaN;
+    return Double.isFinite(dry)?dry:swimmable(npc,p)?column(npc.level(),p.below()).surface-.4:NpcWalkSurface.climbable(npc,p)?p.getY():Double.NaN;
   }
   public static boolean transition(CompanionEntity npc,BlockPos a,BlockPos b,double ay,double by){
-    if(!Double.isFinite(ay)||!Double.isFinite(by)||by-ay>1.00001||ay-by>1.25001)return false;
+    if(!Double.isFinite(ay)||!Double.isFinite(by)||by-ay>1.00001)return false;
+    // Dry drops of up to three blocks, straight off an edge, as a player would jump down.
+    if(ay-by>1.25001)return !swimmable(npc,a)&&!swimmable(npc,b)&&(a.getX()==b.getX()||a.getZ()==b.getZ())&&NpcWalkSurface.dropClear(npc,a,b,ay,by);
     if(!swimmable(npc,a)&&!swimmable(npc,b))return Math.abs(ay-by)<1e-5||NpcWalkSurface.stepClear(npc,a,b,ay,by);
     double r=npc.getBbWidth()/2.,y=Math.max(ay,by);
     return bodyClear(npc,new AABB(a.getX()+.5-r+1e-5,y+1e-5,a.getZ()+.5-r+1e-5,
@@ -75,6 +79,9 @@ public final class NpcWaterTravel {
     var delta=target.subtract(npc.position());double length=Math.sqrt(delta.x*delta.x+delta.z*delta.z);
     boolean sprint=flowing(npc)||emergency;npc.setSprinting(sprint);npc.setSwimming(sprint);
     var v=npc.getDeltaMovement();double thrust=sprint?.045:.025,cap=sprint?.22:.16;
+    // Head against a low ceiling while the goal is lower: sink before pushing on, or vanilla
+    // water physics lifts a body that bumps into something.
+    if(!emergency&&delta.y<-.2&&npc.horizontalCollision){npc.setDeltaMovement(0,Math.min(v.y,-.06),0);npc.setZza(0);return;}
     double x=v.x,z=v.z;
     if(length>.15){x+=delta.x/length*thrust;z+=delta.z/length*thrust;}
     double horizontal=Math.sqrt(x*x+z*z);if(horizontal>cap){x=x/horizontal*cap;z=z/horizontal*cap;}
@@ -82,7 +89,8 @@ public final class NpcWaterTravel {
     if(delta.y>.12)y=Math.max(y,emergency?.14:.10);
     else if(delta.y<-.35&&!emergency)y=Math.max(-.08,Math.min(y,-.025));
     npc.setDeltaMovement(x,y,z);
-    if(delta.y>.25||npc.horizontalCollision)npc.getJumpControl().jump();
+    // Bumping a bank means climb out; bumping a low ceiling while the goal is lower means sink first.
+    if(delta.y>.25||npc.horizontalCollision&&delta.y>-.3)npc.getJumpControl().jump();
   }
   static void follow(CompanionEntity npc,net.minecraft.world.level.pathfinder.Path path,double speed){
     if(path==null)return;

@@ -144,7 +144,22 @@ public final class CompanionEntity extends PathfinderMob
   }
 
   protected void registerGoals() {
-    goalSelector.addGoal(0, new FloatGoal(this));
+    goalSelector.addGoal(
+        0,
+        new FloatGoal(this) {
+          // With the head in air the body is wading or already at the surface; a player only
+          // swims up once the eyes go under, so shallow water lets it settle on the bottom.
+          @Override
+          public boolean canUse() {
+            return super.canUse()
+                && (isInLava() || isEyeInFluid(net.minecraft.tags.FluidTags.WATER));
+          }
+
+          @Override
+          public boolean canContinueToUse() {
+            return canUse();
+          }
+        });
     goalSelector.addGoal(1, new NpcDoorGoal(this));
     goalSelector.addGoal(8, new LookAtPlayerGoal(this, Player.class, 8));
     goalSelector.addGoal(9, new RandomLookAroundGoal(this));

@@ -23,6 +23,19 @@ public final class WalkingPathSearch {
       return true;
     }
 
+    /**
+     * A diagonal brushes the two side cells; they need room for the body, not a floor. Defaults
+     * to the strict rule of standing room.
+     */
+    default boolean passBy(Cell p) {
+      return stand(p);
+    }
+
+    /** Climbing straight up from one cell to the one above it, as on a ladder. */
+    default boolean climb(Cell from, Cell to) {
+      return false;
+    }
+
     /** Extra cost for entering a cell that is passable but better avoided. */
     default int penalty(Cell p) {
       return 0;
@@ -98,7 +111,8 @@ public final class WalkingPathSearch {
   }
 
   private Cell neighbour(Cell from, int dx, int dz) {
-    for (int dy : new int[] {0, 1, -1}) {
+    // Steps first; then straight drops of two or three blocks, which the terrain must allow.
+    for (int dy : dx != 0 && dz != 0 ? new int[] {0, 1, -1} : new int[] {0, 1, -1, -2, -3}) {
       var p = new Cell(from.x + dx, from.y + dy, from.z + dz);
       if (!inside(p)
           || !terrain.stand(p)
@@ -108,8 +122,8 @@ public final class WalkingPathSearch {
       if (dx != 0
           && dz != 0
           && (dy != 0
-              || !terrain.stand(new Cell(from.x + dx, from.y, from.z))
-              || !terrain.stand(new Cell(from.x, from.y, from.z + dz)))) continue;
+              || !terrain.passBy(new Cell(from.x + dx, from.y, from.z))
+              || !terrain.passBy(new Cell(from.x, from.y, from.z + dz)))) continue;
       return p;
     }
     return null;
@@ -137,6 +151,14 @@ public final class WalkingPathSearch {
         path = List.copyOf(reverse);
         state = State.FOUND;
         return state;
+      }
+      var up = new Cell(n.p.x, n.p.y + 1, n.p.z);
+      if (inside(up) && terrain.stand(up) && terrain.climb(n.p, up)) {
+        int g = n.cost + 12 + terrain.penalty(up);
+        if (g < costs.getOrDefault(up.key(), Integer.MAX_VALUE)) {
+          costs.put(up.key(), g);
+          open.add(new Node(up, n, g, g + heuristic(up)));
+        }
       }
       for (int dx = -1; dx <= 1; dx++)
         for (int dz = -1; dz <= 1; dz++) {

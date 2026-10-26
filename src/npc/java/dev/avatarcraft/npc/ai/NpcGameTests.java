@@ -59,6 +59,7 @@ public final class NpcGameTests {
     NpcArrivalGameTests.register(event);
     NpcReflexGameTests.register(event);
     NpcChatOrderGameTests.register(event);
+    NpcTerrainEdgeGameTests.register(event);
     NpcRecoveryGameTests.register(event);
     NpcRuntimeFixGameTests.register(event);
     NpcLongTravelGameTests.register(event);

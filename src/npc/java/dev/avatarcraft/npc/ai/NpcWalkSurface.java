@@ -110,7 +110,7 @@ public final class NpcWalkSurface {
             cell.getX() + .5 + r - 1e-5,
             y + npc.getBbHeight(),
             cell.getZ() + .5 + r - 1e-5);
-    return clearBody(npc, body);
+    return clearBody(npc, body, true);
   }
 
   static boolean stepClear(
@@ -125,16 +125,72 @@ public final class NpcWalkSurface {
                 y + npc.getBbHeight(),
                 from.getZ() + .5 + r - 1e-5)
             .expandTowards(to.getX() - from.getX(), 0, to.getZ() - from.getZ());
-    return clearBody(npc, body);
+    return clearBody(npc, body, true);
+  }
+
+  /**
+   * A ladder or vine cell the body fits in. Climbing works through vanilla physics: moving toward
+   * a point straight above jumps, and a climbable block turns that into climbing.
+   */
+  static boolean climbable(CompanionEntity npc, BlockPos cell) {
+    var level = npc.level();
+    if (!level.hasChunkAt(cell) || !level.isInWorldBounds(cell)) return false;
+    var state = level.getBlockState(cell);
+    if (!state.is(net.minecraft.tags.BlockTags.CLIMBABLE)
+        || state.getBlock() instanceof ScaffoldingBlock
+        || !level.getFluidState(cell).isEmpty()) return false;
+    double r = npc.getBbWidth() / 2.;
+    return clearBody(
+        npc,
+        new AABB(
+            cell.getX() + .5 - r + 1e-5,
+            cell.getY() + 1e-5,
+            cell.getZ() + .5 - r + 1e-5,
+            cell.getX() + .5 + r - 1e-5,
+            cell.getY() + npc.getBbHeight(),
+            cell.getZ() + .5 + r - 1e-5));
+  }
+
+  /** Highest drop a player takes without fall damage. */
+  static final double MAX_DROP = 3.00001;
+
+  /**
+   * Walking off a ledge onto a floor up to three blocks lower: the body must clear the edge at the
+   * starting height and the whole column it falls through.
+   */
+  static boolean dropClear(
+      CompanionEntity npc, BlockPos from, BlockPos to, double fromY, double toY) {
+    if (fromY - toY > MAX_DROP || !stepClear(npc, from, to, fromY, fromY)) return false;
+    double r = npc.getBbWidth() / 2.;
+    return clearBody(
+        npc,
+        new AABB(
+            to.getX() + .5 - r + 1e-5,
+            toY + 1e-5,
+            to.getZ() + .5 - r + 1e-5,
+            to.getX() + .5 + r - 1e-5,
+            fromY + npc.getBbHeight(),
+            to.getZ() + .5 + r - 1e-5));
   }
 
   private static boolean clearBody(CompanionEntity npc, AABB body) {
+    return clearBody(npc, body, false);
+  }
+
+  /**
+   * With {@code wade}, water is allowed in the layer at the feet, as when a player walks through a
+   * flooded floor with the head in air; any fluid higher up still blocks.
+   */
+  private static boolean clearBody(CompanionEntity npc, AABB body, boolean wade) {
     var level = npc.level();
     for (var p :
         BlockPos.betweenClosed(
             BlockPos.containing(body.minX, body.minY, body.minZ),
             BlockPos.containing(body.maxX, body.maxY, body.maxZ))) {
-      if (!level.hasChunkAt(p) || !level.isInWorldBounds(p) || !level.getFluidState(p).isEmpty())
+      if (!level.hasChunkAt(p) || !level.isInWorldBounds(p)) return false;
+      var fluid = level.getFluidState(p);
+      if (!fluid.isEmpty()
+          && !(wade && p.getY() + 1 <= body.minY + 1 && fluid.is(net.minecraft.tags.FluidTags.WATER)))
         return false;
       var state = level.getBlockState(p);
       if (hazard(state.getBlock())) return false;

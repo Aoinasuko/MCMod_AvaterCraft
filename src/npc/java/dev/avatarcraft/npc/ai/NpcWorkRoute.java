@@ -112,7 +112,7 @@ final class NpcWorkRoute implements AutoCloseable {
     skills.continuousWork(true);
     world = new NpcLocalWorld(npc, skills);
     deadline = level.getGameTime() + 20L * 60 * 10;
-    movement = new NpcMoveProgress(level.getGameTime());
+    movement = new NpcMoveProgress(level.getGameTime(), NpcMoveProgress.WORK_STALL_TICKS);
   }
 
   void tick() {

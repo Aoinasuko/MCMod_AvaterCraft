@@ -225,9 +225,13 @@ final class NpcWalkingRoute {
   private static final class Terrain implements WalkingPathSearch.Terrain {
     /** About a four-block detour: step around a standing creature, but never treat it as a wall. */
     static final int ACTOR_PENALTY = 40;
+    /** Keeps routes off walls and corners where the body snags and cannot sprint. */
+    static final int WALL_PENALTY = 3;
 
     final CompanionEntity npc;
     final Map<Long, Boolean> cache = new HashMap<>();
+    final Map<Long, Boolean> walls = new HashMap<>();
+    final Map<Long, Boolean> room = new HashMap<>();
     // Creatures move, so where they stood when the search began costs extra but stays passable.
     final Set<Long> occupied = new HashSet<>();
     final BlockPos allowed;
@@ -273,11 +277,48 @@ final class NpcWalkingRoute {
     }
 
     @Override
+    public boolean climb(WalkingPathSearch.Cell from, WalkingPathSearch.Cell to) {
+      // Up only: walking down a ladder pushes into its wall, which vanilla turns into climbing.
+      return NpcWalkSurface.climbable(npc, new BlockPos(from.x(), from.y(), from.z()))
+          && NpcWalkSurface.climbable(npc, new BlockPos(to.x(), to.y(), to.z()));
+    }
+
+    @Override
     public int penalty(WalkingPathSearch.Cell p) {
       long key = BlockPos.asLong(p.x(), p.y(), p.z());
-      return occupied.contains(key) && (allowed == null || allowed.asLong() != key)
-          ? ACTOR_PENALTY
-          : 0;
+      int cost = occupied.contains(key) && (allowed == null || allowed.asLong() != key) ? ACTOR_PENALTY : 0;
+      return walls.computeIfAbsent(key, k -> besideWall(new BlockPos(p.x(), p.y(), p.z())))
+          ? cost + WALL_PENALTY
+          : cost;
+    }
+
+    private boolean besideWall(BlockPos p) {
+      var level = npc.level();
+      for (var side : Direction.Plane.HORIZONTAL) {
+        var q = p.relative(side);
+        if (!level.hasChunkAt(q)) continue;
+        if (!level.getBlockState(q).getCollisionShape(level, q).isEmpty()
+            || !level.getBlockState(q.above()).getCollisionShape(level, q.above()).isEmpty())
+          return true;
+      }
+      return false;
+    }
+
+    @Override
+    public boolean passBy(WalkingPathSearch.Cell p) {
+      if (stand(p)) return true;
+      // A ledge or hole beside a diagonal is fine as long as nothing is where the body passes.
+      return room.computeIfAbsent(
+          BlockPos.asLong(p.x(), p.y(), p.z()),
+          k -> {
+            var level = npc.level();
+            var q = new BlockPos(p.x(), p.y(), p.z());
+            return level.hasChunkAt(q)
+                && level.getBlockState(q).getCollisionShape(level, q).isEmpty()
+                && level.getBlockState(q.above()).getCollisionShape(level, q.above()).isEmpty()
+                && level.getFluidState(q).isEmpty()
+                && !NpcWalkSurface.hazard(level.getBlockState(q).getBlock());
+          });
     }
 
     private boolean compute(BlockPos p) {

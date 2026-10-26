@@ -26,7 +26,10 @@ public final class NpcStepMoveControl extends MoveControl<CompanionEntity> {
   public void tick() {
     if(operation==Operation.MOVE_TO&&mob.isInWater()){
       var wanted=new net.minecraft.world.phys.Vec3(wantedX,wantedY,wantedZ);
-      super.tick();NpcWaterTravel.propel(mob,wanted,false);return;
+      super.tick();
+      // Under a low ceiling, stop pushing until the body has sunk to the wading floor.
+      if(wanted.y<mob.getY()-.2&&mob.horizontalCollision)mob.setZza(0);
+      NpcWaterTravel.propel(mob,wanted,false);return;
     }
     boolean moving = operation == Operation.MOVE_TO || operation == Operation.JUMPING;
     stepTick();

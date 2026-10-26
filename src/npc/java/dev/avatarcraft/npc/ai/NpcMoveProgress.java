@@ -4,13 +4,24 @@ import java.util.*;
 
 /** A bounded local watchdog: jitter and revisiting the same cells cannot renew a movement. */
 public final class NpcMoveProgress {
-  public static final long STALL_TICKS = 400;
+  /** Give up after 10 s; the short rule below has already tried jumping and re-searching. */
+  public static final long STALL_TICKS = 200;
+  /** Idle ticks before a short recovery: jump first, then search again from here. */
+  public static final long NUDGE_TICKS = 40;
+  /** Work routes wait out long edit searches in place, so they keep the longer limit. */
+  public static final long WORK_STALL_TICKS = 400;
   private final Set<String> visited = new HashSet<>();
   private final Map<String, Double> approaches = new HashMap<>();
   private long lastProgress;
+  private final long limit;
 
   public NpcMoveProgress(long now) {
+    this(now, STALL_TICKS);
+  }
+
+  public NpcMoveProgress(long now, long limit) {
     lastProgress = now;
+    this.limit = limit;
   }
 
   public void pauseForSearch(long now) {
@@ -32,7 +43,7 @@ public final class NpcMoveProgress {
       if (approaches.size() < 4096 || approaches.containsKey(edge)) approaches.put(edge, distance);
       lastProgress = now;
     }
-    return now - lastProgress > STALL_TICKS;
+    return now - lastProgress > limit;
   }
 
   public long idleTicks(long now) {
